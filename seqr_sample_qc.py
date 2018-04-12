@@ -9,6 +9,7 @@ logger.setLevel(logging.INFO)
 def main(args):
     hl.init()
 
+    print("HELLO WORLD")
 
 
 if __name__ == '__main__':
