@@ -10,6 +10,7 @@ def main(args):
     hl.init()
 
     print("HELLO WORLD")
+    print("HELLO AGAIN WORLD")
 
 
 if __name__ == '__main__':
