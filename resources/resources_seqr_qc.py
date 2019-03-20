@@ -10,9 +10,9 @@ def get_filepath(data_type: str, is_external: bool, version: int, test: bool) ->
     origin = "External" if is_external else "Internal"
     build = "GRCh38" if data_type == "WGS" and not is_external else "GRCh37"
     if test:
-        return f'gs://seqr-datasets/methods_dev/test_data/GRCh37/topf'  # TODO rename test vcf
+        return f'gs://seqr-datasets/{build}/RDG_{data_type}_Broad_{origin}/test/v{version}/RDG_{data_type}_Broad_{origin}'
     else:
-        return f'gs://seqr-datasets/{build}/RDG_{data_type}_Broad_{origin}/{version}/RDG_{data_type}_Broad_{origin}_{version}'
+        return f'gs://seqr-datasets/{build}/RDG_{data_type}_Broad_{origin}/v{version}/RDG_{data_type}_Broad_{origin}'
 
 
 def callset_vcf_path(data_type: str, is_external: bool, version: int, test: bool) -> str:
@@ -20,6 +20,8 @@ def callset_vcf_path(data_type: str, is_external: bool, version: int, test: bool
     Returns callset vcf path. Can be internal or external, exomes or genomes.
     """
     filepath = get_filepath(data_type, is_external, version, test)
+    if data_type == "WGS" and not is_external:
+        filepath = filepath + f'/sharded-vcfs/RDG_{data_type}_Broad_Internal.filtered.*'
     return filepath + '.vcf.gz'
 
 
@@ -42,6 +44,16 @@ def qc_mt_path(data_type: str, is_external: bool, version: int, test: bool) -> s
     return filepath + '_seqr_qc.mt'
 
 
+def qc_ht_path(data_type: str, is_external: bool, version: int, test: bool) -> str:
+    """
+    Returns seqr sample qc Table: can be exomes or genomes, internal or external data.
+    Contains vcf sample ID, seqr sample ID, callrate, chimera, contamination, coverage, pedigree information,
+    provided gender and affected status, computed gender, platform, ancestry, inbreeding coefficient.
+    """
+    filepath = get_filepath(data_type, is_external, version, test)
+    return filepath + '_seqr_qc_samples.ht'
+
+
 def metadata_path(data_type: str, is_external: bool, version: int, test: bool) -> str:
     """
     Path to metadata file associated with samples in the callset for seqr sample QC
@@ -52,24 +64,31 @@ def metadata_path(data_type: str, is_external: bool, version: int, test: bool) -
 
 def remap_path(data_type: str, is_external: bool, version: int, test: bool) -> str:
     """
-    Path to remap ID file
+    Path to remap ID file which needs to be stored in the callset's bucket prior to launching pipeline
     """
     filepath = get_filepath(data_type, is_external, version, test)
     return filepath + '_remap.txt'
 
 
-def sex_check_path(data_type: str, is_external: bool, version: int, test: bool) -> str:
-    """Return file path for sex check"""
+def project_map_path(data_type: str, is_external: bool, version: int, test: bool)->str:
+    """
+    Path to project mapping file which needs to be stored in the callset's bucket prior to launching pipeline
+    """
     filepath = get_filepath(data_type, is_external, version, test)
-    return filepath + '.sex_check.txt.bgz'
+    return filepath + '_project_map.txt'
 
 
-def sex_check_name():
-    return "test"
+def sex_check_path(data_type: str, is_external: bool, version: int, test: bool) -> str:
+    """
+    Return file path for sex check
+    """
+    filepath = get_filepath(data_type, is_external, version, test)
+    return filepath + '/sex.txt'
 
 
-def ped_path():
-    return "gs://seqr-dbgap/cmg_topf_cms_wes.ped"  # TODO Use Ben's API to pull ped of all individuals in callset from seqr
+def ped_path(data_type: str, is_external: bool, version: int, test: bool) -> str:
+    filepath = get_filepath(data_type, is_external, version, test)
+    return filepath + '.ped'
 
 
 class DataException(Exception):
@@ -82,21 +101,42 @@ def exome_callrate_mt_path(is_external: bool, version: int, test: bool) -> str:
     return filepath + '_callrate_mt_for_pca.mt'
 
 
-def exome_callrate_scores_ht_path(is_external: bool, version: int, test: bool) -> str:
+def exome_platform_callrate_scores_ht_path(is_external: bool, version: int, test: bool) -> str:
     data_type = "WES"
     filepath = get_filepath(data_type, is_external, version, test)
-    return filepath + '_callrate_pca_scores.ht'
+    return filepath + '_platform_callrate_pca_scores.ht'
 
 
-def qc_temp_data(data_type: str, is_external: bool, test: bool, version: int) -> str:
+def population_assignments_ht_path(data_type: str, is_external: bool, version: int, test: bool) -> str:
     filepath = get_filepath(data_type, is_external, version, test)
-    return filepath + '_platform_pca/'
+    return filepath + '/pop_imputation/RF_pop_assignments.txt.bgz'
 
 
-def platform_labels_path(data_type: str, is_external: bool, test: bool, version: int) -> str:
+def population_assignments_tsv_path(data_type: str, is_external: bool, version: int, test: bool) -> str:
     filepath = get_filepath(data_type, is_external, version, test)
-    return filepath + 'platforms.txt'
+    return filepath + '/pop_imputation/RF_pop_assignments.tsv'
 
 
-class DataException(Exception):
-    pass
+def population_RF_fit_path(data_type: str, is_external: bool, version: int, test: bool) -> str:
+    filepath = get_filepath(data_type, is_external, version, test)
+    return filepath + '/pop_imputation/RF_population_fit.pkl'
+
+
+def qc_temp_data(data_type: str, is_external: bool, version: int, test: bool) -> str:
+    filepath = get_filepath(data_type, is_external, version, test)
+    return filepath + '_platform_pca/' #TODO:Do I use temp anywhere else?
+
+def qc_mt_temp_path(data_type: str, is_external: bool, version: int, test: bool) -> str:
+    filepath = get_filepath(data_type, is_external, version, test)
+    return filepath + f'_temp/qc_mt_temp.mt' #TODO:Do I use temp anywhere else?
+
+def platform_labels_path(data_type: str, is_external: bool, version: int, test: bool) -> str:
+    filepath = get_filepath(data_type, is_external, version, test)
+    return filepath + '_platform_pca/platforms.txt'
+
+def metric_MAD_data_path(data_type: str, is_external: bool, version: int, test: bool) -> str:
+    filepath = get_filepath(data_type, is_external, version, test)
+    return filepath + '.platform_pop_MAD.txt.bgz'
+
+def test():
+    print('In resources test method')
