@@ -1,6 +1,13 @@
+#!/usr/bin/env python
 import getpass
 import requests
 import argparse
+
+# Hack for 2.X and 3.X to use input()
+try:
+    input = raw_input
+except NameError:
+    pass
 
 
 def pull_project_peds(args):
@@ -13,11 +20,11 @@ def pull_project_peds(args):
     login_url = "https://seqr.broadinstitute.org/login"
     individual_api_url = "https://seqr.broadinstitute.org/api/project/{project_guid}/export_project_individuals?file_format=tsv"
 
-    seqr_username = input("What is your seqr username? ")
+    seqr_username = 'mwilson@broadinstitute.org'#input("What is your seqr username? ")
     seqr_password = getpass.getpass()
 
     s = requests.Session()
-    response = s.get(login_url)    # get CSRF cookies
+    response = s.get(login_url, verify=False)  # get CSRF cookies
     response.raise_for_status()
 
     csrf_token = s.cookies.get('csrftoken')
@@ -30,15 +37,16 @@ def pull_project_peds(args):
         },
         headers={
             'Content-Type': 'application/x-www-form-urlencoded'
-        })    # submit login
+        })  # submit login
     response.raise_for_status()
+
     temp_ped = open('temp_pedigree.txt', 'w')
     errors = open('projects_not_retrieved.txt', 'w')
 
     with open(projects, 'r') as project_list:
         for project_guid in project_list:
             project_guid = project_guid.rstrip()
-            response = s.get(individual_api_url.format(**locals()))   # get tsv from API
+            response = s.get(individual_api_url.format(**locals()))  # get tsv from API
             if response.status_code == requests.codes.ok:
                 temp_ped.write(response.text)
             else:
@@ -50,9 +58,10 @@ def pull_project_peds(args):
     final_ped = open('compiled_pedigree.ped', 'w')
 
     with open('temp_pedigree.txt', 'r') as ped:
-        final_ped.write('Family_ID\tIndividual_ID\tPaternal_ID\tMaternal_ID\tSex\tAffected_Status\tNotes\n')
+        header = ped.readline()
+        final_ped.write(header)
         for line in ped:
-            if line != "Family ID\tIndividual ID\tPaternal ID\tMaternal ID\tSex\tAffected Status\tNotes\n":
+            if line != header:
                 final_ped.write(line)
 
     final_ped.close()
