@@ -20,7 +20,7 @@ def pull_project_peds(args):
     login_url = "https://seqr.broadinstitute.org/login"
     individual_api_url = "https://seqr.broadinstitute.org/api/project/{project_guid}/export_project_individuals?file_format=tsv"
 
-    seqr_username = 'mwilson@broadinstitute.org'#input("What is your seqr username? ")
+    seqr_username = input("What is your seqr username? ")
     seqr_password = getpass.getpass()
 
     s = requests.Session()
