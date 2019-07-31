@@ -236,7 +236,7 @@ def run_population_pca(mt: hl.MatrixTable,
     logger.info('Assigning gnomAD populations...')
     data = meta.to_pandas()
     pc_cols = ['PC{}'.format(pc) for pc in range(1, 7)]
-    pop_pca_ht, pop_clf = assign_population_pcs(data, pc_cols=pc_cols, output_col='qc_pop')#, fit=fit)
+    pop_pca_ht, pop_clf = assign_population_pcs(data, pc_cols=pc_cols, output_col='qc_pop', fit=fit)
     pop_pca_ht = hl.Table.from_pandas(pop_pca_ht)
 
     if not fit:
@@ -291,14 +291,16 @@ def main(args):
     is_test = args.is_test
     overwrite = args.overwrite
 
-    logger.info("Converting vcf to MatrixTable...")
+    logger.info("Importing callset...")
     if not args.skip_write_mt:
+        logger.info("Converting vcf to MatrixTable...")
         vcf = callset_vcf_path(build, data_type, data_source, version, is_test)
         hl.import_vcf(vcf, force_bgz=True, reference_genome=f'GRCh{build}',
                       min_partitions=4).write(mt_path(build, data_type, data_source, version, is_test), overwrite=True)
     mt = hl.read_matrix_table(mt_path(build, data_type, data_source, version, is_test))
 
     if not args.skip_validate_mt:
+        logger.info("Validating data type...")
         validate_mt(mt, build, data_type)
 
     if is_test:
