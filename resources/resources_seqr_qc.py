@@ -1,5 +1,6 @@
-class DataException(Exception):
-    pass
+class VCFDataTypeError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
 
 
 def get_filepath(build: str, data_type: str, data_source: str, version: int, is_test: bool) -> str:
@@ -12,9 +13,9 @@ def get_filepath(build: str, data_type: str, data_source: str, version: int, is_
     :return:
     """
     if is_test:
-        return f'gs://seqr-datasets/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/RDG_{data_type}_Broad_{data_source}/sample_qc/test/' # TODO revisit where test should be - want to use same resource folder to avoid copying over agian
+        return f'gs://seqr-datasets/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc/test/' # TODO revisit where test should be - want to use same resource folder to avoid copying over agian
     else:
-        return f'gs://seqr-datasets/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/RDG_{data_type}_Broad_{data_source}/sample_qc/'
+        return f'gs://seqr-datasets/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc/'
 
 
 def callset_vcf_path(build: str, data_type: str, data_source: str, version: int, is_test: bool) -> str:
@@ -24,10 +25,10 @@ def callset_vcf_path(build: str, data_type: str, data_source: str, version: int,
     filepath = get_filepath(build, data_type, data_source, version, is_test)
     if is_test:
         filepath = filepath[:-5]
-    if data_type == 'WGS' and data_source == 'internal':
-        filepath = filepath[:-11] + f'/sharded-vcfs/RDG_{data_type}_Broad_Internal.filtered.*'
+    if data_type == 'WGS' and data_source == 'Internal':
+        filepath = filepath[:-10] + f'sharded_vcf/RDG_{data_type}_Broad_Internal.filtered.*.vcf.gz'
     else:
-        filepath = filepath[:-11] + '.vcf.gz'
+        filepath = filepath[:-10] + f'vcf/RDG_{data_type}_Broad_{data_source}.vcf.gz'
     return filepath
 
 
@@ -65,7 +66,7 @@ def remap_path(build: str, data_type: str, data_source: str, version: int) -> st
     Set is_test to false because resource files do not change during testing.
     """
     filepath = get_filepath(build, data_type, data_source, version, is_test=False)
-    return filepath + 'resources/remap.txt'
+    return filepath + 'resources/remap.tsv'
 
 
 def project_map_path(build: str, data_type: str, data_source: str, version: int) -> str:
@@ -74,7 +75,15 @@ def project_map_path(build: str, data_type: str, data_source: str, version: int)
     Set is_test to false because resource files do not change during testing.
     """
     filepath = get_filepath(build, data_type, data_source, version, is_test=False)
-    return filepath + 'resources/project_map.txt'
+    return filepath + 'resources/project_map.tsv'
+
+
+def missing_metrics_path(build: str, data_type: str, data_source: str, version: int) -> str:
+    """
+    Path to file containing sample IDs that do not have any seq metrics.
+    """
+    filepath = get_filepath(build, data_type, data_source, version, is_test=False)
+    return filepath + 'missing_metrics/samples_missing_metrics.tsv'
 
 
 def ped_path(build: str, data_type: str, data_source: str, version: int, is_test: bool) -> str:
@@ -90,7 +99,7 @@ def sex_check_path(build: str, data_type: str, data_source: str, version: int) -
     Return file path for sex check. Set is_test to false because resource files do not change during testing.
     """
     filepath = get_filepath(build, data_type, data_source, version, is_test=False)
-    return filepath + 'sex_check/imputed_sex.txt'
+    return filepath + 'sex_check/imputed_sex.tsv'
 
 
 def pop_RF_fit_path(build: str, data_type: str, data_source: str, version: int, is_test: bool) -> str:
@@ -117,3 +126,35 @@ def ht_to_tsv_path(build: str, data_type: str, data_source: str, version: int, i
     """
     filepath = get_filepath(build, data_type, data_source, version, is_test)
     return filepath + f'final_output/seqr_sample_qc.tsv'
+
+
+def sample_qc_ht_path(build: str, data_type: str, data_source: str, version: int, is_test: bool) -> str:
+    """
+    Returns seqr sample qc hail table: can be exomes or genomes, internal or external data.
+    Contains vcf sample ID, seqr sample ID, callrate, chimera, contamination, coverage, pedigree information,
+    provided gender and affected status, computed gender, platform, ancestry, inbreeding coefficient.
+    """
+    filepath = get_filepath(build, data_type, data_source, version, is_test)
+    return filepath + f'final_output/seqr_sample_qc.ht'
+
+
+def val_noncoding_ht_path(build):
+    """
+    HT of noncoding variants for validating callset data type. HT written using
+    hail-elasticsearch-pipelines/download_and_create_reference_datasets/v02/hail_scripts/write_dataset_validation_ht.py
+    """
+    if build == '37':
+        return 'gs://seqr-reference-data/GRCh37/validate_ht/common_noncoding_variants.grch37.ht'
+    else:
+        return 'gs://seqr-reference-data/GRCh38/validate_ht/common_noncoding_variants.grch38.ht'
+
+
+def val_coding_ht_path(build):
+    """
+    HT of coding variants for validating callset data type. HT written using
+    hail-elasticsearch-pipelines/download_and_create_reference_datasets/v02/hail_scripts/write_dataset_validation_ht.py
+    """
+    if build == '37':
+        return 'gs://seqr-reference-data/GRCh37/validate_ht/common_coding_variants.grch37.ht'
+    else:
+        return 'gs://seqr-reference-data/GRCh38/validate_ht/common_coding_variants.grch38.ht'
