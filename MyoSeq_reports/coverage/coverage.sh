@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/bin/bash
 
 # gs://broad-ukbb/resources/Homo_sapiens_assembly38.fasta.bgz
 
