@@ -9,7 +9,7 @@ cat << EOF
         BEDfiles exist for all MyoSeq list genes.
 
     Inputs:
-        -d      Bucket containing BEDfile for all MyoSeq list genes
+        -d      Directory containing BEDfile for all MyoSeq list genes
         -c      List of crams for the input samples (one cram per line)
         -f      Reference FASTA
         -b      Output batch file for dsub
@@ -56,10 +56,12 @@ while getopts "d:c:f:b:o:h" opt; do
 done
 
 # write header of file
-echo -e "--input BED\t--input BAMLIST\t--input REGION\t--input FASTA\t--output OUT" > ${batchfile}
+echo -e "--input BAMLIST\t--input REGION\t--input FASTA\t--output OUT" > ${batchfile}
 
 # prepare files for dsub
 for file in ${dir}/*bed; do
+
+    gene=$(basename $file | cut -d '.' -f1)
     len=$(awk 'END {print NR}' $file)
     if (( $len > 1 )); then
         chrom=$(head -1 $file | cut -f1)
@@ -70,7 +72,8 @@ for file in ${dir}/*bed; do
         first=$(cat $file | cut -f2)
         last=$(cat $file | cut -f3)
     fi
+
     region="${chrom}:${first}-${last}"
-    echo $region
-    echo -e "${file}\t${crams}\t${region}\t${fasta}\t${out}" >> ${batchfile}
-done
+    outfile="${out}/${gene}.tsv.bgz"
+    echo -e "${crams}\t${region}\t${fasta}\t${outfile}" >> ${batchfile}
+done 
