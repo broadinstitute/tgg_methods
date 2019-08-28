@@ -5,6 +5,7 @@ from os.path import basename
 import os
 import sys
 
+# output should be named gene.coverage.txt
 tsv = os.environ['TSV']
 out = os.environ['OUT']
 
