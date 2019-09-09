@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 import argparse
-import ancestry
 import logging
+from utils import get_samples, check_missing_samples
 
 
 def ped_sex(ped, samples):
@@ -23,7 +23,7 @@ def ped_sex(ped, samples):
                 reported[sid] = sex
 
     # check if any samples are missing and print missing samples to stdout
-    ancestry.check_missing(samples, reported.keys(), 'ped')
+    ancestry.check_missing_samples(samples, reported.keys(), 'ped')
 
     return reported
 
@@ -63,7 +63,7 @@ def compare(infer, samples, reported, out):
 def main(args):
 
     logging.info('Getting samples from file')
-    samples = ancestry.get_samples(args.samp)
+    samples = get_samples(args.samp)
 
     logging.info('Getting reported sex for each sample')
     reported = ped_sex(args.ped, samples)

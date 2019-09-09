@@ -2,36 +2,7 @@
 
 import argparse
 import logging
-
-
-def check_missing(samples, check, fname):
-    """
-    Checks if any requested samples are missing from seqr sample QC file
-
-    :param list samples: List of strings (requested sample IDs)
-    :param list check: List of strings (sample IDs found in file)
-    :param str fname: File name
-    :return: None
-    :rtype: None
-    """
-    missing = set(samples) - set(check)
-    if len(missing) > 0:
-        logging.warning('{} not found in {} file'.format(','.join(missing), fname))
-
-
-def get_samples(samp):
-    """
-    Get requested sample IDs from input file (one sample per line)
-    
-    :param str samp: Name of file containing requested samples
-    :return: List of sample IDs
-    :rtype: list
-    """
-    samples = []
-    with open(samp) as s:
-        for line in s:
-            samples.append(line.strip())
-    return samples
+from utils import get_samples,check_missing_samples 
 
 
 def parse_pca(pca, samples, out):
@@ -67,7 +38,7 @@ def parse_pca(pca, samples, out):
                 o.write('{}\t{}\n'.format(s, popmap[pop]))
 
     # check if any samples are missing and print missing samples to stdout
-    check_missing(samples, found, 'pca')
+    check_missing_samples(samples, found, 'pca')
     
 
 def main(args):
