@@ -2,15 +2,11 @@
 
 import gzip
 from os.path import basename
-#import pandas as pd
 import os
 import sys
 
 tsv = os.environ['TSV']
 out = os.environ['OUT']
-
-#tsv = sys.argv[1]
-#out = sys.argv[2]
 
 # get gene name
 gene = basename(tsv).split('.')[0]
@@ -49,5 +45,4 @@ with gzip.open(tsv) as t, open(out, 'w') as o:
             cov = threshold_counts[i]
             threshold_counts[i] = round(float(cov) / len(sorted_cov), 2)
 
-        #print chrom, pos, mean_cov, median_cov, threshold_counts
         o.write('{}\t{}\t{}\t{}\t{}\t{}\n'.format(gene, chrom, pos, mean_cov, median_cov, '\t'.join(threshold_counts))
