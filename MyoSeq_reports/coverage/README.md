@@ -10,8 +10,8 @@ Stuff
  3. **`gene_coverage.py`**: Script to use when running `dsub` to summarize coverage calculations. (This might also work on a VM?) Creates one tsv per gene with mean coverage, median coverage, and coverage above each threshold (1, 5, 10, 15, 20, 25, 30, 50, 100) for each position.
  4. **`summarize_coverage.py`**: Summarizes sample coverage over each MyoSeq gene. Outputs bgzipped tsv with gene name, gene size, mean coverage, median coverage, % callable bases, and uncallable bases.
 
-## Part 2: PCA
+## Part 2: Ancestry and sexcheck
 Mike generates a file called something like `seqr_sample_qc.tsv` as part of his seqr sample QC pipeline, and Kristen generates a file called something like `v(callset version)_sex.txt` with imputed sex.
 
- 1. **`ancestry.py`**
-
+ 1. **`ancestry.py`**: Parses `seqr_sample_qc.tsv` for each sample's inferred ancestry. Outputs a file with two columns: sample ID and ancestry.
+ 2. **`sex_check.py`**: Parses `sex.txt` for each sample's inferred sex and pedigree file (downloaded from *seqr*) to compare inferred and reported sex. Outputs a file with four columns: sample ID, reported sex, inferred sex, f-stat, and whether the sexes match (`CONCORD`/`CONFLICT`).
