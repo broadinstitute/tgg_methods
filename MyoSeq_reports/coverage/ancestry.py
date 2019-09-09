@@ -5,6 +5,11 @@ import logging
 from utils import get_samples,check_missing_samples 
 
 
+logging.basicConfig(format='%(asctime)s (%(name)s %(lineno)s): %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+logger = logging.getLogger('ancestry')
+logger.setLevel(logging.INFO)
+
+
 def parse_pca(pca, samples, out):
     """
     Get inferred ancestry from seqr sample QC file and write to output TSV
@@ -34,7 +39,6 @@ def parse_pca(pca, samples, out):
             pop = line[pidx]
             if s in samples:
                 found.append(s)
-                print s, pop
                 o.write('{}\t{}\n'.format(s, popmap[pop]))
 
     # check if any samples are missing and print missing samples to stdout
@@ -52,9 +56,6 @@ def main(args):
 
 if __name__ == '__main__':
     
-     # Set up logger
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
-
     # Get args from command line
     parser = argparse.ArgumentParser(description='Pulls ancestry from PCA file for MYOSEQ reports')
     parser.add_argument('-p', '--pca', help='input TSV (PCA)', required=True)

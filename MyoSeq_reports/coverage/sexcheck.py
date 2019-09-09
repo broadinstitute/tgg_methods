@@ -4,6 +4,10 @@ import argparse
 import logging
 from utils import get_samples, check_missing_samples
 
+logging.basicConfig(format='%(asctime)s (%(name)s %(lineno)s): %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+logger = logging.getLogger('sexcheck')
+logger.setLevel(logging.INFO)
+
 
 def ped_sex(ped, samples):
     """
@@ -74,9 +78,6 @@ def main(args):
 
 if __name__ == '__main__':
     
-     # Set up logger
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
-
     # Get args from command line
     parser = argparse.ArgumentParser(description='Checks inferred sex against reported sex for MYOSEQ reports')
     parser.add_argument('-p', '--ped', help='ped file', required=True)
