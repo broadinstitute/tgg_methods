@@ -63,7 +63,7 @@ def compare(infer, samples, reported, out):
 def main(args):
 
     logging.info('Getting samples from file')
-    samples = ancestry.get_samp(args.samp)
+    samples = ancestry.get_samples(args.samp)
 
     logging.info('Getting reported sex for each sample')
     reported = ped_sex(args.ped, samples)

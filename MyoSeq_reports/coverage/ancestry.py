@@ -19,7 +19,7 @@ def check_missing(samples, check, fname):
         logging.warning('{} not found in {} file'.format(','.join(missing), fname))
 
 
-def get_samp(samp):
+def get_samples(samp):
     """
     Get requested sample IDs from input file (one sample per line)
     
@@ -73,7 +73,7 @@ def parse_pca(pca, samples, out):
 def main(args):
 
     logging.info('Getting samples from input file')
-    samples = get_samp(args.samp)
+    samples = get_samples(args.samp)
 
     logging.info('Getting inferred ancestry from PCA and writing to output')
     parse_pca(args.pca, samples, args.out)
