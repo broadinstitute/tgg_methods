@@ -43,7 +43,7 @@ def main(args):
                                             median=hl.median(hl.agg.collect(ht.median)),
                                             size_kb=(hl.agg.count() / 1000),
                                             pct_callable_bases=((hl.agg.count_where(ht.mean >= 6) / size_kb) * 100),
-                                            pct_uncallable_bases=((hl.agg.count_where(ht.mean < 6) / size kb)* 100))
+                                            uncallable_bases=hl.agg.count_where(ht.mean < 6))
 
         # export grouped table
         ht_result.export(f'{bucket}/myoseq_gene_coverage_summary.tsv.bgz')
