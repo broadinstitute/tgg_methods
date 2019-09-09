@@ -16,7 +16,7 @@ thresholds = [1, 5, 10, 15, 20, 25, 30, 50, 100]
 with gzip.open(tsv) as t, open(out, 'w') as o:
 
     # write header
-    o.write('gene\tchrom\tpos\tmean\tmedian\t1\t5\t10\t15\t20\t25\t30\t50\t100\n')
+    #o.write('gene\tchrom\tpos\tmean\tmedian\t1\t5\t10\t15\t20\t25\t30\t50\t100\n')
     for line in t:
         line = line.strip().split('\t')
         chrom = line[0]
