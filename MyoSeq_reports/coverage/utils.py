@@ -7,7 +7,7 @@ def get_samples(sampleFile):
     :rtype: list
     """
     samples = []
-    with open(sampFile) as s:
+    with open(sampleFile) as s:
         for line in s:
             samples.append(line.strip())
     return samples
