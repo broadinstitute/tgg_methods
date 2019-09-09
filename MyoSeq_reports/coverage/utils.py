@@ -13,7 +13,7 @@ def get_samples(sampleFile):
     return samples
 
 
-def check_missing(samples, check, fname):
+def check_missing_samples(samples, check, fname):
     """
     Checks if any requested samples are missing from a file
 
