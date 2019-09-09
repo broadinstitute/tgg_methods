@@ -66,13 +66,13 @@ def compare(infer, samples, reported, out):
 
 def main(args):
 
-    logging.info('Getting samples from file')
+    logger.info('Getting samples from file')
     samples = get_samples(args.samp)
 
-    logging.info('Getting reported sex for each sample')
+    logger.info('Getting reported sex for each sample')
     reported = ped_sex(args.ped, samples)
 
-    logging.info('Comparing inferred and reported sex and writing to output')
+    logger.info('Comparing inferred and reported sex and writing to output')
     compare(args.infer, samples, reported, args.out)
 
 

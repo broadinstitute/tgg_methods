@@ -6,6 +6,10 @@ import logging
 import os
 from utils import get_samples
 
+logging.basicConfig(format='%(asctime)s (%(name)s %(lineno)s): %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+logger = logging.getLogger('bigquery')
+logger.setLevel(logging.INFO)
+
 
 def parse_var(var, samples):
     """
@@ -22,7 +26,7 @@ def parse_var(var, samples):
         # get header of seqr export file
         header = v.readline().strip().split(',')
         # this is to double check that seqr download format has not changed
-        print header[0:6], header[19:24]
+        logger.info('seqr format check: {}, {}'.format(header[0:6], header[19:24]))
         
         for line in v:
             line = line.strip().split(',')
@@ -39,10 +43,8 @@ def parse_var(var, samples):
                 variants[variant] = []
             for sample in sample_info:
                 if ':' in sample:
-                    print sample
                     sample = sample.split(':')
                     if sample[0] in samples:
-                        print sample
                         variants[variant].append(sample[0])
     return variants
 
@@ -70,21 +72,18 @@ def write_bigquery_tsv(variants, out):
 
 def main(args):
 
-    logging.info('Getting individual IDs from ped file')
+    logger.info('Getting individual IDs from ped file')
     samples = get_samples(args.ped)
 
-    logging.info('Getting variants from seqr')
+    logger.info('Getting variants from seqr')
     variants = parse_var(args.var, samples)
     
-    logging.info('Writing variants to output')
+    logger.info('Writing variants to output')
     write_bigquery_tsv(variants, args.out)
 
 
 if __name__ == '__main__':
     
-     # Set up logger
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
-
     # Get args from command line
     parser = argparse.ArgumentParser(description='Reformats seqr variant export for biqquery AF lookup')
     parser.add_argument('-v', '--var', help='input (seqr variants)', required=True)

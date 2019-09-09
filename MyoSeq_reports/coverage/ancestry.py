@@ -47,10 +47,10 @@ def parse_pca(pca, samples, out):
 
 def main(args):
 
-    logging.info('Getting samples from input file')
+    logger.info('Getting samples from input file')
     samples = get_samples(args.samp)
 
-    logging.info('Getting inferred ancestry from PCA and writing to output')
+    logger.info('Getting inferred ancestry from PCA and writing to output')
     parse_pca(args.pca, samples, args.out)
 
 
