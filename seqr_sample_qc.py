@@ -34,8 +34,6 @@ def validate_mt(mt: hl.MatrixTable, build: int, data_type: str, threshold=0.3):
 
         :param mt: Matrix Table to check
         :param build: reference build
-        :return: a dict of coding/non-coding to dict with 'matched_count', 'total_count' and 'match' boolean.
-        :rtype Set
         """
         stats = {}
         types_to_ht_path = {
@@ -84,7 +82,6 @@ def validate_mt(mt: hl.MatrixTable, build: int, data_type: str, threshold=0.3):
                 f'Sample type validation error: dataset sample-type is specified as {data_type} but appears to be '
                 'WGS because it contains many common non-coding variants'
             )
-    return True
 
 
 def apply_filter_flags_expr(mt: hl.MatrixTable, data_type: str) -> hl.expr.SetExpression:
@@ -113,38 +110,6 @@ def apply_filter_flags_expr(mt: hl.MatrixTable, data_type: str) -> hl.expr.SetEx
                             [hl.or_missing(filter_expr, name) for name, filter_expr in flags.items()]))
 
 
-def liftover_to_37(vcf_mt: hl.MatrixTable) -> hl.MatrixTable:
-    """
-    Liftover input mt from GRCh38 to GRCh37 and return for gnomAD population assignment
-    :param vcf_mt: MatrixTable on GRCh38
-    :return: MatrixTable with GRCh37 locus
-    :rtype MatrixTable:
-    """
-    logger.info('Lifting a 38 genome over to 37')
-    chain_file = "gs://hail-common/references/grch38_to_grch37.over.chain.gz"
-    grch38 = hl.get_reference('GRCh38')
-    grch38.add_liftover(chain_file, 'GRCh37')
-    vcf_mt = vcf_mt.annotate_rows(liftover_locus=hl.liftover(vcf_mt.locus, 'GRCh37'))
-    vcf_mt = vcf_mt.filter_rows(hl.is_defined(vcf_mt.liftover_locus))
-    vcf_mt = vcf_mt.rename({'locus': 'locus_grch38', 'liftover_locus': 'locus'})
-    vcf_mt = vcf_mt.key_rows_by('locus', 'alleles')
-    return vcf_mt
-
-
-def prep_meta(ht: hl.Table) -> hl.Table:
-    """
-    Preps gnomAD exome and genome metadata for population PC by selecting relevant fields only
-    :param Table ht: Hail table from gnomAD's metadata column annotations
-    :return: Hail Table ready for joining
-    :rtype: Table
-    """
-    ht = ht.key_by('s')
-    ht = ht.annotate(source='gnomAD')
-    ht = ht.select('PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6', 'data_type', 'qc_pop', 'source')
-    ht = ht.filter(hl.is_defined(ht.PC1)).rename({'qc_pop': 'known_pop'})
-    return ht
-
-
 def get_all_sample_metadata(mt: hl.MatrixTable, build: int, data_type: str, data_source: str, version: int) -> hl.Table:
     """
     Annotate MatrixTable with all current metadata: sample sequencing metrics, sample ID mapping,
@@ -165,7 +130,7 @@ def get_all_sample_metadata(mt: hl.MatrixTable, build: int, data_type: str, data
     meta_ht = meta_ht.annotate(**remap_ht[meta_ht.key])
     meta_ht = meta_ht.annotate(seqr_id=hl.cond(hl.is_missing(meta_ht.seqr_id), meta_ht.SAMPLE, meta_ht.seqr_id))
 
-    logger.info("Annotating bi-allelic, high-callrate, common SNPs for sample QC...")
+    logger.info("Annotating bi-allelic, high-callrate, common SNPs for sample QC...") # filter not annotate
     mt = mt.filter_rows((hl.len(mt.alleles) == 2) & hl.is_snp(mt.alleles[0], mt.alleles[1])
                         & (hl.agg.mean(mt.GT.n_alt_alleles()) / 2 > 0.001) &
                         (hl.agg.fraction(hl.is_defined(mt.GT)) > 0.99))
@@ -197,58 +162,32 @@ def run_platform_imputation(mt: hl.MatrixTable, plat_min_cluster_size: int, plat
 
 def run_population_pca(mt: hl.MatrixTable,
                        build: int,
-                       data_type: str,
-                       data_source: str,
-                       version: int,
-                       is_test: bool,
-                       fit: Any = None,
+                       fit_path = 'gs://seqr-datasets/methods_dev/test_data/pop_imputation/pca_w_cmg/samples.RF_fit_90.pkl',
                        ) -> hl.Table:
     """
-    Preps data for population PCA by joining gnomAD metadata tables with new samples' scores from pc_project and selects
-    columns for run_assign_population_pcs
+    Projects samples onto pre-computed gnomAD and rare disease sample principal components using PCA loadings.  A
+    random forest classifier assigns gnomAD and rare disease sample population labels
     :param MatrixTable mt: QC MatrixTable
     :param int build: 37 or 38 for write path
-    :param str data_type: WGS or WES for write path
-    :param str data_source: internal or external for write path
-    :param int version: Int for write path
-    :param bool is_test: Boolean on whether testing pipeline for write path
     :param RandomForestClassifier fit: fit from a previously trained random forest model (i.e., the output from a previous RandomForestClassifier() call)
-    :return: Table annotated with assigned gnomAD population and PCs
+    :return: Table annotated with assigned RDG and gnomAD population and PCs
     :rtype: Table
-
     """
-    meta_exomes = hl.read_table(metadata_exomes_ht_path(version=CURRENT_EXOME_META))
-    meta_genomes = hl.read_table(metadata_genomes_ht_path(version=CURRENT_GENOME_META))
-    loadings = hl.read_table(ancestry_pca_loadings_ht_path())
-
-    meta_exomes = prep_meta(meta_exomes)
-    meta_genomes = prep_meta(meta_genomes)
-    meta = meta_exomes.union(meta_genomes)
-
+    loadings = hl.read_table(rdg_gnomad_pop_pca_loadings_ht_path(build))
     mt = mt.select_entries('GT')
-    scores = pc_project(mt, loadings)
-    d = {f'PC{i+1}': scores.scores[i] for i in range(6)}
-    scores = scores.annotate(**d).drop('scores')
-    scores = scores.annotate(data_type=data_type, known_pop=hl.null(hl.tstr), source="RDG").key_by('s')
-    meta = meta.select('PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6', 'data_type', 'known_pop', 'source')
-    meta = meta.union(scores)
+    scores = pc_project(mt, loadings)  # TODO run pc_project and compare mt to split mt
+    scores = scores.annotate(scores = scores.scores[:6], known_pop="Unknown").key_by('s')
 
-    logger.info('Assigning gnomAD populations...')
-    data = meta.to_pandas()
-    pc_cols = ['PC{}'.format(pc) for pc in range(1, 7)]
-    pop_pca_ht, pop_clf = assign_population_pcs(data, pc_cols=pc_cols, output_col='qc_pop', fit=fit)
-    pop_pca_ht = hl.Table.from_pandas(pop_pca_ht)
+    logger.info('Unpacking RF model')
+    fit = None
+    with hl.hadoop_open(fit_path, 'rb') as f:
+        fit = pickle.load(f)
 
-    if not fit:
-        # Pickle RF
-        with hl.hadoop_open(pop_RF_fit_path(build, data_type, data_source, version, is_test), 'wb') as out:
-            pickle.dump(pop_clf, out)
-
-    pop_pca_ht = pop_pca_ht.filter(pop_pca_ht.source == "RDG").drop('known_pop', 'source', 'data_type').key_by('s')
-    pop_pca_ht = pop_pca_ht.annotate(**scores[pop_pca_ht.s])
-    pop_pca_ht = pop_pca_ht.rename({f'PC{pc}': f'pop_PC{pc}' for pc in range(1,7)})
-    logger.info("Found the following sample count after population assignment: {}".format(
-        ", ".join(f'{pop}: {count}' for pop, count in pop_pca_ht.aggregate(hl.agg.counter(pop_pca_ht.qc_pop)).items())))
+    pop_pca_ht, ignore = assign_population_pcs(scores, pc_cols=scores.scores, output_col='qc_pop', fit=fit)
+    pop_pca_ht = pop_pca_ht.key_by('s')
+    d = {f'pop_PC{i+1}': scores.scores[i] for i in range(6)}
+    scores = scores.annotate(**d).drop('scores', 'known_pop')
+    pop_pca_ht = pop_pca_ht.annotate(**scores[pop_pca_ht.key])
     return pop_pca_ht
 
 
@@ -261,6 +200,7 @@ def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
     :return: MatrixTable annotated with hails sample qc metrics as well as pop and platform outliers
     :rtype: MatrixTable
     """
+    mt = filter_to_autosomes(mt)
     mt = hl.split_multi_hts(mt)
     mt = hl.sample_qc(mt)
     mt = mt.annotate_cols(sample_qc=mt.sample_qc.annotate(f_inbreeding=hl.agg.inbreeding(mt.GT, mt.info.AF[0])))
@@ -281,7 +221,9 @@ def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
 
 def main(args):
 
-    hl.init(tmp_dir='hdfs:///pc_relate.tmp/')
+    hl.init(log='/seqr_sample_qc.log')
+    hl._set_flags(newaggs=None)
+
     logger.info("Beginning seqr sample QC pipeline...")
 
     data_type = args.data_type
@@ -307,11 +249,6 @@ def main(args):
         logger.info('Creating test mt...')
         mt = hl.filter_intervals(mt, [hl.parse_locus_interval('20', reference_genome=f'GRCh{build}')]).persist()
 
-    if build == '38':
-        mt = liftover_to_37(mt)  # Needed for gnomAD PC project
-        mt = mt.checkpoint(liftover_mt_path(build, data_type, data_source, version, is_test), overwrite)
-        logger.info('Liftover complete')
-
     logger.info("Annotating with sequencing metrics and filtered callrate...")
     meta_ht = get_all_sample_metadata(mt, build, data_type, data_source, version)
     mt = mt.annotate_cols(**meta_ht[mt.col_key])
@@ -324,21 +261,17 @@ def main(args):
         logger.info('Running platform imputation...')
         plat_ht = run_platform_imputation(mt, args.plat_min_cluster_size, args.plat_min_sample_size)
         mt = mt.annotate_cols(**plat_ht[mt.col_key])
-    else:
+    elif data_source == 'Internal':
         logger.info('Assigning platform from product in metadata...')
-        mt = mt.annotate_cols(qc_platform=mt.PRODUCT)
+        mt = mt.annotate_cols(qc_platform=hl.cond(hl.is_defined(mt.PRODUCT),mt.PRODUCT,"Unknown"))
 
-        missing_metrics = mt.filter_cols(hl.is_defined(mt.PRODUCT), keep=False)  # Write out samples missing seq metrics
-        missing_metrics.cols().select().export(missing_metrics_path(build, data_type, data_source, version))
-
-        mt = mt.filter_cols(hl.is_defined(mt.PRODUCT))  # Remove control samples and blacklisted samples
-        mt = mt.filter_rows(hl.agg.count_where(mt.GT.is_non_ref()) > 0)
-
-    # Checkpoint because mt.to_pandas in run_population_pca nukes dataproc nodes otherwise
-    mt = mt.checkpoint(mt_temp_path(build, data_type, data_source, version, is_test), overwrite)
+        missing_metrics = mt.filter_cols(hl.is_defined(mt.PRODUCT), keep=False)
+        missing_metrics.cols().select().export(missing_metrics_path(build, data_type, data_source, version)) #  TODO Add logging step that prints unexpected missing samples
+    else:
+        mt = mt.annotate_cols(qc_platform='Unknown')
 
     logger.info('Projecting gnomAD population PCs...')
-    pop_ht = run_population_pca(mt, build, data_type, data_source, version, is_test, args.pop_pca_fit)
+    pop_ht = run_population_pca(mt, build)
     mt = mt.annotate_cols(**pop_ht[mt.col_key])
 
     logger.info('Running Hail\'s sample qc...')
@@ -364,7 +297,6 @@ if __name__ == '__main__':
     parser.add_argument('--plat-min-sample-size', help='Minimum sample size for platform pca labeling', default=40)
     parser.add_argument('--skip-write-mt', help='Skip writing out qc mt', action='store_true')
     parser.add_argument('--skip-validate-mt', help='Skip validating the mt against common coding and noncoding variants', action='store_true')
-    parser.add_argument('--pop-pca-fit', help='Random Forest classifier for population assignment')
     parser.add_argument('--project-list', help='List of seqr projects that are in the callset')
     parser.add_argument('--slack-channel', help='Slack channel to post results and notifications to.')
     parser.add_argument('--overwrite', help="Overwrite previous paths", action='store_true')

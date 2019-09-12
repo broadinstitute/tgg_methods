@@ -13,9 +13,9 @@ def get_filepath(build: str, data_type: str, data_source: str, version: int, is_
     :return:
     """
     if is_test:
-        return f'gs://seqr-datasets/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc/test/' # TODO revisit where test should be - want to use same resource folder to avoid copying over agian
+        return f'gs://seqr-datasets/v02/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc/test/' # TODO revisit where test should be - want to use same resource folder to avoid copying over agian
     else:
-        return f'gs://seqr-datasets/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc/'
+        return f'gs://seqr-datasets/v02/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc/'
 
 
 def callset_vcf_path(build: str, data_type: str, data_source: str, version: int, is_test: bool) -> str:
@@ -25,10 +25,7 @@ def callset_vcf_path(build: str, data_type: str, data_source: str, version: int,
     filepath = get_filepath(build, data_type, data_source, version, is_test)
     if is_test:
         filepath = filepath[:-5]
-    if data_type == 'WGS' and data_source == 'Internal':
-        filepath = filepath[:-10] + f'sharded_vcf/RDG_{data_type}_Broad_Internal.filtered.*.vcf.gz'
-    else:
-        filepath = filepath[:-10] + f'vcf/RDG_{data_type}_Broad_{data_source}.vcf.gz'
+    filepath = filepath[:-10] + f'RDG_{data_type}_Broad_{data_source}.vcf.bgz'
     return filepath
 
 
@@ -39,16 +36,6 @@ def mt_path(build: str, data_type: str, data_source: str, version: int, is_test:
     """
     filepath = get_filepath(build, data_type, data_source, version, is_test)
     return filepath + f'resources/callset.mt'
-
-
-def liftover_mt_path(build: str, data_type: str, data_source: str, version: int, is_test: bool) -> str:
-    """
-    Returns seqr sample qc MatrixTable: can be exomes or genomes, internal or external data.
-    Contains vcf sample ID, seqr sample ID, callrate, chimera, contamination, coverage, pedigree information,
-    provided gender and affected status, computed gender, platform, ancestry, inbreeding coefficient.
-    """
-    filepath = get_filepath(build, data_type, data_source, version, is_test)
-    return filepath + f'resources/callset_37_liftover.mt'
 
 
 def seq_metrics_path(build: str, data_type: str, data_source: str, version: int) -> str:
@@ -100,6 +87,11 @@ def sex_check_path(build: str, data_type: str, data_source: str, version: int) -
     """
     filepath = get_filepath(build, data_type, data_source, version, is_test=False)
     return filepath + 'sex_check/imputed_sex.tsv'
+
+
+def rdg_gnomad_pop_pca_loadings_ht_path(build: str) -> str:
+    """Return the PCA loadings from joint RDG and gnomAD PCA"""
+    return f'gs://seqr-datasets/v02/GRCh{build}/sample_qc/population_assignment/ancestry_pca_loadings.ht'
 
 
 def pop_RF_fit_path(build: str, data_type: str, data_source: str, version: int, is_test: bool) -> str:
