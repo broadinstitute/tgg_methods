@@ -85,9 +85,49 @@ def get_patient_details(proband: str, dirname: str, outname: str) -> str:
     return inferred
 
 
+def report_cnvs(proband, dirname, outname, resources):
+    '''
+    Formats any candidate CNVs for first page of report
+
+    :param str proband: Proband ID
+    :param str dirname: Name of top level directory with all sample information for reports
+    :param str outname: Output file name
+    :param str resources: Directory with tex files
+    :return: None
+    :rtype: None
+    '''
+    cat(f'{resources}/myoseq_template_report_cnv_table_header.tex', outname)
+    
+    # add empty line to top of CNV box for formatting
+    cnv_info = f'{} & {} & {} & {} & {} {LINE_BREAK}\n'
+
+    logger.info('Extracting information from CNV file')
+    cnv_file = f'{dirname}/summary/{proband}_CNV.tsv'
+    with open(cnv_file) as c:
+        # previous format:
+        # CAPN3	Loss (CN=1)	WES	15:42676429-42686791	10.362
+        # new format (from gCNV output):
+        # chr   start   end CN  gene
+        for line in c:
+            chrom, start, end, cn, gene = line.strip().split('\t')
+            cnv = f'{chrom}:{start}-{end}'
+            # size is reported in kb 
+            size = float(start - end) / 1000
+            if int(cn) <= 1:
+                cnv_type = f'Loss (CN={cn})'
+            else:
+                cnv_type = f'Gain (CN={cn})'
+            cnv_info += f'{gene} & ' + '\\textbf{\\color{red}' + f'{cnv_type}' + '} & ' + f'WES & {cnv} & {size} {LINE_BREAK} \\hline \n'
+    cnv_info += '\\end{tabular}\n\\end{small}\n'
+    append_out(cnv_info, outname)
+
+    logger.info('Closing out CNV section of reports')
+    cat(f'{resources}/myoseq_template_candidate_cnv_notes.tex')
+            
+
 def get_report_variants(proband: str, dirname: str, unsolved: bool, outname: str, resources: str, sex: str) -> None:
     '''
-    Formats any candidate variants (tagged 'REPORT' in seqr) for first page of report
+    Formats any candidate SNVs/indels (tagged 'REPORT' in seqr) for first page of report
 
     :param str proband: Proband ID
     :param str dirname: Name of top level directory with all sample information for reports
@@ -109,7 +149,7 @@ def get_report_variants(proband: str, dirname: str, unsolved: bool, outname: str
         logger.info('Starting REPORT genes box')
         cat(f'{resources}/myoseq_template_report_variants_table_header.tex', outname)
         report_file = f'{dirname}/seqr/variants/{proband}.flagged.txt'
-        report_info = pandas.read_csv(report_file, sep='\t').do_dict('records')
+        report_info = pandas.read_csv(report_file, sep='\t').to_dict('records')
 
         # break variant into component chr:pos, ref, alt and get rest of variant information
         #'variant': 'chr1:236883444 T>A',
@@ -205,10 +245,13 @@ def get_report_variants(proband: str, dirname: str, unsolved: bool, outname: str
                 comment = comments[i].split(': ')[1].replace('http', '\\\\\nhttp')
                 variant_info += '\\textsuperscript{' + f'{alpha_foot[i]}' + '} ' + f'{comment}\n{LINE_BREAK}\n' 
 
+        append_out(variant_info, outname)
         logger.info('Finishing off REPORT genes box with notes .tex')
         cat(f'{resources}/myoseq_template_candidate_variants_notes.tex', outname)
 
-    append_out(report_str, outname)
+
+def add_cnv_plot():
+    pass
 
 
 def main(args):
