@@ -17,6 +17,8 @@ logger.setLevel(logging.INFO)
 LINE_BREAK = '\\\\'
 END_BOX = '\\end{tabular}\n\\end{small}\n'
 NEW_PAGE = '\\newpage\n'
+GT = '\\textgreater'
+UNDERSCORE = '\\textunderscore'
 
 
 def awk(sample: str, fname: str) -> str:
@@ -151,6 +153,117 @@ def report_sma(proband: str, dirname: str, outname: str, resources: str):
     cat(f'{resources}/myoseq_template_candidate_cnv_notes.tex')
 
 
+def get_variants(line: dict, report: bool, comment_index: int) -> str:
+    '''
+    Formats variant information for one row in variant table
+
+    :param dict line: Line with variant information from patient.flagged.txt (REPORT variants) or patient.genes.txt (all rare variants called)
+    :param bool report: Whether this variant is going on the first page of the reports (was tagged REPORT in seqr)
+    :param int comment_index: Which index to use for comments
+    :return: Formatted variant information for .tex file
+    :rtype: str
+    '''
+
+    # break variant into component chr:pos, ref, alt and get rest of variant information
+    #'variant': 'chr1:236883444 T>A',
+    chr_pos = line['variant'].split(' ')[0]
+    ref, alt = line['variant'].split(' ')[1].split('>')
+    genotype = line['genotype']
+    transcript, hgvsc = line['hgvsc'].replace('>', f'{GT}').replace('_', f'{UNDERSCORE}').split(':')
+    hgvsp = line['hgvsp'].split(':')[1].replace('>', f'{GT}').replace('_', f'{UNDERSCORE}')
+    function = line['functional_class']
+    global_af = line['gnomad_global_af']
+    popmax_af = line['gnomad_pop_max_af']
+    popmax_pop = line['gnomad_pop_max_population']
+    stars = line['number_of_stars']
+
+    # format notes from seqr
+    # NOTE: assumes you won't have more comments than letters in the alphabet
+    comments = line['comments']
+    if comments != '.' and report:
+        comment_foot = chr(97+comment_index)
+        comment_info = ''
+        comments = comments.split('|')
+        # 	kchao@broadinstitute.org: https://www.ncbi.nlm.nih.gov/pubmed/28554942|kchao@broadinstitute.org: https://www.ncbi.nlm.nih.gov/pubmed/28544275|kchao@broadinstitute.org: not seen in gnomAD
+        for c in comments:
+            c = c.split(': ')[1].replace('http', '\\\\\nhttp')
+            comment_info += c + ' ' 
+    else:
+        comment_foot = ''
+        comment_info = ''
+
+    # truncate long indels
+    indel_fmt = '\\textsuperscript{+}'
+    if len(ref) > 10:
+        ref = ref[:10] + f'{indel_fmt}'
+    if len(alt) > 10:
+        alt = alt[:10] + f'{indel_fmt}'
+    if len(hgvsc) > 30:
+        hgvsc = hgsvsc[:30] + f'{indel_fmt}'
+
+    # format variant into chr:pos ref>alt
+    variant = f'{chr_pos} {ref} {GT} {alt}'
+    variant_info = '\\bf{' + f"{line['gene_name']}" + '} & ' + f'{variant} & {round(global_af, 2)} &'
+
+    # correct hom to hem for males on X
+    if 'X' in chr_pos and genotype == 'hom' and sex == 'Male':
+        genotype = 'hem'
+
+    # parse ClinVar status and determine color
+    # Monkol split on "/" to split up entries that are too long (pathogenic/likely pathogenic)
+    clinsig = line['clinvar_clinsig']).split('/')
+    revstat = line['clinvar_clnrevstat']
+    if clinsig == ['.']:
+        variant_info += f' NA & {comment_foot} {LINE_BREAK}\n'
+    else:
+        if clinsig.contains('pathogenic'):
+            color = 'red'
+        elif clinsig.contains('conflicting'):
+            color = 'red'
+        elif clinsig.contains('uncertain'):
+            color = 'Orange'
+        elif clinsig.contains('benign'):
+            color = 'Green'
+        # other clinvar statuses default to black text
+        else:
+            color = ''
+
+        if color != '':
+            for i in len(clinsig):
+                variant_info += '\\textcolor{' + f'{color}' + '}{\\textbf{' + f'{clinsig[i]}' + '}} & ' + f'{comment_foot} {LINE_BREAK}\n'
+        else:
+            for i in len(clinsig):
+                variant_info += '{\\textbf{' + f'{clinsig[i]}' + '}} & ' + f'{comment_foot} {LINE_BREAK}\n'
+
+    # color variant's hgvsc red if it is a splice variant; otherwise display in black
+    if function == 'splice_donor_variant' or function == 'slice_acceptor_variant':
+        variant_info += f'{transcript} & ' + '\\textcolor{red}{' + f'{hgvsc}' + '} & ' + f'{round(popmax_af, 2)} & ' + f'{revstat} & {LINE_BREAK}\n'
+    else:
+        variant_info += f'{transcript} & {hgvsc} & {round(popmax_af, 2)} & {revstat} & {LINE_BREAK}\n'
+
+    # color variant's hgvsp  according to functional impact
+    if len(hgvsp) > 0:
+        color = ''
+        if function == 'synonymous_variant':
+            color = 'Green'
+        elif function == 'frameshift_variant' or function == 'stop_gained' or function == 'splice_donor_variant' or function == 'slice_acceptor_variant':
+            color = 'red'
+        elif function == 'missense_variant' or function == 'inframe_deletion' or function == 'inframe_insertion':
+            color = 'Orange'
+        else:
+            color = ''
+
+        if color != '':
+            hgvsp =  '\\textcolor{' + f'{color}' + '}{' + f'{hgvps}' + '}'
+    variant_info += '\\textit{' + f'{genotype}' + '} & ' + f'{hgvps} & & {stars} & {LINE_BREAK}\n'
+    variant_info += f'& {line["rsid"]} & & & {LINE_BREAK}\n\\hline\n'
+
+    if comments != '':
+        variant_info += '\\textsuperscript{' + f'{comment_foot}' + '} ' + f'{comments}\n{LINE_BREAK}\n' 
+
+    return variant_info
+
+
 def get_report_variants(proband: str, dirname: str, unsolved: bool, outname: str, resources: str, sex: str) -> None:
     '''
     Formats any candidate SNVs/indels (tagged 'REPORT' in seqr) for first page of report
@@ -168,110 +281,16 @@ def get_report_variants(proband: str, dirname: str, unsolved: bool, outname: str
         logger.info('Adding None to REPORT genes box')
         cat(f'{resources}/myoseq_template_no_candidate_variants_notes.tex', outname)
     else:
-        # set up pdflatex formatting for special characters
-        gt = '\\textgreater'
-        underscore = '\\textunderscore'
-
         logger.info('Starting REPORT genes box')
         cat(f'{resources}/myoseq_template_report_variants_table_header.tex', outname)
         report_file = f'{dirname}/seqr/variants/{proband}.flagged.txt'
         report_info = pandas.read_csv(report_file, sep='\t').to_dict('records')
-
-        # break variant into component chr:pos, ref, alt and get rest of variant information
-        #'variant': 'chr1:236883444 T>A',
-        chr_pos = report_info[0]['variant'].split(' ')[0]
-        ref, alt = report_info[0]['variant'].split(' ')[1].split('>')
-        genotype = report_info[0]['genotype']
-        transcript, hgvsc = report_info[0]['hgvsc'].replace('>', f'{gt}').replace('_', f'{underscore}').split(':')
-        hgvsp = report_info[0]['hgvsp'].split(':')[1].replace('>', f'{gt}').replace('_', f'{underscore}')
-        function = report_info[0]['functional_class']
-        global_af = report_info[0]['gnomad_global_af']
-        popmax_af = report_info[0]['gnomad_pop_max_af']
-        popmax_pop = report_info[0]['gnomad_pop_max_population']
-        stars = report_info[0]['number_of_stars']
-
-        # truncate long indels
-        indel_fmt = '\\textsuperscript{+}'
-        if len(ref) > 10:
-            ref = ref[:10] + f'{indel_fmt}'
-        if len(alt) > 10:
-            alt = alt[:10] + f'{indel_fmt}'
-        if len(hgvsc) > 30:
-            hgvsc = hgsvsc[:30] + f'{indel_fmt}'
-
-        # finish formatting variant
-        variant = f'{chr_pos} {ref} {gt} {alt}'
-        variant_info = '\\bf{' + f"{report_info[0]['gene_name']}" + '} & ' + f'{variant} & {round(global_af, 2)} &'
-
-        # correct hom to hem for males on X
-        if 'X' in chr_pos and genotype == 'hom' and sex == 'Male':
-            genotype = 'hem'
-
-        # parse ClinVar status and determine color
-        # Monkol split on "/" to split up entries that are too long (pathogenic/likely pathogenic)
-        clinsig = report_info[0]['clinvar_clinsig']).split('/')
-        revstat = report_info[0]['clinvar_clnrevstat']
-        if clinsig == ['.']:
-            variant_info += f' NA & {comment_foot} {LINE_BREAK}\n'
-        else:
-            if clinsig.contains('pathogenic'):
-                color = 'red'
-            elif clinsig.contains('conflicting'):
-                color = 'red'
-            elif clinsig.contains('uncertain'):
-                color = 'Orange'
-            elif clinsig.contains('benign'):
-                color = 'Green'
-            # other clinvar statuses default to black text
-            else:
-                color = ''
-
-            if color != '': 
-                for i in len(clinsig):
-                    variant_info += '\\textcolor{' + f'{color}' + '}{\\textbf{' + f'{clinsig[i]}' + '}} & ' + f'{comment_foot} {LINE_BREAK}\n'
-            else:
-                for i in len(clinsig):
-                    variant_info += '{\\textbf{' + f'{clinsig[i]}' + '}} & ' + f'{comment_foot} {LINE_BREAK}\n'
-
-        # color variant's hgvsc red if it is a splice variant; otherwise display in black
-        if function == 'splice_donor_variant' or function == 'slice_acceptor_variant':
-            variant_info += f'{transcript} & ' + '\\textcolor{red}{' + f'{hgvsc}' + '} & ' + f'{round(popmax_af, 2)} & ' + f'{revstat} & {LINE_BREAK}\n'
-        else:
-            variant_info += f'{transcript} & {hgvsc} & {round(popmax_af, 2)} & {revstat} & {LINE_BREAK}\n'
-        
-        # color variant's hgvsp  according to functional impact
-        if len(hgvsp) > 0:
-            color = ''
-            if function == 'synonymous_variant':
-                color = 'Green'
-            elif function == 'frameshift_variant' or function == 'stop_gained' or function == 'splice_donor_variant' or function == 'slice_acceptor_variant':
-                color = 'red'
-            elif function == 'missense_variant' or function == 'inframe_deletion' or function == 'inframe_insertion':
-                color = 'Orange'
-            else:
-                color = ''
-
-            if color != '':
-                hgvsp =  '\\textcolor{' + f'{color}' + '}{' + f'{hgvps}' + '}'
-        variant_info += '\\textit{' + f'{genotype}' + '} & ' + f'{hgvps} & & {stars} & {LINE_BREAK}\n'
-        variant_info += f'& {report_info[0]["rsid"]} & & & {LINE_BREAK}\n\\hline\n'
+        variant_info = ''
+        for i in range(len(report_info)):
+            variant_info += get_variants(report_info[i], True, i)
         variant_info += f'{END_BOX}'      
-
-        # format notes from seqr
-        # create footer for notes made in seqr
-        # Monkol only accounts for up to 6 notes (a-g), so I've done the same
-        alpha_foot = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
-
-        comments = report_info[0]['comments']
-        if comments != '.':
-            comments = comments.split('|')
-            # 	kchao@broadinstitute.org: https://www.ncbi.nlm.nih.gov/pubmed/28554942|kchao@broadinstitute.org: https://www.ncbi.nlm.nih.gov/pubmed/28544275|kchao@broadinstitute.org: not seen in gnomAD
-            # truncating number of comments at 6, per Monkol's code
-            for i in range(7):
-                comment = comments[i].split(': ')[1].replace('http', '\\\\\nhttp')
-                variant_info += '\\textsuperscript{' + f'{alpha_foot[i]}' + '} ' + f'{comment}\n{LINE_BREAK}\n' 
-
         append_out(variant_info, outname)
+
         logger.info('Finishing off REPORT genes box with notes .tex')
         cat(f'{resources}/myoseq_template_candidate_variants_notes.tex', outname)
 
