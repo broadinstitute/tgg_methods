@@ -287,7 +287,7 @@ def get_report_variants(proband: str, dirname: str, unsolved: bool, outname: str
         report_info = pandas.read_csv(report_file, sep='\t').to_dict('records')
         variant_info = ''
         for i in range(len(report_info)):
-            variant_info += get_variants(report_info[i], True, i)
+            variant_info += get_variants(report_info[i], report=True, i)
         variant_info += f'{END_BOX}'      
         append_out(variant_info, outname)
 
@@ -339,6 +339,33 @@ def add_sma_plot(proband: str, dirname: str, outname: str) -> None:
     cat(f'{resources}/myoseq_template_sma_figure_caption.tex', outname)
     append_out(NEW_PAGE, outname)   
  
+
+def get_all_variants(proband: str, dirname: str, unsolved: bool, outname: str, resources: str, sex: str) -> None:
+    '''
+    Formats any candidate SNVs/indels (tagged 'REPORT' in seqr) for first page of report
+
+    :param str proband: Proband ID
+    :param str dirname: Name of top level directory with all sample information for reports
+    :param bool unsolved: Whether patient is unsolved
+    :param str outname: Output file name
+    :param str resources: Directory with tex files
+    :param str sex: Sample's inferred sex
+    :return: None
+    :rtype: None
+    '''
+    logger.info('Starting appendix (all rare variants) box')
+    cat(f'{resources}/myoseq_template_all_variants_table_header.tex', outname)
+    myoseq_file = f'{dirname}/seqr/variants/{proband}.genes.txt'
+    myoseq_info = pandas.read_csv(myoseq_file, sep='\t').to_dict('records')
+    variant_info = ''
+    for i in range(len(myoseq_info)):
+        variant_info += get_variants(myoseq_info[i], report=False, i)
+    variant_info += '\\end{longtable}\n\\end{small}\n'      
+    append_out(variant_info, outname)
+
+    logger.info('Finishing off appendix with notes .tex')
+    cat(f'{resources}/myoseq_template_additional_variants_notes.tex', outname)
+
 
 def main(args):
 
