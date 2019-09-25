@@ -1,0 +1,91 @@
+{\Large \textbf{\underline{General Methodology}}}
+\\ \\ \\
+{\large \textbf{\textit{Exome Sequencing}}}
+\\
+We performed whole exome sequencing on DNA samples at the Broad Institute's Genomics Platform, using Illumina exome capture, 38 Mb baited target, and the Broad's in-solution 
+hybrid selection process. For input DNA we used \textgreater250 $ng$ of DNA, at \textgreater2 $ng/\mu l$. Our exome-sequencing pipeline included sample plating, library preparation (2-plexing of samples 
+per hybridization), hybrid capture, sequencing (76 bp paired reads), sample identification QC check, and data storage. Our hybrid selection libraries cover \textgreater80\% of targets at 
+20x and a mean target coverage of \textgreater80x. The exome sequencing data was de-multiplexed and each sample's sequence data were aggregated into a single Picard BAM file.
+\\ \\ \\
+{\large \textbf{\textit{Variant Calling, Filtering and Annotation}}}
+\\
+Exome sequencing data was processed through a pipeline based on \textit{Picard}, using base quality score recalibration and local 
+realignment at known indels. We used the \textit{BWA} aligner for mapping reads to the human genome build 37 (hg19). Single Nucleotide Polymorphism (SNPs) 
+and insertions/deletions (indels) were jointly called across all samples using \textit{Genome Analysis Toolkit (GATK)} HaplotypeCaller package version 3.1. 
+Default filters were applied to SNP and indel calls using the GATK Variant Quality Score Recalibration (VQSR) approach. 
+Lastly, the variants were annotated using \textit{Variant Effect Predictor (VEP)}.
+\\ \\ \\
+{\large \textbf{\textit{Ancestry Inference}}}
+\\
+A set of $\sim$5,800 common SNPs was used to perform principal component analysis (PCA) with 1000 genomes samples and ancestry was inferred based on distance to nearest 
+cluster formed by Exome Aggregation Consortium (ExAC) samples. This analysis is able to identify individuals with a European, South Asian, East Asian, African or 
+Latino ancestry.
+\\ \\ \\
+{\large \textbf{\textit{Gender Inference}}}
+\\
+The gender of the individual was inferred using the fraction of heterozygous calls amongst a set of common variant on chromosome X. In addition, the Y chromosome coverage 
+normalized to chromosome 20 coverage was also used to infer gender.
+\\ \\ \\
+{\large \textbf{\textit{Gene coverage}}}
+\\
+The coding bases (including 10 bp flanking region) of the candidate genes was determined using the Gencode v19 regions. The per base coverage of each
+sample was determined using \textit{samtools depth}. Only reads with mapping quality (MQ) $\geq$20 and bases with base quality (BQ) $\geq$10
+were included in the coverage metric. Lastly, bases with from overlapping reads were only counted once. A site with coverage \textgreater6 was considered
+callable.  
+\\ \\ \\
+{\large \textbf{\textit{Analysis}}}
+\\
+The variant call set was uploaded on to \textit{xBrowse} and an analysis limited to the candidate gene list was performed using the various 
+inheritance patterns. The main report contains variants restricted to nonsense, frameshift, essential splice site and missense variants and filtered on variant site and genotype quality. The appendix listing each gene contains all variants discovered regardless of annotation and quality.
+\\ \\ \\
+{\large \textbf{\textit{Exome Aggregation Consortium (ExAC) data set}}}
+\\
+The Exome Aggregation Consortium (ExAC) is a coalition of investigators seeking to aggregate and harmonize exome sequencing data from a wide variety of large-scale sequencing projects, and to make summary data available for the wider scientific community. The data set contains \textgreater60,000 unrelated individuals sequenced as part of various disease-specific and population genetic studies. The allele frequencies are summarized into the major ancestries European, Non-Finnish European, South Asian, East Asian, African and Latino. For more details please visit http://exac.broadinstitute.org/about
+\\ \\ \\
+
+\newpage
+{\large \textbf{\textit{ClinVar Database}}}
+\\
+ClinVar is a freely accessible, public archive of reports of the relationships among human variations and phenotypes, with supporting evidence. The level of confidence in the accuracy of variation calls and assertions of clinical significance depends in large part on the supporting evidence and is variable for the variants included in ClinVar. A review status (stars) is also assigned by ClinVar to each variant, to indicate the level of supporting evidence. 
+\\ \\
+
+\begin{small}
+\begin{tabular}{ |p{1cm}|p{15cm}|  }
+\hline
+\textbf{Stars} & \textbf{Review Status} \\
+\hline
+None & Either conficting interpretations (in which case the independent values are enumerated), or no submitter provided an interpretation \\
+1 & One submitter provided an interpretation (classified by single submitter) \\
+2 & Two or more submitters provided the same interpretation (classified by multiple submitters) \\
+3 & Reviewed by expert panel \\
+4 & Practice guideline (reviewed by professional society) \\
+\hline
+\end{tabular}
+\end{small}
+\\ \\
+
+{\large \textbf{\textit{SMA carrier detection from exome sequencing data}}}
+\\
+The probability of being a Spinal Muscular Atrophy (SMA) carrier was calculated according to the methods
+described in Larson et al (2015) using the scripts available at https://github.com/klaricch/sma{\textunderscore}carrier{\textunderscore}detection \\ 
+\\ \\
+{\large \textbf{\textit{Tools/Resources}}}
+\\ \\
+\begin{small}
+\begin{tabular}{ |p{6cm}|p{10cm}|  }
+\hline
+\textbf{Tool/Resource} & \textbf{Link} \\
+\hline
+BWA & https://github.com/lh3/bwa \\
+Picard & https://github.com/broadinstitute/picard \\
+Genome Analysis Toolkit (GATK) & https://www.broadinstitute.org/gatk \\
+samtools & https://github.com/samtools/samtools \\
+Gencode v19 & http://www.gencodegenes.org/releases/19.html \\
+Variant Effect Predictor (VEP) & http://www.ensembl.org/info/docs/tools/vep/index.html \\ 
+xBrowse & https://xbrowse.broadinstitute.org \\
+Exome Aggregation Consortium (ExAC) & http://exac.broadinstitute.org \\
+ClinVar & http://www.ncbi.nlm.nih.gov/clinvar \\
+\hline
+\end{tabular}
+\end{small}
+\newpage

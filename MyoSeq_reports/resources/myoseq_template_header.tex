@@ -1,0 +1,35 @@
+\documentclass[a4paper]{article}
+\pagestyle{plain}
+\usepackage[usenames, dvipsnames]{color}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage[table]{xcolor}
+\usepackage{longtable}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}m{#1}}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{geometry}
+ \geometry{
+ a4paper,
+ total={210mm,297mm},
+ left=20mm,
+ right=20mm,
+ top=20mm,
+ bottom=20mm,
+ }
+\setlength{\parindent}{0pt}
+\usepackage{inputenc}
+\setlength{\arrayrulewidth}{0.5mm}
+\setlength{\tabcolsep}{6pt}
+\renewcommand{\arraystretch}{1.5}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\usepackage{tabularx}
+\renewcommand{\headrulewidth}{0pt}
+\lhead{\LARGE\textcolor{lightgray}{\textbf{FOR RESEARCH USE ONLY}}}
+\begin{document}
+\vspace*{\dimexpr-1in-\topmargin-\headsep-\headheight-\baselineskip}%
+\hspace*{\dimexpr-1in-\evensidemargin-\parindent}%
+\makebox[\paperwidth][r]{\frame{\includegraphics[scale=0.4]{Broad}}}
