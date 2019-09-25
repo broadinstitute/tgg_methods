@@ -128,7 +128,7 @@ def report_cnvs(proband: str, dirname: str, outname: str, resources: str) -> tup
     return (gene, int(cn))
             
 
-def report_sma(proband: str, dirname: str, outname: str, resources: str):
+def report_sma(proband: str, dirname: str, outname: str, resources: str) -> None:
     '''
     Formats SMA information for first page of report
 
@@ -397,6 +397,8 @@ def main(args):
     dirname = args.dirname
     resources = args.resources
     unsolved = args.unsolved
+    cnv = args.cnv
+    sma = args.sma
     outname = f'{args.out}/{proband}.tex'
 
     logger.info('Setting up the report header')
@@ -405,13 +407,41 @@ def main(args):
     logger.info('Preparing top of first page of reports (ID, sex, ancestry)')
     sex = get_patient_details(proband, dirname, outname)
 
+    if cnv:
+        logger.info('Adding candidate CNVs to first page of reports')
+        cnv = report_cnvs(proband, dirname, outname, resources 
+        gene = cnv[0]
+        cn = cnv[1]
+    if sma:
+        logger.info('Adding SMA carrier status to first page of reports')
+        report_sma(proband, dirname, outname, resources)
+
     logger.info('Finishing first page of reports (REPORT genes box)')
     get_report_variants(proband, dirname, unsolved, outname, resources, sex)
 
-    logger.info('Preparing appendix of all variants in gene list')
+    if cnv:
+        logger.info('Adding CNV plot to second page of reports')
+        add_cnv_plot(proband, gene, cn, dirname, resources, outname) 
+    if sma:
+        logger.info('Adding SMA plot to second page of reports')
+        add_sma_plot(proband, dirname, outname) 
+
+    logger.info('Adding MyoSeq gene list to reports (starting appendix)')
     cat(f'{resources}/myoseq_template_appendix_gene_list.tex', outname)
 
+    logger.info('Creating table for all rare variants called in MyoSeq gene list')
+    get_all_variants(proband, dirname, outname, resources)
 
+    logger.info('Adding gene coverage table to appendix')
+    get_coverage_table(proband, dirname, outname, resources)
+ 
+    logger.info('Adding methods section to reports')
+    cat(f'{resources}/myoseq_template_general_methodology_cnv_sma_nogenelist.tex', outname)
+
+    logger.info('Finishing report')
+    append_out('\\end{document}\n')
+
+    
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Creates patient section of tex file for pdflatex')
