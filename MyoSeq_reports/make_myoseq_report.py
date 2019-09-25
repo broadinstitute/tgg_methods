@@ -42,7 +42,6 @@ def cat(fname: str, outname: str) -> None:
     :param fname: File name with information to be cat
     :param str outname: Output file name
     :return: None
-    :rtype: None
     '''
     cmd = '''cat {} >> {}'''.format(fname, outname)
     Popen([cmd], shell=True).communicate()
@@ -55,7 +54,6 @@ def append_out(info: str, outname: str) -> None:
     :param str info: Information to be added into file
     :param str outname: Output file name
     :return: None
-    :rtype: None
     '''
     with open(outname, 'a') as o:
         o.write(info)
@@ -139,7 +137,6 @@ def report_sma(proband: str, dirname: str, outname: str, resources: str):
     :param str outname: Output file name
     :param str resources: Directory with tex files
     :return: None
-    :rtype: None
     '''
     cat(f'{resources}/myoseq_template_report_sma_table_header.tex', outname)
 
@@ -275,7 +272,6 @@ def get_report_variants(proband: str, dirname: str, unsolved: bool, outname: str
     :param str resources: Directory with tex files
     :param str sex: Sample's inferred sex
     :return: None
-    :rtype: None
     '''
     if unsolved:
         logger.info('Adding None to REPORT genes box')
@@ -306,7 +302,6 @@ def add_cnv_plot(proband: str, gene: str, cn: int, dirname: str, resources: str,
     :param str outname: Output file name
     :param str resources: Directory with tex files
     :return: None
-    :rtype: None
     '''
     cnv_figure = f'{dirname}/images/cnv/{proband}.pdf'
     cnv_info = '\\includegraphics[width=14cm, height=14cm]{' + f'{cnv_figure} {LINE_BREAK}\n'
@@ -328,7 +323,6 @@ def add_sma_plot(proband: str, dirname: str, outname: str) -> None:
     :param str outname: Output file name
     :param str resources: Directory with tex files
     :return: None
-    :rtype: None
     '''
     sma_info = '{\\Large \\textbf{{SMA Carrier Detection}}} ' + f'{LINE_BREAK} {LINE_BREAK} \n'
     sma_info += 'Detected SMN1 Copy Number deletion (CN=0) in ' + f'{proband} {LINE_BREAK} {LINE_BREAK} {LINE_BREAK}\n'
@@ -340,18 +334,15 @@ def add_sma_plot(proband: str, dirname: str, outname: str) -> None:
     append_out(NEW_PAGE, outname)   
  
 
-def get_all_variants(proband: str, dirname: str, unsolved: bool, outname: str, resources: str, sex: str) -> None:
+def get_all_variants(proband: str, dirname: str, outname: str, resources: str) -> None:
     '''
     Formats any candidate SNVs/indels (tagged 'REPORT' in seqr) for first page of report
 
     :param str proband: Proband ID
     :param str dirname: Name of top level directory with all sample information for reports
-    :param bool unsolved: Whether patient is unsolved
     :param str outname: Output file name
     :param str resources: Directory with tex files
-    :param str sex: Sample's inferred sex
     :return: None
-    :rtype: None
     '''
     logger.info('Starting appendix (all rare variants) box')
     cat(f'{resources}/myoseq_template_all_variants_table_header.tex', outname)
@@ -365,6 +356,39 @@ def get_all_variants(proband: str, dirname: str, unsolved: bool, outname: str, r
 
     logger.info('Finishing off appendix with notes .tex')
     cat(f'{resources}/myoseq_template_additional_variants_notes.tex', outname)
+
+
+def get_coverage_table(proband: str, dirname: str, outname: str, resources: str) -> None:
+    '''
+    Formats sample coverage across MyoSeq gene list into table for appendix
+
+    :param str proband: Proband ID
+    :param str dirname: Name of top level directory with all sample information for reports
+    :param str outname: Output file name
+    :param str resources: Directory with tex files
+    :return: None
+    '''
+    logger.info('Starting gene coverage table')
+    cov_info = '{\\large \\textbf{\\underline{Appendix}}} ' + f'{LINE_BREAK} {LINE_BREAK} {LINE_BREAK}\n'
+    cov_info += '{\\large \\textbf{\\textitGene Coverage}}}\n'
+    cat(f'{resources}/myoseq_template_coverage_table_header.tex', outname)
+
+    cov_file = f'{dirname}/{proband}_coverage.tsv'
+    with open(cov_file) as c:
+        # Gene	Cohort_Mean	Sample_Mean	Cohort_Callable	Sample_Callable	Cohort_Uncallable	Sample_Uncallable
+        header = c.readline()
+        for line in c:
+            line = line.strip().split('\t')
+            row = ' & '.join(line)
+
+            # color line if sample has uncallable sites
+            if int(line[-1]) > 0:
+                cov_info += '\\rowcolor{Lavender} ' 
+            cov_info += f'{row} {LINE_BREAK}\n'
+             
+    cov_info += '\\end{longtable}\n'
+    append_out(cov_info, outname)
+    cat(f'{resources}/myoseq_template_coverage_notes.tex')
 
 
 def main(args):
