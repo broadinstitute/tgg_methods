@@ -16,6 +16,7 @@ logger.setLevel(logging.INFO)
 # the line break is just two (\\); using the extra two to escape the tow needed 
 LINE_BREAK = '\\\\'
 END_BOX = '\\end{tabular}\n\\end{small}\n'
+NEW_PAGE = '\\newpage\n'
 
 
 def awk(sample: str, fname: str) -> str:
@@ -275,7 +276,7 @@ def get_report_variants(proband: str, dirname: str, unsolved: bool, outname: str
         cat(f'{resources}/myoseq_template_candidate_variants_notes.tex', outname)
 
 
-def add_cnv_plot(proband, gene, cn, dirname, resources, outname):
+def add_cnv_plot(proband: str, gene: str, cn: int, dirname: str, resources: str, outname: str) -> None:
     '''
     Adds CNV plot to second page of report
 
@@ -296,11 +297,29 @@ def add_cnv_plot(proband, gene, cn, dirname, resources, outname):
     cnv_info += '\\textbf{Figure 1. ' + f'{cnv_type} of exons in {gene} detected by gCNV.' + '}' + f'{LINE_BREAK}\n'
     append_out(cnv_info, outname)
     cat(f'{resources}/myoseq_template_cnv_figure_caption.tex', outname)
+    append_out(NEW_PAGE, outname)
 
 
-def add_sma_plot():
-    pass
+def add_sma_plot(proband: str, dirname: str, outname: str) -> None:
+    '''
+    Adds SMA plot to second page of report
 
+    :param str proband: Proband ID
+    :param str dirname: Name of top level directory with all sample information for reports
+    :param str outname: Output file name
+    :param str resources: Directory with tex files
+    :return: None
+    :rtype: None
+    '''
+    sma_info = '{\\Large \\textbf{{SMA Carrier Detection}}} ' + f'{LINE_BREAK} {LINE_BREAK} \n'
+    sma_info += 'Detected SMN1 Copy Number deletion (CN=0) in ' + f'{proband} {LINE_BREAK} {LINE_BREAK} {LINE_BREAK}\n'
+    sma_figure = f'{dirname}/images/sma/{proband}_carrier_probabilities_plot.pdf'
+    sma_info += '\\includegraphics[width=14cm, height=8cm]{' + f'{sma_figure} {LINE_BREAK}\n'
+    sma_info += '\\textbf{Figure 1. SMA copy number detection showing all samples in MYOSEQ project}' + f'{LINE_BREAK}\n'
+    append_out(sma_info, outname)
+    cat(f'{resources}/myoseq_template_sma_figure_caption.tex', outname)
+    append_out(NEW_PAGE, outname)   
+ 
 
 def main(args):
 
