@@ -12,9 +12,10 @@ logger = logging.getLogger('make_myoseq_report')
 logger.setLevel(logging.INFO)
 
 
-# define global line break for pdflatex
+# define globals for pdflatex
 # the line break is just two (\\); using the extra two to escape the tow needed 
 LINE_BREAK = '\\\\'
+END_BOX = '\\end{tabular}\n\\end{small}\n'
 
 
 def awk(sample: str, fname: str) -> str:
@@ -118,12 +119,35 @@ def report_cnvs(proband, dirname, outname, resources):
             else:
                 cnv_type = f'Gain (CN={cn})'
             cnv_info += f'{gene} & ' + '\\textbf{\\color{red}' + f'{cnv_type}' + '} & ' + f'WES & {cnv} & {size} {LINE_BREAK} \\hline \n'
-    cnv_info += '\\end{tabular}\n\\end{small}\n'
+    cnv_info += f'{END_BOX}'
     append_out(cnv_info, outname)
 
-    logger.info('Closing out CNV section of reports')
+    logger.info('Closing out CNV section of first page of reports')
     cat(f'{resources}/myoseq_template_candidate_cnv_notes.tex')
             
+
+def report_sma(proband, dirname, outname, resources):
+    '''
+    Formats SMA information for first page of report
+
+    :param str proband: Proband ID
+    :param str dirname: Name of top level directory with all sample information for reports
+    :param str outname: Output file name
+    :param str resources: Directory with tex files
+    :return: None
+    :rtype: None
+    '''
+    cat(f'{resources}/myoseq_template_report_sma_table_header.tex', outname)
+
+    logger.info('Creating SMA box')    
+    sma_info = f'{} & {} & {} {LINE_BREAK}\n'
+    sma_info += 'SMN1 & \\textbf{\\color{red}Loss (CN=0)} & WES ' + f'{LINE_BREAK}' + ' \\hline\n'
+    sma_info += f'{END_BOX}'
+    append_out(sma_info, outname)
+
+    logger.info('Closing out SMA section of first page of reports')
+    cat(f'{resources}/myoseq_template_candidate_cnv_notes.tex')
+
 
 def get_report_variants(proband: str, dirname: str, unsolved: bool, outname: str, resources: str, sex: str) -> None:
     '''
@@ -229,7 +253,7 @@ def get_report_variants(proband: str, dirname: str, unsolved: bool, outname: str
                 hgvsp =  '\\textcolor{' + f'{color}' + '}{' + f'{hgvps}' + '}'
         variant_info += '\\textit{' + f'{genotype}' + '} & ' + f'{hgvps} & & {stars} & {LINE_BREAK}\n'
         variant_info += f'& {report_info[0]["rsid"]} & & & {LINE_BREAK}\n\\hline\n'
-        variant_info += '\\end{tabular}\n\\end{small}\n'      
+        variant_info += f'{END_BOX}'      
 
         # format notes from seqr
         # create footer for notes made in seqr
@@ -251,6 +275,10 @@ def get_report_variants(proband: str, dirname: str, unsolved: bool, outname: str
 
 
 def add_cnv_plot():
+    pass
+
+
+def add_sma_plot():
     pass
 
 
