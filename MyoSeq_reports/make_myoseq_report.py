@@ -86,7 +86,7 @@ def get_patient_details(proband: str, dirname: str, outname: str) -> str:
     return inferred
 
 
-def report_cnvs(proband, dirname, outname, resources):
+def report_cnvs(proband: str, dirname: str, outname: str, resources: str) -> tuple:
     '''
     Formats any candidate CNVs for first page of report
 
@@ -94,8 +94,8 @@ def report_cnvs(proband, dirname, outname, resources):
     :param str dirname: Name of top level directory with all sample information for reports
     :param str outname: Output file name
     :param str resources: Directory with tex files
-    :return: None
-    :rtype: None
+    :return: Gene name of CNV, copy number
+    :rtype: str
     '''
     cat(f'{resources}/myoseq_template_report_cnv_table_header.tex', outname)
     
@@ -124,9 +124,10 @@ def report_cnvs(proband, dirname, outname, resources):
 
     logger.info('Closing out CNV section of first page of reports')
     cat(f'{resources}/myoseq_template_candidate_cnv_notes.tex')
+    return (gene, int(cn))
             
 
-def report_sma(proband, dirname, outname, resources):
+def report_sma(proband: str, dirname: str, outname: str, resources: str):
     '''
     Formats SMA information for first page of report
 
@@ -274,8 +275,27 @@ def get_report_variants(proband: str, dirname: str, unsolved: bool, outname: str
         cat(f'{resources}/myoseq_template_candidate_variants_notes.tex', outname)
 
 
-def add_cnv_plot():
-    pass
+def add_cnv_plot(proband, gene, cn, dirname, resources, outname):
+    '''
+    Adds CNV plot to second page of report
+
+    :param str proband: Proband ID
+    :param str gene: Gene of interest
+    :param int cn: Copy number of CNV
+    :param str dirname: Name of top level directory with all sample information for reports
+    :param str outname: Output file name
+    :param str resources: Directory with tex files
+    :return: None
+    :rtype: None
+    '''
+    cnv_figure = f'{dirname}/images/cnv/{proband}.pdf'
+    cnv_info = '\\includegraphics[width=14cm, height=14cm]{' + f'{cnv_figure} {LINE_BREAK}\n'
+    cnv_type = 'Deletion'
+    if cn > 1:
+        cnv_type = 'Duplication' 
+    cnv_info += '\\textbf{Figure 1. ' + f'{cnv_type} of exons in {gene} detected by gCNV.' + '}' + f'{LINE_BREAK}\n'
+    append_out(cnv_info, outname)
+    cat(f'{resources}/myoseq_template_cnv_figure_caption.tex', outname)
 
 
 def add_sma_plot():
