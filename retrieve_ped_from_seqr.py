@@ -2,6 +2,7 @@
 import getpass
 import requests
 import argparse
+import os
 
 # Hack for 2.X and 3.X to use input()
 try:
@@ -18,7 +19,7 @@ def pull_project_peds(args):
     '''
     projects = args.projects
     login_url = "https://seqr.broadinstitute.org/login"
-    individual_api_url = "https://seqr.broadinstitute.org/api/project/{project_guid}/export_project_individuals?file_format=tsv"
+    individual_api_url = "seqr.broadinstitute.org/api/project/{project_guid}/export_project_individuals?file_format=tsv"
 
     seqr_username = input("What is your seqr username? ")
     seqr_password = getpass.getpass()
@@ -65,6 +66,7 @@ def pull_project_peds(args):
                 final_ped.write(line)
 
     final_ped.close()
+    os.remove('temp_pedigree.txt')
 
 
 if __name__ == '__main__':
