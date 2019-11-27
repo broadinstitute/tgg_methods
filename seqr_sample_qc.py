@@ -50,7 +50,6 @@ def validate_mt(mt: hl.MatrixTable, build: int, data_type: str, threshold=0.3):
             ht_stats['match'] = (ht_stats['matched_count']/ht_stats['total_count']) >= threshold
         return stats
 
-
     data_type_stats = data_type_stats(mt, build, threshold)
 
     for name, stat in data_type_stats.items():
@@ -89,7 +88,7 @@ def apply_filter_flags_expr(mt: hl.MatrixTable, data_type: str, metric_threshold
     Annotates table with flags for elevated contamination and chimera as well as low coverage and call rate
     :param Table mt: input MatrixTable
     :param str data_type: 'WES' or 'WGS' for selecting coverage threshold
-    :param dict filter_flags: dictionary where key is metric and value is threshold value
+    :param dict metric_thresholds: dictionary where key is metric and value is threshold value
     :return: Set of sequencing metric flags
     :rtype: SetExpression
     """
@@ -132,9 +131,14 @@ def get_all_sample_metadata(mt: hl.MatrixTable, build: int, data_type: str, data
     meta_ht = meta_ht.annotate(seqr_id=hl.if_else(hl.is_missing(meta_ht.seqr_id), meta_ht.SAMPLE, meta_ht.seqr_id))
 
     logger.info("Filtering to bi-allelic, high-callrate, common SNPs to calculate callrate...")
-    mt = mt.filter_rows((hl.len(mt.alleles) == 2) & hl.is_snp(mt.alleles[0], mt.alleles[1])
-                        & (hl.agg.mean(mt.GT.n_alt_alleles()) / 2 > 0.001) &
-                        (hl.agg.fraction(hl.is_defined(mt.GT)) > 0.99))
+    mt = filter_rows_for_qc(mt, min_af=0.001,
+                            min_callrate=0.99,
+                            bi_allelic_only=True,
+                            snv_only=True,
+                            apply_hard_filters=False,
+                            min_inbreeding_coeff_threshold=None,
+                            min_hardy_weinberg_threshold=None,
+                            )
     callrate_ht = mt.select_cols(filtered_callrate=hl.agg.fraction(hl.is_defined(mt.GT))).cols()
     meta_ht = meta_ht.annotate(**callrate_ht[meta_ht.key])
     return meta_ht
@@ -153,8 +157,7 @@ def run_platform_imputation(mt: hl.MatrixTable, plat_min_cluster_size: int, plat
     intervals = hl.import_locus_intervals(evaluation_intervals_path)
     callrate_mt = compute_callrate_mt(mt, intervals)
     eigenvalues, scores_ht, _ = run_platform_pca(callrate_mt)
-    plat_ht = assign_platform_from_pcs(scores_ht, hdbscan_min_cluster_size=plat_min_cluster_size,
-                                       hdbscan_min_samples=plat_min_sample_size)
+    plat_ht = assign_platform_from_pcs(scores_ht, hdbscan_min_cluster_size=plat_min_cluster_size, hdbscan_min_samples=plat_min_sample_size)
     d = {f'plat_PC{i+1}': scores_ht.scores[i] for i in list(range(0, 6))}
     scores_ht = scores_ht.annotate(**d).drop('scores')
     plat_ht = plat_ht.annotate(**scores_ht[plat_ht.key])
@@ -243,7 +246,6 @@ def main(args):
         hl.import_vcf(vcf, force_bgz=True, reference_genome=f'GRCh{build}',
                       min_partitions=4).write(mt_path(build, data_type, data_source, version, is_test), overwrite=True)
     mt = hl.read_matrix_table(mt_path(build, data_type, data_source, version, is_test))
-    mt = filter_to_autosomes(mt)
 
     if not args.skip_validate_mt:
         logger.info("Validating data type...")
@@ -255,7 +257,7 @@ def main(args):
 
     logger.info("Annotating with sequencing metrics and filtered callrate...")
     meta_ht = get_all_sample_metadata(mt, build, data_type, data_source, version)
-    mt = mt.annotate_cols(**meta_ht[mt.col_key])
+    mt = mt.annotate_cols(**meta_ht[mt.col_key], data_type=data_type)
 
     logger.info("Annotating with sample metric filter flags...")
     metric_thresholds = {
@@ -299,7 +301,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--data-type', help="Sequencing data type (WES or WGS)", choices=["WES", "WGS"], required=True)
-    parser.add_argument('-b', '--build', help='Reference build, 37 or 38', choices=["37", "38"], required=True)
+    parser.add_argument('-b', '--build', help='Reference build, 37 or 38', type=int, choices=[37, 38],  required=True)
     parser.add_argument('-v', '--callset-version', help='Version of callset vcf', type=int, required=True)
     parser.add_argument('--data-source', help="Data source (Internal or External)", choices=["Internal", "External"], required=True)
     parser.add_argument('--is-test', help='To run a test of the pipeline using test files and directories',
