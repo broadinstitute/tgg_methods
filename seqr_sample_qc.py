@@ -62,7 +62,7 @@ def validate_mt(mt: hl.MatrixTable, build: int, data_type: str, threshold=0.3):
     if not has_coding and not has_noncoding:
         raise VCFDataTypeError(
             f'Genome version validation error: dataset specified as GRCh{build} but doesn\'t contain '
-            f'the expected number of common GRChf{build} variants'
+            f'the expected number of common GRCh{build} variants'
         )
     elif has_noncoding and not has_coding:
         raise VCFDataTypeError(
@@ -144,7 +144,7 @@ def get_all_sample_metadata(mt: hl.MatrixTable, build: int, data_type: str, data
     return meta_ht
 
 
-def run_platform_imputation(mt: hl.MatrixTable, plat_min_cluster_size: int, plat_min_sample_size: int) -> hl.Table:
+def run_platform_imputation(mt: hl.MatrixTable, plat_min_cluster_size: int, plat_min_sample_size: int, plat_assignment_pcs: int) -> hl.Table:
     """
     Run PCA using sample callrate across gnomAD's evaluation interval and create Hail Table
     with platform PCs and assigned platform.
@@ -158,7 +158,7 @@ def run_platform_imputation(mt: hl.MatrixTable, plat_min_cluster_size: int, plat
     callrate_mt = compute_callrate_mt(mt, intervals)
     eigenvalues, scores_ht, _ = run_platform_pca(callrate_mt)
     plat_ht = assign_platform_from_pcs(scores_ht, hdbscan_min_cluster_size=plat_min_cluster_size, hdbscan_min_samples=plat_min_sample_size)
-    d = {f'plat_PC{i+1}': scores_ht.scores[i] for i in list(range(0, 6))}
+    d = {f'plat_PC{i+1}': scores_ht.scores[i] for i in list(range(0, plat_assignment_pcs))}
     scores_ht = scores_ht.annotate(**d).drop('scores')
     plat_ht = plat_ht.annotate(**scores_ht[plat_ht.key])
     return plat_ht
@@ -272,7 +272,7 @@ def main(args):
     logger.info('Assign platform or product')
     if data_type == 'WES' and data_source == 'External':
         logger.info('Running platform imputation...')
-        plat_ht = run_platform_imputation(mt, args.plat_min_cluster_size, args.plat_min_sample_size)
+        plat_ht = run_platform_imputation(mt, args.plat_min_cluster_size, args.plat_min_sample_size, args.plat_assignment_pcs)
         mt = mt.annotate_cols(**plat_ht[mt.col_key])
     elif data_source == 'Internal':
         logger.info('Assigning platform from product in metadata...')
@@ -314,6 +314,7 @@ if __name__ == '__main__':
     parser.add_argument('--plat-min-cluster-size', help='Minimum cluster size for platform pca labeling', default=40)
     parser.add_argument('--plat-min-sample-size', help='Minimum sample size for platform pca labeling', default=40)
     parser.add_argument('--pop-assignment-pcs', help='Number of principal components to use in population assignment RF', default=6)
+    parser.add_argument('--plat-assignment-pcs', help='Number of principal components to use in population assignment RF', default=6)
     parser.add_argument('--pop-rf-classifier', help='fit from a previously trained random forest model',
                         default='gs://seqr-datasets/sample_qc_resources/population_assignment/gnomad_cmg.RF_fit_90.pkl')
     parser.add_argument('--skip-write-mt', help='Skip writing out qc mt', action='store_true')
