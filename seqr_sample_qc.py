@@ -151,6 +151,7 @@ def run_platform_imputation(mt: hl.MatrixTable, plat_min_cluster_size: int, plat
     :param MatrixTable mt: QC MatrixTable
     :param plat_min_cluster_size: min cluster size for HBDscan clustering
     :param plat_min_sample_size: min sample size for HBDscan clustering
+    :param plat_assignment_pcs: Number PCs used for HBDscan clustering
     :return: Table with platform PCs and assigned platform
     :rtype: Table
     """
@@ -314,7 +315,7 @@ if __name__ == '__main__':
     parser.add_argument('--plat-min-cluster-size', help='Minimum cluster size for platform pca labeling', default=40)
     parser.add_argument('--plat-min-sample-size', help='Minimum sample size for platform pca labeling', default=40)
     parser.add_argument('--pop-assignment-pcs', help='Number of principal components to use in population assignment RF', default=6)
-    parser.add_argument('--plat-assignment-pcs', help='Number of principal components to use in population assignment RF', default=6)
+    parser.add_argument('--plat-assignment-pcs', help='Number of principal components to use in platform assignment clustering', default=6)
     parser.add_argument('--pop-rf-classifier', help='fit from a previously trained random forest model',
                         default='gs://seqr-datasets/sample_qc_resources/population_assignment/gnomad_cmg.RF_fit_90.pkl')
     parser.add_argument('--skip-write-mt', help='Skip writing out qc mt', action='store_true')
