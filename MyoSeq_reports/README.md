@@ -3,6 +3,10 @@
 
 This series of scripts prepares PDF reports for the MyoSeq group led by Volker Straub.
 
+## Notes on preparatory steps
+ 1. Create BED files for all MyoSeq gene lists -- see README in `beds/` directory.
+ 2. Create lists of samples with candidate genes, without candidate genes, and with candidate CNV or SMA findings.
+ 3. Download all variants tagged "REPORT" in seqr (saved variants page), and all rare variants across MyoSeq gene list (use project-wide search).
 
 ## Part 1: Coverage
 The scripts necessary for part 1 are in the `coverage` folder. This step requires access to the sample cram files.
