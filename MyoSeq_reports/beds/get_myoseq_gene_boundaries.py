@@ -41,7 +41,7 @@ def parse_gtf(gene_list, gtf) -> dict:
             for item in line[-1].split(';'):
 
                 if 'gene_name' in item:
-                    gene = item.split(' ').replace('"', '')
+                    gene = item.replace('"', '').split(' ')[-1]
 
                     if gene in gene_list:
                         chrom = line[0]
@@ -72,7 +72,7 @@ def write_beds(gene_boundaries, out) -> None:
     for gene in gene_boundaries:
         out_bed = f'{out}/{gene}.bed'
         with open(out_bed, 'w') as o:
-            o.write(f'{gene_boundaries[0]}\t{gene_boundaries[1]}\t{gene_boundaries[2]}')
+            o.write(f'{gene_boundaries[gene][0]}\t{gene_boundaries[gene][1]}\t{gene_boundaries[gene][2]}')
 
 
 def main(args):
