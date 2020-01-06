@@ -29,7 +29,7 @@ def parse_gtf(gene_list, gtf) -> dict:
 
     :param set gene_list: Set containing MyoSeq genes
     :param str gtf: Path to Gencode GTF
-    :return: Dictionary; key (str): gene, value (ints): (start, end) 
+    :return: Dictionary; key (str): gene, value (str, int, int): (chrom, start, end) 
     :rtype: dict
     '''
     gene_boundaries = {}
@@ -44,20 +44,35 @@ def parse_gtf(gene_list, gtf) -> dict:
                     gene = item.split(' ').replace('"', '')
 
                     if gene in gene_list:
+                        chrom = line[0]
                         start = int(line[3])
                         end = int(line[4])
 
                         # if gene is already in dictionary, take smallest start and largest end
                         if gene in gene_boundaries:
-                            gene_boundaries[gene] = (min(start, gene_boundaries[gene][0]), max(end, gene_boundaries[gene][1]))
+                            gene_boundaries[gene] = (chrom, min(start, gene_boundaries[gene][1]), max(end, gene_boundaries[gene][2]))
                         else:
-                            gene_boundaries[gene] = (start, end)
+                            gene_boundaries[gene] = (chrom, start, end)
 
     # sanity check that dictionary is same length as gene list
     if len(gene_boundaries) != len(gene_list):
         logger.warn('Length of gene boundaries dictionary is not the same as length of gene list. Make sure all genes are present in GTF.')
 
     return gene_boundaries 
+
+
+def write_beds(gene_boundaries, out) -> None:
+    '''
+    Writes BED files for MyoSeq genes
+
+    :param dict gene_boundaries: Dictionary of MyoSeq genes (key; str) and their chromosome/starts/ends (value; str, int, int)
+    :return: None
+    :rtype: None
+    '''
+    for gene in gene_boundaries:
+        out_bed = f'{out}/{gene}.bed'
+        with open(out_bed, 'w') as o:
+            o.write(f'{gene_boundaries[0]}\t{gene_boundaries[1]\t{gene_boundaries[2]}')
 
 
 def main(args):
@@ -68,7 +83,9 @@ def main(args):
     logger.info('Parsing GTF')
     gene_boundaries = parse_gtf(gene_list, args.gtf)
 
-    logger.info('Writing out BEDs'
+    logger.info('Writing out BEDs')
+    write_beds(gene_boundaries, args.out)
+
 
 if __name__ == '__main__':
 
