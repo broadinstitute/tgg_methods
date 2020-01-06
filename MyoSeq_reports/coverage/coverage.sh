@@ -14,4 +14,4 @@
 #1	229568723	229568872	ACTA1_ENSG00000143632.10_ENST00000366684.3
 
 # TSV should be named gene.txt.bgz
-samtools depth -f ${BAMLIST} -r ${REGION} -q 10 -Q 20 -a --reference ${FASTA} | bgzip > ${TSV}
+samtools depth -f ${BAMLIST} -r ${REGION} -q 10 -Q 20 -a --reference ${FASTA} | bgzip > ${OUT}
