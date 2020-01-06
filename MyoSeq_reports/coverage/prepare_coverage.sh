@@ -56,7 +56,7 @@ while getopts "d:c:f:b:o:h" opt; do
 done
 
 # write header of file
-echo -e "--input BAMLIST\t--input REGION\t--input FASTA\t--output OUT" > ${batchfile}
+echo -e "--input BAMLIST\t--env REGION\t--input FASTA\t--output OUT" > ${batchfile}
 
 # prepare files for dsub
 for file in ${dir}/*bed; do
