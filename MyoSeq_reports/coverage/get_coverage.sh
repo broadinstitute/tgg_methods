@@ -3,17 +3,16 @@
 usage() {
 cat << EOF
 
-    This program prepares a batch of MyoSeq samples for coverage calculations across the MyoSeq gene list.
+    This program calculates coverage across the MyoSeq gene list in a set of samples..
 
     Assumptions:
-        BEDfiles exist for all MyoSeq list genes.
+        BEDfiles exist for all MyoSeq genes.
 
     Inputs:
-        -d      Directory containing BEDfile for all MyoSeq list genes
+        -d      Directory containing BEDfile for all MyoSeq genes
         -c      List of crams for the input samples (one cram per line)
         -f      Reference FASTA
-        -b      Output batch file for dsub
-        -o      Output bucket for coverage files
+        -o      Output directory for bgzipped coverage TSVs
 
     Outputs:
         Batch file for dsub.
@@ -21,13 +20,13 @@ EOF
 }
 
 # check number of arguments
-if [[ $# -lt 10 ]]; then
+if [[ $# -lt 8 ]]; then
     usage
     exit 1
 fi
 
 # parse args
-while getopts "d:c:f:b:o:h" opt; do
+while getopts "d:c:f:o:h" opt; do
     case $opt in
         d)
             dir=$OPTARG
@@ -37,9 +36,6 @@ while getopts "d:c:f:b:o:h" opt; do
         ;;
         f)
             fasta=$OPTARG
-        ;;
-        b)
-            batchfile=$OPTARG
         ;;
         o)
             out=$OPTARG
@@ -55,10 +51,15 @@ while getopts "d:c:f:b:o:h" opt; do
     esac
 done
 
-# write header of file
-echo -e "--input BAMLIST\t--env REGION\t--input FASTA\t--output OUT" > ${batchfile}
+# index each cram if its index doesn't exist
+while read line; do
+    crai="${line}.crai"
+    if [[ ! -s $crai ]]; then
+        samtools index -c $line > $crai
+    fi
+done < ${crams}
 
-# prepare files for dsub
+# calculate coverage for each gene
 for file in ${dir}/*bed; do
 
     gene=$(basename $file | cut -d '.' -f1)
@@ -75,5 +76,7 @@ for file in ${dir}/*bed; do
 
     region="${chrom}:${first}-${last}"
     outfile="${out}/${gene}.tsv.bgz"
-    echo -e "${crams}\t${region}\t${fasta}\t${outfile}" >> ${batchfile}
-done 
+
+    echo "samtools depth -r ${region} -q 10 -Q 20 -a -f ${crams} --reference ${fasta} | bgzip > ${outfile}"
+    samtools depth -r ${region} -q 10 -Q 20 -a -f ${crams} --reference ${fasta} | bgzip > ${outfile}
+done
