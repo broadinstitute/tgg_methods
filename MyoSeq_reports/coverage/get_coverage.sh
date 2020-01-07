@@ -15,7 +15,7 @@ cat << EOF
         -o      Output directory for bgzipped coverage TSVs
 
     Outputs:
-        Batch file for dsub.
+        Coverage tsvs for each gene, where each column is a sample (in the same order as in crams list)
 EOF
 }
 
