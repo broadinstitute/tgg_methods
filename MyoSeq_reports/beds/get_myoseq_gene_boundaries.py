@@ -1,25 +1,11 @@
 import argparse
 import logging
+from MyoSeq_reports.utils import get_genes
 
 
 logging.basicConfig(format='%(asctime)s (%(name)s %(lineno)s): %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 logger = logging.getLogger('get_myoseq_gene_boundaries')
 logger.setLevel(logging.INFO)
-
-
-def get_genes(genes) -> set:
-    '''
-    Opens text file with  MyoSeq gene list and stores genes as list
-
-    :param str genes: Path to text file with MyoSeq gene list
-    :return: Set containing MyoSeq genes
-    :rtype: set
-    '''
-    gene_list = []
-    with open(genes) as g:
-        for line in g:
-            gene_list.append(line.strip())
-    return set(gene_list)
 
 
 def parse_gtf(gene_list, gtf) -> dict:
