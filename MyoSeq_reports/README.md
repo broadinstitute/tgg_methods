@@ -16,11 +16,12 @@ This series of scripts prepares PDF reports for the MyoSeq group led by Volker S
  4. Locate all cram files for samples of interest and copy them to the Google bucket.
 
 ## Part 2: Coverage
-The scripts necessary for part 1 are in the `coverage` folder. This step requires access to the sample cram files.
+The scripts necessary for part 1 are in the `coverage` folder. This step requires access to the sample cram files. All scripts in this section are run on the Google VM created above.
 
- 1. **`get_coverage.sh`**: Calculates sample coverage across all MyoSeq gene list genes. Outputs a bgzipped TSV per gene.
- 2. **`gene_coverage.py`**: Script to use when running `dsub` to summarize coverage calculations. (This might also work on a VM?) Creates one tsv per gene with mean coverage, median coverage, and coverage above each threshold (1, 5, 10, 15, 20, 25, 30, 50, 100) for each position.
- 3. **`summarize_coverage.py`**: Summarizes sample coverage over each MyoSeq gene. Outputs bgzipped tsv with gene name, gene size, mean coverage, median coverage, % callable bases, and uncallable bases.
+ 1. ssh into VM instance. Example command: `gcloud beta compute --project "cmg-analysis" ssh --zone "us-central1-b" "coverage"`
+ 2. **`get_coverage.sh`**: Calculates sample coverage across all MyoSeq gene list genes. Outputs a bgzipped TSV per gene.
+ 3. **`gene_coverage.py`**: Script to use when running `dsub` to summarize coverage calculations. (This might also work on a VM?) Creates one tsv per gene with mean coverage, median coverage, and coverage above each threshold (1, 5, 10, 15, 20, 25, 30, 50, 100) for each position.
+ 4. **`summarize_coverage.py`**: Summarizes sample coverage over each MyoSeq gene. Outputs bgzipped tsv with gene name, gene size, mean coverage, median coverage, % callable bases, and uncallable bases.
 
 ## Part 3: Ancestry and sexcheck
 The scripts necessary for part 2 are in the `inference` folder. This step requires three files: one with inferred ancestry, one with reported sex, and another with imputed sex. The reported ancestry is always recorded as European.
