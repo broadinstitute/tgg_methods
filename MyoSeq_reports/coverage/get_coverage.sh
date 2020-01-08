@@ -78,5 +78,5 @@ for file in ${dir}/*bed; do
     outfile="${out}/${gene}.tsv.bgz"
 
     echo "samtools depth -r ${region} -q 10 -Q 20 -a -f ${crams} --reference ${fasta} | bgzip > ${outfile}"
-    samtools depth -r ${region} -q 10 -Q 20 -a -f ${crams} --reference ${fasta} | bgzip > ${outfile}
+    samtools depth -b ${file} -r ${region} -q 10 -Q 20 -a -f ${crams} --reference ${fasta} | bgzip > ${outfile}
 done
