@@ -40,21 +40,6 @@ def get_cram_order(cramslist) -> list:
     return samples
 
 
-def get_gene_size(bed: str) -> int:
-    '''
-    Opens bed file for gene and returns number of bases in gene
-
-    :param str bed: Path to bedfile
-    :return: Number of bases in gene
-    :rtype: int
-    '''
-    total_bases = 0
-    with open(bed) as b:
-        chrom, start, end = b.readline().strip().split('\t')
-        total_bases += int(end) - int(start)
-    return total_bases
-
-
 def get_positions(bed: str) -> set:
     '''
     Opens bed file for gene and gets all positions to check coverage
@@ -65,9 +50,10 @@ def get_positions(bed: str) -> set:
     '''
     positions = []
     with open(bed) as b:
-        chrom, start, end = b.readline().strip().split('\t')
-        for i in range(int(start), int(end) + 1):
-            positions.append(i)
+        for line in b:
+            chrom, start, end = line.strip().split('\t')
+            for i in range(int(start), int(end) + 1):
+                positions.append(i)
     return set(positions)
 
 
@@ -83,14 +69,17 @@ def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str)
     :rtype: dict
     '''
     summary = {}
+    for sample in samples:
+        summary[sample] = {}
+
     for gene in gene_list:
 
         # set up variables for gene
         summary[gene] = {}
         tsv = f'{covdir}/{gene}.tsv.bgz'
         bed = f'{beddir}/{gene}.bed'
-        total_bases = get_gene_size(bed)
         positions = get_positions(bed)
+        total_bases = len(positions)
         total_cov = 0
         callable_bases = 0
         logger.info(f'Working on {gene}...')
@@ -130,7 +119,6 @@ def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str)
         summary[gene]['callable'] = round(float(callable_bases) / total_bases, 2)
         summary[gene]['uncallable'] = total_bases - callable_bases
         for sample in samples:
-            summary[sample] = {}
             summary[sample][gene] = {}
             summary[sample][gene]['mean'] = round(float(sample_cov[sample]) / total_bases, 2)
             summary[sample][gene]['callable'] = round(float(sample_callable[sample]) / total_bases,  2)
