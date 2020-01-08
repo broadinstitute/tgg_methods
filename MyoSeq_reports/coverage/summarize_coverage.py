@@ -22,7 +22,7 @@ def get_genes(genes) -> set:
     with open(genes) as g:
         for line in g:
             gene_list.append(line.strip())
-    return set(sorted(gene_list, reverse=True))
+    return sorted(set(gene_list))
 
 
 def get_cram_order(cramslist) -> list:
