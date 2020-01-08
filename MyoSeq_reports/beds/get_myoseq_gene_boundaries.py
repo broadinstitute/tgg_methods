@@ -1,11 +1,25 @@
 import argparse
 import logging
-from MyoSeq_reports.utils import get_genes
 
 
 logging.basicConfig(format='%(asctime)s (%(name)s %(lineno)s): %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 logger = logging.getLogger('get_myoseq_gene_boundaries')
 logger.setLevel(logging.INFO)
+
+
+def get_genes(genes) -> set:
+    '''
+    Opens text file with  MyoSeq gene list and stores genes as list
+
+    :param str genes: Path to text file with MyoSeq gene list
+    :return: Set containing MyoSeq genes
+    :rtype: set
+    '''
+    gene_list = []
+    with open(genes) as g:
+        for line in g:
+            gene_list.append(line.strip())
+    return sorted(set(gene_list))
 
 
 def parse_gtf(gene_list, gtf) -> dict:
@@ -15,7 +29,7 @@ def parse_gtf(gene_list, gtf) -> dict:
 
     :param set gene_list: Set containing MyoSeq genes
     :param str gtf: Path to Gencode GTF
-    :return: Dictionary; key (str): gene, value (str, int, int): (chrom, start, end) 
+    :return: Dictionary; key: gene, value: list of (chrom, start, end) 
     :rtype: dict
     '''
     gene_boundaries = {}
@@ -31,14 +45,14 @@ def parse_gtf(gene_list, gtf) -> dict:
 
                     if gene in gene_list:
                         chrom = line[0]
-                        start = int(line[3])
+                        start = int(line[3]) - 1
                         end = int(line[4])
 
-                        # if gene is already in dictionary, take smallest start and largest end
                         if gene in gene_boundaries:
-                            gene_boundaries[gene] = (chrom, min(start, gene_boundaries[gene][1]), max(end, gene_boundaries[gene][2]))
+                            gene_boundaries[gene].append((chrom, start, end))
+                            #gene_boundaries[gene] = (chrom, min(start, gene_boundaries[gene][1]), max(end, gene_boundaries[gene][2]))
                         else:
-                            gene_boundaries[gene] = (chrom, start, end)
+                            gene_boundaries[gene] = [(chrom, start, end)]
 
     # sanity check that dictionary is same length as gene list
     if len(gene_boundaries) != len(gene_list):
@@ -58,7 +72,10 @@ def write_beds(gene_boundaries, out) -> None:
     for gene in gene_boundaries:
         out_bed = f'{out}/{gene}.bed'
         with open(out_bed, 'w') as o:
-            o.write(f'{gene_boundaries[gene][0]}\t{gene_boundaries[gene][1]}\t{gene_boundaries[gene][2]}\n')
+            lines = set(gene_boundaries[gene])
+            for line in lines:
+                o.write(f'{line[0]}\t{line[1]}\t{line[2]}\n')
+            #o.write(f'{gene_boundaries[gene][0]}\t{gene_boundaries[gene][1]}\t{gene_boundaries[gene][2]}\n')
 
 
 def main(args):
