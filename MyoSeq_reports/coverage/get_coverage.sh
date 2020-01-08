@@ -66,8 +66,8 @@ for file in ${dir}/*bed; do
     len=$(awk 'END {print NR}' $file)
     if (( $len > 1 )); then
         chrom=$(head -1 $file | cut -f1)
-        first=$(head -1 $file | cut -f2)
-        last=$(tail -1 $file | cut -f2)
+        first=$(cat $file | cut -f2 | sort -n | head -1)
+        last=$(cat $file | cut -f3 | sort -nr | head -1)
     else
         chrom=$(cat $file | cut -f1)
         first=$(cat $file | cut -f2)
@@ -77,6 +77,6 @@ for file in ${dir}/*bed; do
     region="${chrom}:${first}-${last}"
     outfile="${out}/${gene}.tsv.bgz"
 
-    echo "samtools depth -r ${region} -q 10 -Q 20 -a -f ${crams} --reference ${fasta} | bgzip > ${outfile}"
+    echo "samtools depth -b ${file} -r ${region} -q 10 -Q 20 -a -f ${crams} --reference ${fasta} | bgzip > ${outfile}"
     samtools depth -b ${file} -r ${region} -q 10 -Q 20 -a -f ${crams} --reference ${fasta} | bgzip > ${outfile}
 done
