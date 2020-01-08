@@ -27,7 +27,7 @@ def ped_sex(ped, samples):
                 reported[sid] = sex
 
     # check if any samples are missing and print missing samples to stdout
-    ancestry.check_missing_samples(samples, reported.keys(), 'ped')
+    check_missing_samples(samples, reported.keys(), 'ped')
 
     return reported
 
@@ -61,7 +61,7 @@ def compare(infer, samples, reported, out):
                     o.write('{}\t{}\t{}\t{}\t{}\n'.format(s, reported[s], inferred, f_stat, 'CONFLICT'))
 
     # check if any samples are missing from inferred file
-    ancestry.check_missing(samples, found, 'inferred sex')
+    check_missing_samples(samples, found, 'inferred sex')
                 
 
 def main(args):
