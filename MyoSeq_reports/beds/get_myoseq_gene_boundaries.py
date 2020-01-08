@@ -72,7 +72,7 @@ def write_beds(gene_boundaries, out) -> None:
     for gene in gene_boundaries:
         out_bed = f'{out}/{gene}.bed'
         with open(out_bed, 'w') as o:
-            lines = set(gene_boundaries[gene])
+            lines = sorted(set(gene_boundaries[gene]))
             for line in lines:
                 o.write(f'{line[0]}\t{line[1]}\t{line[2]}\n')
             #o.write(f'{gene_boundaries[gene][0]}\t{gene_boundaries[gene][1]}\t{gene_boundaries[gene][2]}\n')
