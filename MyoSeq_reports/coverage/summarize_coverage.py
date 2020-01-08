@@ -116,12 +116,12 @@ def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str)
         logger.info(f'Callable bases: {callable_bases}')
         mean_cov = round(float(total_cov) / total_bases, 2)
         summary[gene]['mean'] = mean_cov
-        summary[gene]['callable'] = round(float(callable_bases) / total_bases, 2)
+        summary[gene]['callable'] = round((float(callable_bases) / total_bases) * 100, 2)
         summary[gene]['uncallable'] = total_bases - callable_bases
         for sample in samples:
             summary[sample][gene] = {}
             summary[sample][gene]['mean'] = round(float(sample_cov[sample]) / total_bases, 2)
-            summary[sample][gene]['callable'] = round(float(sample_callable[sample]) / total_bases,  2)
+            summary[sample][gene]['callable'] = round((float(sample_callable[sample]) / total_bases) * 100,  2)
             summary[sample][gene]['uncallable'] = total_bases - sample_callable[sample]
     return summary
 
