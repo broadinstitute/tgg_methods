@@ -1,5 +1,7 @@
 import argparse
 import gzip
+import logging
+import typing
 from statistics import mean
 
 
@@ -48,7 +50,7 @@ def get_gene_size(bed: str) -> int:
     '''
     with open(bed) as b:
         chrom, start, end = b.readline().strip().split('\t')
-    return end - start
+    return int(end) - int(start)
 
 
 def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str) -> dict:
@@ -71,6 +73,8 @@ def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str)
         bed = f'{beddir}/{gene}.bed'
         total_bases = get_gene_size(bed)
         callable_bases = 0
+        logger.info(f'Working on {gene}...')
+        logger.info(f'Number of bases: {total_bases}')
 
         # create dict to store coverage per sample
         sample_cov = {}
@@ -79,7 +83,7 @@ def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str)
             sample_cov[sample] = 0
             sample_uncallable[sample] = 0
 
-        with open(tsv) as t: 
+        with gzip.open(tsv, 'rt') as t: 
             for line in t:
                 line = line.strip().split('\t')
                 chrom = line[0]
@@ -87,7 +91,7 @@ def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str)
                 total_cov = 0
 
                 # check if position is considered "callable" (mean depth > 6, as defined by Monkol)
-                mean_at_pos = mean(line[2:])
+                mean_at_pos = mean(map(int, line[2:]))
                 if mean_at_pos > 6:
                     callable_bases += 1
 
@@ -96,7 +100,7 @@ def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str)
                     if line[1] == 0:
                         sample_uncallable[samples[i-2]] += 1
                     else:
-                        total_cov += line[i]
+                        total_cov += int(line[i])
                         sample_cov[samples[i-2]] += int(line[i]) 
 
         mean_cov = round(float(total_cov) / total_bases, 2)
@@ -104,6 +108,8 @@ def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str)
         summary[gene]['callable'] = round(float(callable_bases) / total_bases, 2)
         summary[gene]['uncallable'] = total_bases - callable_bases
         for sample in samples:
+            logger.info(f'Working on {sample}...')
+            summary[sample] = {}
             summary[sample][gene] = {}
             summary[sample][gene]['mean'] = round(float(sample_cov[sample]) / total_bases, 2)
             summary[sample][gene]['callable'] = round(float(sample_uncallable[sample]) / total_bases,  2)
@@ -150,6 +156,9 @@ def main(args):
 
     logger.info('Summarizing cram coverage')
     summary = summarize_coverage(gene_list, samples, args.covdir, args.beddir)
+
+    logger.info('Writing output files')
+    write_summary(samples, gene_list, summary, args.out)
 
 
 if __name__ == '__main__':
