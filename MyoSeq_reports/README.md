@@ -7,7 +7,9 @@ This series of scripts prepares PDF reports for the MyoSeq group led by Volker S
  1. Download and install the Google cloud [sdk](https://cloud.google.com/sdk/). Make sure you have a billing project set up.
  2. Create a Google bucket. 
  3. Create a VM instance. Make sure the boot disk is large enough to store all of the crams. Example command: `gcloud beta compute --project=cmg-analysis instances create coverage --zone=us-central1-b --machine-type=n1-standard-64 --subnet=default --network-tier=PREMIUM --maintenance-policy=MIGRATE --service-account=422849809944-compute@developer.gserviceaccount.com --scopes=https://www.googleapis.com/auth/devstorage.read_only,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/servicecontrol,https://www.googleapis.com/auth/service.management.readonly,https://www.googleapis.com/auth/trace.append --image=debian-9-stretch-v20191210 --image-project=debian-cloud --boot-disk-size=500GB --boot-disk-type=pd-standard --boot-disk-device-name=coverage --reservation-affinity=any`. Be sure to shut down the VM when not in use, as Google will charge for its uptime.
- 4. Install samtools, bgzip, and their necessary dependencies on your VM instance. See [samtools documentation] (http://www.htslib.org/download/).
+ 4. Install samtools, bgzip, Anaconda (Python3.7), and their necessary dependencies on your VM instance. See [samtools documentation](http://www.htslib.org/download/) and [Anaconda](https://www.anaconda.com/distribution/).
+ 5. Clone this repo or copy the scripts in the `coverage` folder to the VM.
+ 6. Ensure the Google service account associated with the VM or a personal Gmail has access to the crams. To login on the VM with a personal Gmail, use `gcloud auth login`.
 
 ## Part 1: Preparation
  1. Create BED files for all MyoSeq gene lists if necessary. For instructions, see README in `beds/` directory. Copy BED files to the Google bucket created above. 
@@ -19,9 +21,9 @@ This series of scripts prepares PDF reports for the MyoSeq group led by Volker S
 The scripts necessary for part 1 are in the `coverage` folder. This step requires access to the sample cram files. All scripts in this section are run on the Google VM created above.
 
  1. ssh into VM instance. Example command: `gcloud beta compute --project "cmg-analysis" ssh --zone "us-central1-b" "coverage"`
- 2. **`get_coverage.sh`**: Calculates sample coverage across all MyoSeq gene list genes. Outputs a bgzipped TSV per gene.
- 3. **`gene_coverage.py`**: Script to use when running `dsub` to summarize coverage calculations. (This might also work on a VM?) Creates one tsv per gene with mean coverage, median coverage, and coverage above each threshold (1, 5, 10, 15, 20, 25, 30, 50, 100) for each position.
- 4. **`summarize_coverage.py`**: Summarizes sample coverage over each MyoSeq gene. Outputs bgzipped tsv with gene name, gene size, mean coverage, median coverage, % callable bases, and uncallable bases.
+ 2. **`get_coverage.sh`**: Calculates sample coverage across all MyoSeq gene list genes. Outputs a bgzipped TSV per gene, with coverage per position in the gene. The columns in this file are samples in the same order as provided (i.e., in the same order as in the input crams list).
+ 3. **`summarize_coverage.py`**: Summarizes coverage across MyoSeq genes for each sample and compares each sample to the other samples in the batch. Creates one TSV per sample with gene, batch mean coverage, sample mean coverage, percent of callable sites for the batch, percent of callable sites for the sample, number of uncallable sites for the batch, and number of uncallable sites for the sample.
+ 4. Copy the files output by step 3 first to the Google bucket and then to local storage. Don't forget to shut down the VM.
 
 ## Part 3: Ancestry and sexcheck
 The scripts necessary for part 2 are in the `inference` folder. This step requires three files: one with inferred ancestry, one with reported sex, and another with imputed sex. The reported ancestry is always recorded as European.
