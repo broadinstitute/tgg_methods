@@ -15,7 +15,8 @@ This series of scripts prepares PDF reports for the MyoSeq group led by Volker S
  1. Create BED files for all MyoSeq gene lists if necessary. For instructions, see README in `beds/` directory. Copy BED files to the Google bucket created above. 
  2. Create lists of samples with candidate genes, without candidate genes, and with candidate CNV or SMA findings.
  3. Download all variants tagged "REPORT" in seqr (saved variants page), and all rare variants across MyoSeq gene list (use project-wide search).
- 4. Locate all cram files for samples of interest and copy them to the Google bucket.
+ 4. Download pedigree for samples from seqr (in the project of interest, click "Download Table", then ".tsv" under "Individuals") and remove quotations from downloaded files.
+ 5. Locate all cram files for samples of interest and copy them to the Google bucket.
 
 ## Part 2: Coverage
 The scripts necessary for part 1 are in the `coverage` folder. This step requires access to the sample cram files. All scripts in this section are run on the Google VM created above.
