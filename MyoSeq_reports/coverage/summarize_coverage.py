@@ -55,6 +55,22 @@ def get_gene_size(bed: str) -> int:
     return total_bases
 
 
+def get_positions(bed: str) -> set:
+    '''
+    Opens bed file for gene and gets all positions to check coverage
+
+    :param str bed: Path to bed file
+    :return: Set of positions to check
+    :rtype: set
+    '''
+    positions = []
+    with open(bed) as b:
+        chrom, start, end = b.readline().strip().split('\t')
+        for i in range(int(start), int(end) + 1):
+            positions.append(i)
+    return set(positions)
+
+
 def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str) -> dict:
     '''
     Opens coverage files for processing. Summarizes coverage across gene across batch of samples.
@@ -74,6 +90,7 @@ def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str)
         tsv = f'{covdir}/{gene}.tsv.bgz'
         bed = f'{beddir}/{gene}.bed'
         total_bases = get_gene_size(bed)
+        positions = get_positions(bed)
         total_cov = 0
         callable_bases = 0
         logger.info(f'Working on {gene}...')
@@ -90,7 +107,9 @@ def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str)
             for line in t:
                 line = line.strip().split('\t')
                 chrom = line[0]
-                pos = line[1]
+                pos = int(line[1])
+                if pos not in positions:
+                    continue
 
                 # check if position is considered "callable" (mean depth > 6, as defined by Monkol)
                 mean_at_pos = mean(map(int, line[2:]))
@@ -105,12 +124,12 @@ def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str)
                         sample_cov[samples[i-2]] += cov
                         sample_callable[samples[i-2]] += 1
 
+        logger.info(f'Callable bases: {callable_bases}')
         mean_cov = round(float(total_cov) / total_bases, 2)
         summary[gene]['mean'] = mean_cov
         summary[gene]['callable'] = round(float(callable_bases) / total_bases, 2)
         summary[gene]['uncallable'] = total_bases - callable_bases
         for sample in samples:
-            logger.info(f'Working on {sample}...')
             summary[sample] = {}
             summary[sample][gene] = {}
             summary[sample][gene]['mean'] = round(float(sample_cov[sample]) / total_bases, 2)
