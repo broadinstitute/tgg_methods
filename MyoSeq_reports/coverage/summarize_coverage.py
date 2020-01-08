@@ -102,7 +102,6 @@ def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str)
                 for i in range(2, len(line)):
                     cov = int(line[i])
                     if cov > 0:
-                        sample_callable[samples[i-2]] += 1
                         sample_cov[samples[i-2]] += cov
                         sample_callable[samples[i-2]] += 1
 
@@ -115,8 +114,8 @@ def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str)
             summary[sample] = {}
             summary[sample][gene] = {}
             summary[sample][gene]['mean'] = round(float(sample_cov[sample]) / total_bases, 2)
-            summary[sample][gene]['callable'] = round(float(sample_uncallable[sample]) / total_bases,  2)
-            summary[sample][gene]['uncallable'] = total_bases - sample_uncallable[sample]
+            summary[sample][gene]['callable'] = round(float(sample_callable[sample]) / total_bases,  2)
+            summary[sample][gene]['uncallable'] = total_bases - sample_callable[sample]
     return summary
 
 
