@@ -48,9 +48,11 @@ def get_gene_size(bed: str) -> int:
     :return: Number of bases in gene
     :rtype: int
     '''
+    total_bases = 0
     with open(bed) as b:
         chrom, start, end = b.readline().strip().split('\t')
-    return int(end) - int(start)
+        total_bases += int(end) - int(start)
+    return total_bases
 
 
 def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str) -> dict:
@@ -72,36 +74,37 @@ def summarize_coverage(gene_list: set, samples: list, covdir: str,  beddir: str)
         tsv = f'{covdir}/{gene}.tsv.bgz'
         bed = f'{beddir}/{gene}.bed'
         total_bases = get_gene_size(bed)
+        total_cov = 0
         callable_bases = 0
         logger.info(f'Working on {gene}...')
         logger.info(f'Number of bases: {total_bases}')
 
         # create dict to store coverage per sample
         sample_cov = {}
-        sample_uncallable = {}
+        sample_callable = {}
         for sample in samples:
             sample_cov[sample] = 0
-            sample_uncallable[sample] = 0
+            sample_callable[sample] = 0
 
         with gzip.open(tsv, 'rt') as t: 
             for line in t:
                 line = line.strip().split('\t')
                 chrom = line[0]
                 pos = line[1]
-                total_cov = 0
 
                 # check if position is considered "callable" (mean depth > 6, as defined by Monkol)
                 mean_at_pos = mean(map(int, line[2:]))
+                total_cov += mean_at_pos
                 if mean_at_pos > 6:
                     callable_bases += 1
 
                 # get sample coverage -- sample order in coverage file is same as cram order, with indices shifted by 2
                 for i in range(2, len(line)):
-                    if line[1] == 0:
-                        sample_uncallable[samples[i-2]] += 1
-                    else:
-                        total_cov += int(line[i])
-                        sample_cov[samples[i-2]] += int(line[i]) 
+                    cov = int(line[i])
+                    if cov > 0:
+                        sample_callable[samples[i-2]] += 1
+                        sample_cov[samples[i-2]] += cov
+                        sample_callable[samples[i-2]] += 1
 
         mean_cov = round(float(total_cov) / total_bases, 2)
         summary[gene]['mean'] = mean_cov
