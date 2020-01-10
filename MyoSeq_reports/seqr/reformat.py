@@ -1,6 +1,5 @@
 import argparse
 import logging
-import re
 import typing
 
 
@@ -43,13 +42,19 @@ def get_gnomad_info(tsv: str) -> dict:
             # extract necessary fields
             line = line.strip().split('\t')
             locus = line[header.index('locus')]
-            alleles = re.sub('[^a-zA-Z]+', '', line[header.index('alleles')]).split(',')
+            alleles = line[header.index('alleles')].replace('[', '').replace(']', '').replace('"', '').split(',')
             global_af = line[header.index('gnomad_global_AF')]
+            # correct global AF (hail reports 0.0000e+00 if AF was 0.0 from hail)
+            if global_af == '0.0000e+00':
+                global_af = '0.0'
             popmax_af = line[header.index('gnomad_exomes_popmax_AF')]
+            # correct missing values for popmax AF
+            if popmax_af == 'NA':
+                popmax_af = '0.0'
             popmax_pop = line[header.index('gnomad_exomes_popmax_pop')]
 
             # add variant info to dict
-            variant = f'{locus}-{alleles[0]}-{alleles[1]}'
+            variant = f'{locus} {alleles[0]}>{alleles[1]}'
             if variant not in variants:
                 variants[variant] = {}
             variants[variant]['global'] = global_af
@@ -75,13 +80,16 @@ def get_output_fields(seqr: str, variants: dict, sex: dict) -> dict:
 
         # get header of seqr export file -- format should be stable but double check
         header = s.readline().strip().split('\t')
-        logger.info(f'seqr format check: {line[0:6]}, {line[18:23]}')
+        logger.info(f'seqr format check: {header[0:6]}, {header[18:23]}')
         logger.info('expected: [chrom pos ref alt gene] [rsid hgvsc hgvsp clinvar_clinical_significance clinvar_gold_stars]')
 
         # cycle through seqr export file and pull relevant fields
         for line in s:
             line = line.strip().split('\t')
             chrom, pos, ref, alt, gene, worst_consequence = line[0:6]
+            # add 'chr' to chrom
+            if 'chr' not in chrom:
+                chrom = f'chr{chrom}'
             rsid, hgvsc, hgvsp, clinvar_clinsig, clinvar_gold_stars = line[18:23]
             notes = line[26]
 
@@ -94,7 +102,6 @@ def get_output_fields(seqr: str, variants: dict, sex: dict) -> dict:
                         pmid += f'{notes[i]}{notes[i+1]}'
             else:
                 pmid = '.'
-            print(pmid)
 
             # set clinvar values to '.' if they don't exist
             clinvar_clinsig = clinvar_clinsig.replace('_', ' ').lower()
@@ -158,19 +165,23 @@ def get_output_fields(seqr: str, variants: dict, sex: dict) -> dict:
     return samples
         
 
-def write_out(samples, out):
+def write_out(samples: dict, out: str, report: bool):
     """
     Writes out files for each sample for MYOSEQ reports
 
     :param dict samples: Dictionary of samples (key) and their variants (with frequencies; value)
     :param str out: Name of output file
+    :param bool report: Whether output file should be named 'flagged' (REPORT variants') or 'genes' (all rare variants')
     :return: None
     :rtype: None
     """
 
     logger.info(f'Number of samples found: {len(samples)}')
     for sample in samples:
-        outfile = f'{out}/report_for_MYOSEQ_v20_{sample}.genes.txt'
+        if not report:
+            outfile = f'{out}/report_for_MYOSEQ_v20_{sample}.genes.txt'
+        else:
+            outfile = f'{out}/report_for_MYOSEQ_v20_{sample}.flagged.txt'
 
         # open a file for each sample in specified output directory
         with open(outfile, 'w') as o:
@@ -195,7 +206,7 @@ def main(args):
     samples = get_output_fields(args.seqr, variants, sex)
     
     logger.info('Writing output files')
-    write_out(samples, args.out)
+    write_out(samples, args.out, args.report)
 
 
 if __name__ == '__main__':
@@ -205,6 +216,7 @@ if __name__ == '__main__':
     parser.add_argument('-x', '--sex', help='Input file of samples and their sex information', required=True)
     parser.add_argument('-s', '--seqr', help='Input file of variants exported from seqr', required=True)
     parser.add_argument('-t', '--tsv', help='TSV exported by hail after joining seqr variant loci/alleles to gnomAD hail tables', required=True)
+    parser.add_argument('-r', '--report', help='Output file is for variants tagged REPORT', action='store_true')
     parser.add_argument('-o', '--out', help='Output directory', required=True)
     args = parser.parse_args()
 
