@@ -179,9 +179,9 @@ def write_out(samples: dict, out: str, report: bool):
     logger.info(f'Number of samples found: {len(samples)}')
     for sample in samples:
         if not report:
-            outfile = f'{out}/report_for_MYOSEQ_v20_{sample}.genes.txt'
+            outfile = f'{out}/{sample}.genes.txt'
         else:
-            outfile = f'{out}/report_for_MYOSEQ_v20_{sample}.flagged.txt'
+            outfile = f'{out}/{sample}.flagged.txt'
 
         # open a file for each sample in specified output directory
         with open(outfile, 'w') as o:
