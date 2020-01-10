@@ -1,3 +1,4 @@
+import argparse
 import hail as hl
 import logging
 import typing
@@ -62,12 +63,12 @@ def join_tables(ht: hl.Table, exomes: bool) -> hl.Table:
         gnomad_ht = gnomad_ht.select_globals()
         gnomad_ht.describe()
 
-    ht = ht.annotate(**gnomad_ht[ht.row_key])
+    ht = ht.annotate(**gnomad_ht[ht.key])
     ht.describe()
     return ht
 
 
-def add_global_af(ht: hl.Table, temp; str) -> hl.Table:
+def add_global_af(ht: hl.Table, temp: str) -> hl.Table:
     '''
     Adds gnomAD global AF annotation to Table
 
