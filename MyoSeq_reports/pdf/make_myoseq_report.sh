@@ -13,6 +13,7 @@ cat << EOF
         -u      Samples have no candidate variants
         -d      Top level directory that contains all data for reports
         -r      Directory containing resource .tex files
+        -p      Path to make_myoseq_report.py
         -o      Output directory
 
     Outputs:
@@ -21,13 +22,13 @@ EOF
 }
 
 # check number of arguments
-if [[ $# -lt 8 ]]; then
+if [[ $# -lt 10 ]]; then
     usage
     exit 1
 fi
 
 # parse args
-while getopts "l:c:s:u:d:r:o:h" opt; do
+while getopts "l:c:s:u:d:r:o:p:h" opt; do
     case $opt in
         l)
             list=$OPTARG
@@ -50,6 +51,9 @@ while getopts "l:c:s:u:d:r:o:h" opt; do
         o)
             out=$OPTARG
         ;;
+        p)
+            script_path=$OPTARG
+        ;;
         h)
             usage
             exit 0
@@ -63,12 +67,12 @@ done
 
 while read line; do 
     if [ $cnv ]; then
-        python make_myoseq_report.py -p ${line} -d ${dir} -r ${resources} -o ${out}/${line}.tex -c
+        python $script_path/make_myoseq_report.py -p ${line} -d ${dir} -r ${resources} -o ${out} -c
     elif [ $sma ]; then
-         python make_myoseq_report.py -p ${line} -d ${dir} -r ${resources} -o ${out}/${line}.tex -s
+         python $script_path/make_myoseq_report.py -p ${line} -d ${dir} -r ${resources} -o ${out} -s
     elif [ $unsolved ]; then
-        python make_myoseq_report.py -p ${line} -d ${dir} -r ${resources} -o ${out}/${line}.tex -u
+        python $script_path/make_myoseq_report.py -p ${line} -d ${dir} -r ${resources} -o ${out} -u
     else
-        python make_myoseq_report.py -p ${line} -d ${dir} -r ${resources} -o ${out}/${line}.tex 
+        python $script_path/make_myoseq_report.py -p ${line} -d ${dir} -r ${resources} -o ${out}
     fi
-< done < ${list} 
+done < ${list} 

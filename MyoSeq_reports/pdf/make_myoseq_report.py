@@ -3,6 +3,7 @@
 import argparse
 import logging
 import pandas as pd
+from decimal import Decimal
 from subprocess import Popen, PIPE
 import sys
 
@@ -17,8 +18,8 @@ logger.setLevel(logging.INFO)
 LINE_BREAK = '\\\\'
 END_BOX = '\\end{tabular}\n\\end{small}\n'
 NEW_PAGE = '\\newpage\n'
-GT = '\\textgreater'
-UNDERSCORE = '\\textunderscore'
+GT = '\\textgreater '
+UNDERSCORE = ' \\textunderscore '
 
 
 def awk(sample: str, fname: str) -> str:
@@ -30,9 +31,9 @@ def awk(sample: str, fname: str) -> str:
     :return: Line from file
     :rtype: str
     '''
-    cmd = '''awk $1 == "{}"' {}'''.format(sample, fname)
+    cmd = '''awk '$1 == "{}"' {}'''.format(sample, fname)
     line, err = Popen([cmd], stdout=PIPE, stderr=PIPE, shell=True).communicate()
-    return line
+    return line.decode('UTF-8')
 
 
 def cat(fname: str, outname: str) -> None:
@@ -81,8 +82,8 @@ def get_patient_details(proband: str, dirname: str, outname: str) -> str:
     ancestry_check = f'{dirname}/inference/MYOSEQ_pop.tsv'
     ancestry_line = awk(proband, ancestry_check)
     sample,ancestry = ancestry_line.strip().split('\t')
-    patient_details += '{\\large \\textbf{Inferred Ancestry (Reported):} ' + f'{ancestry} (European)' + '}' + f'\n{LINE_BREAK} {LINE_BREAK} {LINE_BREAK} \n' 
-
+    patient_details += '{\\large \\textbf{Inferred Ancestry (Reported):} ' + f'{ancestry} (European)' + '}' + f'\n{LINE_BREAK} {LINE_BREAK} {LINE_BREAK}\n' 
+    
     append_out(patient_details, outname)
     return inferred
 
@@ -101,7 +102,7 @@ def report_cnvs(proband: str, dirname: str, outname: str, resources: str) -> tup
     cat(f'{resources}/myoseq_template_report_cnv_table_header.tex', outname)
     
     # add empty line to top of CNV box for formatting
-    cnv_info = f'{} & {} & {} & {} & {} {LINE_BREAK}\n'
+    cnv_info = '{} & {} & {} & {} & {}' + f' {LINE_BREAK}\n'
 
     logger.info('Extracting information from CNV file')
     cnv_file = f'{dirname}/summary/{proband}_CNV.tsv'
@@ -141,7 +142,7 @@ def report_sma(proband: str, dirname: str, outname: str, resources: str) -> None
     cat(f'{resources}/myoseq_template_report_sma_table_header.tex', outname)
 
     logger.info('Creating SMA box')    
-    sma_info = f'{} & {} & {} {LINE_BREAK}\n'
+    sma_info = '{} & {} & {} '+ f'{LINE_BREAK}\n'
     sma_info += 'SMN1 & \\textbf{\\color{red}Loss (CN=0)} & WES ' + f'{LINE_BREAK}' + ' \\hline\n'
     sma_info += f'{END_BOX}'
     append_out(sma_info, outname)
@@ -166,13 +167,19 @@ def get_variants(line: dict, report: bool, comment_index: int) -> str:
     chr_pos = line['variant'].split(' ')[0]
     ref, alt = line['variant'].split(' ')[1].split('>')
     genotype = line['genotype']
-    transcript, hgvsc = line['hgvsc'].replace('>', f'{GT}').replace('_', f'{UNDERSCORE}').split(':')
-    hgvsp = line['hgvsp'].split(':')[1].replace('>', f'{GT}').replace('_', f'{UNDERSCORE}')
+    transcript, hgvsc = line['hgvs_c'].replace('>', f'{GT}').replace('_', f'{UNDERSCORE}').split(':')
+    try:
+        hgvsp = line['hgvs_p'].split(':')[1].replace('>', f'{GT}').replace('_', f'{UNDERSCORE}')
+    except:
+        hgvsp = ''
     function = line['functional_class']
-    global_af = line['gnomad_global_af']
-    popmax_af = line['gnomad_pop_max_af']
+    global_af = '%.2E' % Decimal(line['gnomad_global_af'])
+    popmax_af = '%.2E' % Decimal(line['gnomad_pop_max_af'])
     popmax_pop = line['gnomad_pop_max_population']
     stars = line['number_of_stars']
+    rsid = str(line['rsid'])
+    if rsid == 'nan':
+        rsid = ''
 
     # format notes from seqr
     # NOTE: assumes you won't have more comments than letters in the alphabet
@@ -196,11 +203,11 @@ def get_variants(line: dict, report: bool, comment_index: int) -> str:
     if len(alt) > 10:
         alt = alt[:10] + f'{indel_fmt}'
     if len(hgvsc) > 30:
-        hgvsc = hgsvsc[:30] + f'{indel_fmt}'
+        hgvsc = hgvsc[:30] + f'{indel_fmt}'
 
     # format variant into chr:pos ref>alt
     variant = f'{chr_pos} {ref} {GT} {alt}'
-    variant_info = '\\bf{' + f"{line['gene_name']}" + '} & ' + f'{variant} & {round(global_af, 2)} &'
+    variant_info = '\\bf{' + f"{line['gene_name']}" + '} & ' + f'{variant} & {global_af} &'
 
     # correct hom to hem for males on X
     if 'X' in chr_pos and genotype == 'hom' and sex == 'Male':
@@ -208,35 +215,32 @@ def get_variants(line: dict, report: bool, comment_index: int) -> str:
 
     # parse ClinVar status and determine color
     # Monkol split on "/" to split up entries that are too long (pathogenic/likely pathogenic)
-    clinsig = line['clinvar_clinsig']).split('/')
+    clinsig = line['clinvar_clinsig'].split('/')
     revstat = line['clinvar_clnrevstat']
     if clinsig == ['.']:
         variant_info += f' NA & {comment_foot} {LINE_BREAK}\n'
     else:
-        if clinsig.contains('pathogenic'):
-            color = 'red'
-        elif clinsig.contains('conflicting'):
-            color = 'red'
-        elif clinsig.contains('uncertain'):
-            color = 'Orange'
-        elif clinsig.contains('benign'):
-            color = 'Green'
-        # other clinvar statuses default to black text
-        else:
-            color = ''
-
+        color = ''
+        for i in clinsig:
+            if 'pathogenic' in i or 'conflicting' in i:
+                color = 'red'
+            elif 'uncertain' in i:
+                color = 'Orange'
+            elif 'benign' in i:
+                color = 'Green'
+        
         if color != '':
-            for i in len(clinsig):
+            for i in range(len(clinsig)):
                 variant_info += '\\textcolor{' + f'{color}' + '}{\\textbf{' + f'{clinsig[i]}' + '}} & ' + f'{comment_foot} {LINE_BREAK}\n'
         else:
-            for i in len(clinsig):
+            for i in range(len(clinsig)):
                 variant_info += '{\\textbf{' + f'{clinsig[i]}' + '}} & ' + f'{comment_foot} {LINE_BREAK}\n'
 
     # color variant's hgvsc red if it is a splice variant; otherwise display in black
     if function == 'splice_donor_variant' or function == 'slice_acceptor_variant':
-        variant_info += f'{transcript} & ' + '\\textcolor{red}{' + f'{hgvsc}' + '} & ' + f'{round(popmax_af, 2)} & ' + f'{revstat} & {LINE_BREAK}\n'
+        variant_info += f'{transcript} & ' + '\\textcolor{red}{' + f'{hgvsc}' + '} & ' + f'{popmax_af} & ' + f'{revstat} & {LINE_BREAK}\n'
     else:
-        variant_info += f'{transcript} & {hgvsc} & {round(popmax_af, 2)} & {revstat} & {LINE_BREAK}\n'
+        variant_info += f'{transcript} & {hgvsc} & {popmax_af} & {revstat} & {LINE_BREAK}\n'
 
     # color variant's hgvsp  according to functional impact
     if len(hgvsp) > 0:
@@ -251,11 +255,11 @@ def get_variants(line: dict, report: bool, comment_index: int) -> str:
             color = ''
 
         if color != '':
-            hgvsp =  '\\textcolor{' + f'{color}' + '}{' + f'{hgvps}' + '}'
-    variant_info += '\\textit{' + f'{genotype}' + '} & ' + f'{hgvps} & & {stars} & {LINE_BREAK}\n'
-    variant_info += f'& {line["rsid"]} & & & {LINE_BREAK}\n\\hline\n'
+            hgvsp =  '\\textcolor{' + f'{color}' + '}{' + f'{hgvsp}' + '}'
+    variant_info += '\\textit{' + f'{genotype}' + '} & ' + f'{hgvsp} & & {stars} & {LINE_BREAK}\n'
+    variant_info += f'& {rsid} & & & {LINE_BREAK}\n\\hline\n'
 
-    if comments != '':
+    if comments != '.':
         variant_info += '\\textsuperscript{' + f'{comment_foot}' + '} ' + f'{comments}\n{LINE_BREAK}\n' 
 
     return variant_info
@@ -280,10 +284,10 @@ def get_report_variants(proband: str, dirname: str, unsolved: bool, outname: str
         logger.info('Starting REPORT genes box')
         cat(f'{resources}/myoseq_template_report_variants_table_header.tex', outname)
         report_file = f'{dirname}/seqr/variants/{proband}.flagged.txt'
-        report_info = pandas.read_csv(report_file, sep='\t').to_dict('records')
+        report_info = pd.read_csv(report_file, sep='\t').to_dict('records')
         variant_info = ''
         for i in range(len(report_info)):
-            variant_info += get_variants(report_info[i], report=True, i)
+            variant_info += get_variants(report_info[i], True, i)
         variant_info += f'{END_BOX}'      
         append_out(variant_info, outname)
 
@@ -345,12 +349,15 @@ def get_all_variants(proband: str, dirname: str, outname: str, resources: str) -
     :return: None
     '''
     logger.info('Starting appendix (all rare variants) box')
+    header_text = '{\\Large \\textbf{\\underline{Appendix - Candidate Gene List}}}\n' + f'{LINE_BREAK} {LINE_BREAK}\n'
+    append_out(header_text, outname)
+
     cat(f'{resources}/myoseq_template_all_variants_table_header.tex', outname)
     myoseq_file = f'{dirname}/seqr/variants/{proband}.genes.txt'
-    myoseq_info = pandas.read_csv(myoseq_file, sep='\t').to_dict('records')
+    myoseq_info = pd.read_csv(myoseq_file, sep='\t').to_dict('records')
     variant_info = ''
     for i in range(len(myoseq_info)):
-        variant_info += get_variants(myoseq_info[i], report=False, i)
+        variant_info += get_variants(myoseq_info[i], False, i)
     variant_info += '\\end{longtable}\n\\end{small}\n'      
     append_out(variant_info, outname)
 
@@ -369,11 +376,13 @@ def get_coverage_table(proband: str, dirname: str, outname: str, resources: str)
     :return: None
     '''
     logger.info('Starting gene coverage table')
-    cov_info = '{\\large \\textbf{\\underline{Appendix}}} ' + f'{LINE_BREAK} {LINE_BREAK} {LINE_BREAK}\n'
-    cov_info += '{\\large \\textbf{\\textitGene Coverage}}}\n'
+    cov_header = '{\\large \\textbf{\\underline{Appendix}}} ' + f'{LINE_BREAK} {LINE_BREAK} {LINE_BREAK}\n'
+    cov_header += '{\\large \\textbf{\\textit{Gene Coverage}}}\n'
+    append_out(cov_header, outname)
     cat(f'{resources}/myoseq_template_coverage_table_header.tex', outname)
 
-    cov_file = f'{dirname}/{proband}_coverage.tsv'
+    cov_file = f'{dirname}/per_sample/{proband}_coverage.tsv'
+    cov_info = ''
     with open(cov_file) as c:
         # Gene	Cohort_Mean	Sample_Mean	Cohort_Callable	Sample_Callable	Cohort_Uncallable	Sample_Uncallable
         header = c.readline()
@@ -385,10 +394,9 @@ def get_coverage_table(proband: str, dirname: str, outname: str, resources: str)
             if int(line[-1]) > 0:
                 cov_info += '\\rowcolor{Lavender} ' 
             cov_info += f'{row} {LINE_BREAK}\n'
-             
     cov_info += '\\end{longtable}\n'
     append_out(cov_info, outname)
-    cat(f'{resources}/myoseq_template_coverage_notes.tex')
+    cat(f'{resources}/myoseq_template_coverage_notes.tex', outname)
 
 
 def main(args):
@@ -409,7 +417,7 @@ def main(args):
 
     if cnv:
         logger.info('Adding candidate CNVs to first page of reports')
-        cnv = report_cnvs(proband, dirname, outname, resources 
+        cnv = report_cnvs(proband, dirname, outname, resources) 
         gene = cnv[0]
         cn = cnv[1]
     if sma:
@@ -439,7 +447,7 @@ def main(args):
     cat(f'{resources}/myoseq_template_general_methodology_cnv_sma_nogenelist.tex', outname)
 
     logger.info('Finishing report')
-    append_out('\\end{document}\n')
+    append_out('\\end{document}\n', outname)
 
     
 if __name__ == '__main__':
@@ -447,7 +455,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Creates patient section of tex file for pdflatex')
     parser.add_argument('-c', '--cnv', help='Samples have CNV candidates', action='store_true')
     parser.add_argument('-s', '--sma', help='Samples are SMA carriers', action='store_true')
-    parser.add_argument('-u', '--unsolved', help='Sample is unsolved (no candidates)', action='store_false')
+    parser.add_argument('-u', '--unsolved', help='Sample is unsolved (no candidates)', action='store_true')
     parser.add_argument('-d', '--dirname', help='Top level directory that contains all data for reports', required=True)
     parser.add_argument('-r', '--resources', help='Directory containing tex files', required=True)
     parser.add_argument('-p', '--proband', help='Proband ID', required=True)
