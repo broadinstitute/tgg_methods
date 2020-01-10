@@ -1,61 +1,211 @@
-#!/usr/bin/env python
-
-
 import argparse
 import logging
-import os
+import re
 import typing
-from utils import get_samples
 
 
 logging.basicConfig(format='%(asctime)s (%(name)s %(lineno)s): %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
-logger = logging.getLogger('bigquery')
+logger = logging.getLogger('reformat')
 logger.setLevel(logging.INFO)
 
 
-
-def fix_blanks(tsv, out) -> None:
+def get_sex(sex: str) -> dict:
     '''
-    Fixes blanks in tsv (for import into hail)
+    Extract inferred sex from sex tsv (created using sexcheck script)
 
-    :param str tsv: Path to file downloadedfrom seqr
-    :param str out: Output path
-    :return: None
-    :rtype: None
+    :param str sex: Input tsv with sex information
+    :return: Dictionary; key: sample, value: inferred sex
+    :rtype: dict
     '''
-    with open(tsv) as t, open(out, 'w') as o:
+    samples = {}
+    with open(sex) as s:
+        for line in s:
+            sample, reported_sex, inferred_sex, fstat, status = line.strip().split('\t')
+            samples[sample] = inferred_sex
+    return samples
 
-        # get header of seqr export file
-        header = t.readline()
-        o.write(header)
-        header = header.strip().split('\t')
+
+def get_gnomad_info(tsv: str) -> dict:
+    '''
+    Extract gnomAD popmax AF, popmax pop, and  global AF from TSV (export using hail after joining variant loci/alleles with gnomAD tables)
+
+    :param str tsv: Path to input tsv
+    :return: Dictionary of variants; key: variants, value: global AF, popmax AF, popmax pop
+    :rtype: dict
+    '''
+    variants = {}
+    
+    with open(tsv) as t:
+
+        header = t.readline().strip().split('\t')
 
         for line in t:
+            # extract necessary fields
             line = line.strip().split('\t')
+            locus = line[header.index('locus')]
+            alleles = re.sub('[^a-zA-Z]+', '', line[header.index('alleles')]).split(',')
+            global_af = line[header.index('gnomad_global_AF')]
+            popmax_af = line[header.index('gnomad_exomes_popmax_AF')]
+            popmax_pop = line[header.index('gnomad_exomes_popmax_pop')]
 
-            # skip malformed lines
-            if len(line) != len(header):
-                logger.warning (f'Skipping the following line (length differs from header length): \n{line}')
+            # add variant info to dict
+            variant = f'{locus}-{alleles[0]}-{alleles[1]}'
+            if variant not in variants:
+                variants[variant] = {}
+            variants[variant]['global'] = global_af
+            variants[variant]['popmax'] = popmax_af
+            variants[variant]['pop'] = popmax_pop
 
-            for i in range(len(line)):
-                if line[i] == '':
-                    line[i] = '.'
+    return variants
 
-            o.write('\t'.join(line) + '\n')
+
+def get_output_fields(seqr: str, variants: dict, sex: dict) -> dict:
+    """
+    Reads in seqr export file and stores each sample's variants and necessary information for output file in dict
+
+    :param str seqr: Path to seqr export tsv
+    :param dict all_variants: Dictionary of variants and their gnomAD info
+    :param dict sex: Dictionary of each sample and their inferred sex
+    :return: Dictionary of samples (key) and their variants with frequencies (value)
+    :rtype: dict
+    """
+
+    samples = {}
+    with open(seqr) as s:
+
+        # get header of seqr export file -- format should be stable but double check
+        header = s.readline().strip().split('\t')
+        logger.info(f'seqr format check: {line[0:6]}, {line[18:23]}')
+        logger.info('expected: [chrom pos ref alt gene] [rsid hgvsc hgvsp clinvar_clinical_significance clinvar_gold_stars]')
+
+        # cycle through seqr export file and pull relevant fields
+        for line in s:
+            line = line.strip().split('\t')
+            chrom, pos, ref, alt, gene, worst_consequence = line[0:6]
+            rsid, hgvsc, hgvsp, clinvar_clinsig, clinvar_gold_stars = line[18:23]
+            notes = line[26]
+
+            # check if notes field has PMID; if not, don't include notes
+            pmid = ''
+            if 'PMID' in notes:
+                notes = notes.split(' ')
+                for i in range(len(notes)):
+                    if 'PMID' in i:
+                        pmid += f'{notes[i]}{notes[i+1]}'
+            else:
+                pmid = '.'
+            print(pmid)
+
+            # set clinvar values to '.' if they don't exist
+            clinvar_clinsig = clinvar_clinsig.replace('_', ' ').lower()
+            if len(clinvar_clinsig) == 0:
+                clinvar_clinsig = '.'
+            if len(clinvar_gold_stars) == 0:
+                clinvar_gold_stars = '.'
+
+            # get variant (format matches what will be output in reports)
+            variant = '{}:{} {}>{}'.format(chrom, pos, ref, alt)
+
+            # get gene name from column - check for seqr gene name bug
+            if ',' in gene:
+                gene = gene.replace("'","")
+
+            # get popmax and global_af from files; if key doesn't exist, then use '0.0' (not seen in gnomAD)
+            global_af = variants[variant]['global']
+            popmax_af = variants[variant]['popmax']
+            pop = variants[variant]['pop']
+
+            # check all items in seqr download starting from index 27 (first index to potentially have sample information)
+            for item in line[27:]:
+
+                # sample_1:num_alt_alleles:gq:ab
+                # skip if item doesn't have colon -- this means it doesn't have sample info
+                if ':' not in item: 
+                    continue
+
+                # add sample to dict
+                info = item.split(':')
+                s = info[0]
+                if s not in samples:
+                    samples[s] = []
+
+                # get sample genotype
+                try:
+                    geno = int(info[1])
+                except:
+                    logger.warning(f'{s} has non-int genotype. Skipping {s}')
+                    continue
+
+                # only keep heterozygous or homozygous variant genotypes
+                if geno == 0:
+                    continue
+                elif geno == 1:
+                    gt = 'het'
+                else:
+                    if geno != 2:
+                        logger.warning(f'{s} genotype is {geno}; not 0, 1, or 2. Assuming this means {s} is heterozygous')
+                        gt = 'het'
+                    else:
+                        if (chrom == 'X' or chrom == 'chrX') and sex[s] == 'Male':
+                            gt = 'hemi'
+                        else:
+                            gt = 'hom'
+                        
+                # add formatted line to sample dict
+                # columns needed for output: gene, genotype, variant, functional effect, hgvsc, hgvsp, rsid, gnomad global AF, gnomad popmax AF, gnomad popmax pop, clinvar clinical significance, clinvar clinical review status (no longer in seqr downloads), number of clinvar stars, clinvar url (also no longer in seqr download), PMID 
+                samples[s].append([gene, gt, variant, worst_consequence, hgvsc, hgvsp, rsid, global_af, popmax_af, pop, clinvar_clinsig, '.', clinvar_gold_stars, '.', pmid])
+
+    return samples
+        
+
+def write_out(samples, out):
+    """
+    Writes out files for each sample for MYOSEQ reports
+
+    :param dict samples: Dictionary of samples (key) and their variants (with frequencies; value)
+    :param str out: Name of output file
+    :return: None
+    :rtype: None
+    """
+
+    logger.info(f'Number of samples found: {len(samples)}')
+    for sample in samples:
+        outfile = f'{out}/report_for_MYOSEQ_v20_{sample}.genes.txt'
+
+        # open a file for each sample in specified output directory
+        with open(outfile, 'w') as o:
+
+            # write header to output
+            o.write('gene_name\tgenotype\tvariant\tfunctional_class\thgvs_c\thgvs_p\trsid\tgnomad_global_af\tgnomad_pop_max_af\tgnomad_pop_max_population\tclinvar_clinsig\tclinvar_clnrevstat\tnumber_of_stars\tclinvar_url\tcomments\n')
+
+            # write variants to output
+            for line in samples[sample]:
+                o.write('\t'.join(line) + '\n')
 
 
 def main(args):
 
-    logger.info('Fixing input file')
-    fix_blanks(args.tsv, args.out)
+    logger.info('Getting sex information for samples')
+    sex = get_sex(args.sex)
+
+    logger.info('Getting gnomAD global AF, popmax AF, and popmax pop from hail tsv export')
+    variants = get_gnomad_info(args.tsv)
+
+    logger.info('Getting seqr export information')
+    samples = get_output_fields(args.seqr, variants, sex
+    
+    logger.info('Writing output files')
+    write_out(samples, args.out)
 
 
 if __name__ == '__main__':
     
     # Get args from command line
-    parser = argparse.ArgumentParser(description='Fixes blanks in seqr downloads for import into hail')
-    parser.add_argument('-t', '--tsv', help='TSV downloaded from seqr', required=True)
-    parser.add_argument('-o', '--out', help='output TSV', required=True)
+    parser = argparse.ArgumentParser(description='Reformats seqr variant tsv export in preparation for downstream pdf generation')
+    parser.add_argument('-x', '--sex', help='Input file of samples and their sex information', required=True)
+    parser.add_argument('-s', '--seqr', help='Input file of variants exported from seqr', required=True)
+    parser.add_argument('-t', '--tsv', help='TSV exported by hail after joining seqr variant loci/alleles to gnomAD hail tables', required=True)
+    parser.add_argument('-o', '--out', help='Output directory', required=True)
     args = parser.parse_args()
 
     main(args)
