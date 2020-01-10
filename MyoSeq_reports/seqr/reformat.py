@@ -192,7 +192,7 @@ def main(args):
     variants = get_gnomad_info(args.tsv)
 
     logger.info('Getting seqr export information')
-    samples = get_output_fields(args.seqr, variants, sex
+    samples = get_output_fields(args.seqr, variants, sex)
     
     logger.info('Writing output files')
     write_out(samples, args.out)
