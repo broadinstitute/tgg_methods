@@ -115,7 +115,7 @@ def report_cnvs(proband: str, dirname: str, outname: str, resources: str) -> tup
             chrom, start, end, cn, gene = line.strip().split('\t')
             cnv = f'{chrom}:{start}-{end}'
             # size is reported in kb 
-            size = float(start - end) / 1000
+            size = float(start) - float(end) / 1000
             if int(cn) <= 1:
                 cnv_type = f'Loss (CN={cn})'
             else:
@@ -125,7 +125,7 @@ def report_cnvs(proband: str, dirname: str, outname: str, resources: str) -> tup
     append_out(cnv_info, outname)
 
     logger.info('Closing out CNV section of first page of reports')
-    cat(f'{resources}/myoseq_template_candidate_cnv_notes.tex')
+    cat(f'{resources}/myoseq_template_candidate_cnv_notes.tex', outname)
     return (gene, int(cn))
             
 
@@ -307,8 +307,8 @@ def add_cnv_plot(proband: str, gene: str, cn: int, dirname: str, resources: str,
     :param str resources: Directory with tex files
     :return: None
     '''
-    cnv_figure = f'{dirname}/images/cnv/{proband}.pdf'
-    cnv_info = '\\includegraphics[width=14cm, height=14cm]{' + f'{cnv_figure} {LINE_BREAK}\n'
+    cnv_figure = f'{dirname}/images/cnv/{proband}'
+    cnv_info = '\\includegraphics[width=14cm, height=14cm]{' + f'{cnv_figure}' + '} {LINE_BREAK}\n'
     cnv_type = 'Deletion'
     if cn > 1:
         cnv_type = 'Duplication' 

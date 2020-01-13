@@ -28,7 +28,7 @@ if [[ $# -lt 10 ]]; then
 fi
 
 # parse args
-while getopts "l:c:s:u:d:r:o:p:h" opt; do
+while getopts "l:d:r:o:p:ucsh" opt; do
     case $opt in
         l)
             list=$OPTARG
@@ -67,7 +67,11 @@ done
 
 while read line; do 
     if [ $cnv ]; then
-        python $script_path/make_myoseq_report.py -p ${line} -d ${dir} -r ${resources} -o ${out} -c
+        if [ $unsolved ]; then
+            python $script_path/make_myoseq_report.py -p ${line} -d ${dir} -r ${resources} -o ${out} -c -u
+        else
+            python $script_path/make_myoseq_report.py -p ${line} -d ${dir} -r ${resources} -o ${out} -c
+        fi
     elif [ $sma ]; then
          python $script_path/make_myoseq_report.py -p ${line} -d ${dir} -r ${resources} -o ${out} -s
     elif [ $unsolved ]; then
