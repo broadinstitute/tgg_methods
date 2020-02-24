@@ -5,11 +5,21 @@ import pickle
 import hail as hl
 import hail.expr.aggregators as agg
 
-from gnomad_hail import *
-from gnomad_hail.resources.sample_qc import *
-from gnomad_hail.utils import *
-from gnomad_hail.utils.sample_qc import *
-from resources_seqr_qc import *
+from gnomad_hail.utils.sample_qc import (
+    compute_callrate_mt,
+    run_platform_pca,
+    assign_platform_from_pcs,
+    compute_stratified_metrics_filter,
+    filter_rows_for_qc,
+)
+from gnomad_hail.utils.generic import (
+    pc_project,
+    assign_population_pcs,
+    filter_to_autosomes,
+)
+from gnomad_hail.utils.slack import try_slack
+from gnomad_qc.v2.resources import evaluation_intervals_path
+from resources.resources_seqr_qc import *
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 logger = logging.getLogger("seqr_sample_qc")
@@ -98,13 +108,17 @@ def apply_filter_flags_expr(mt: hl.MatrixTable, data_type: str, metric_threshold
         'chimera': mt.AL_PCT_CHIMERAS > metric_thresholds['chimera_thres']
     }
     if data_type == 'WES':
-        flags.update({
+        flags.update(
+            {
             'coverage': mt.HS_PCT_TARGET_BASES_20X < metric_thresholds['wes_cov_thres']
-        })
+            }
+        )
     else:
-        flags.update({
+        flags.update(
+            {
             'coverage': mt.WGS_MEAN_COVERAGE < metric_thresholds['wgs_cov_thres']
-        })
+            }
+        )
 
     return hl.set(hl.filter(lambda x: hl.is_defined(x),
                             [hl.or_missing(filter_expr, name) for name, filter_expr in flags.items()]))
@@ -157,7 +171,7 @@ def run_platform_imputation(mt: hl.MatrixTable, plat_min_cluster_size: int, plat
     """
     intervals = hl.import_locus_intervals(evaluation_intervals_path)
     callrate_mt = compute_callrate_mt(mt, intervals)
-    eigenvalues, scores_ht, _ = run_platform_pca(callrate_mt)
+    eigenvalues, scores_ht, ignore = run_platform_pca(callrate_mt)
     plat_ht = assign_platform_from_pcs(scores_ht, hdbscan_min_cluster_size=plat_min_cluster_size, hdbscan_min_samples=plat_min_sample_size)
     d = {f'plat_PC{i+1}': scores_ht.scores[i] for i in list(range(0, plat_assignment_pcs))}
     scores_ht = scores_ht.annotate(**d).drop('scores')
@@ -220,9 +234,9 @@ def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
 
     metric_ht = compute_stratified_metrics_filter(strat_ht, qc_metrics, strata)
     checkpoint_pass = metric_ht.aggregate(hl.agg.count_where(hl.len(metric_ht.qc_metrics_filters) == 0))
-    logger.info('{0} samples found passing pop/platform-specific filtering'.format(checkpoint_pass))
+    logger.info(f'{checkpoint_pass} samples found passing pop/platform-specific filtering')
     checkpoint_fail = metric_ht.aggregate(hl.agg.count_where(hl.len(metric_ht.qc_metrics_filters) != 0))
-    logger.info('{0} samples found failing pop/platform-specific filtering'.format(checkpoint_fail))
+    logger.info(f'{checkpoint_fail} samples found failing pop/platform-specific filtering')
     metric_ht = metric_ht.annotate(sample_qc=mt.cols()[metric_ht.key].sample_qc)
     return metric_ht
 
@@ -302,7 +316,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--data-type', help="Sequencing data type (WES or WGS)", choices=["WES", "WGS"], required=True)
-    parser.add_argument('-b', '--build', help='Reference build, 37 or 38', type=int, choices=[37, 38],  required=True)
+    parser.add_argument('-b', '--build', help='Reference build, 37 or 38', type=int, choices=[37, 38], required=True)
     parser.add_argument('-v', '--callset-version', help='Version of callset vcf', type=int, required=True)
     parser.add_argument('--data-source', help="Data source (Internal or External)", choices=["Internal", "External"], required=True)
     parser.add_argument('--is-test', help='To run a test of the pipeline using test files and directories',
@@ -310,8 +324,8 @@ if __name__ == '__main__':
     parser.add_argument('--callrate-low-threshold', help="Lower threshold at which to flag samples for low callrate", default=0.85)
     parser.add_argument('--contam-up-threshold', help="Upper threshold at which to flag samples for elevated contamination", default=5)
     parser.add_argument('--chimera-up-threshold', help="Upper threshold at which to flag samples for elevated chimera", default=5)
-    parser.add_argument('--wes-coverage-low-threshold',help="Lower threshold at which to flag exome samples for low coverage", default=85)
-    parser.add_argument('--wgs-coverage-low-threshold',help="Lower threshold at which to flag genome samples for low coverage", default=30)
+    parser.add_argument('--wes-coverage-low-threshold', help="Lower threshold at which to flag exome samples for low coverage", default=85)
+    parser.add_argument('--wgs-coverage-low-threshold', help="Lower threshold at which to flag genome samples for low coverage", default=30)
     parser.add_argument('--plat-min-cluster-size', help='Minimum cluster size for platform pca labeling', default=40)
     parser.add_argument('--plat-min-sample-size', help='Minimum sample size for platform pca labeling', default=40)
     parser.add_argument('--pop-assignment-pcs', help='Number of principal components to use in population assignment RF', default=6)
