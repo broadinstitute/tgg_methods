@@ -172,6 +172,7 @@ def make_hgmd_url(ht: hl.Table) -> hl.Table:
 
 
 def get_datatype_pop(ht, data_type, pop, data_type_pops, stat):
+    """"""
     return (
         ht[f"{data_type}_{gnomad_pop_expr(pop, stat)}"]
         if pop in data_type_pops[data_type]
@@ -218,6 +219,12 @@ def gnomad_af_dict(ht, all_pops) -> hl.dict:
 
 
 def calc_gnomad_allele_stats(ht: hl.Table, all_pops) -> hl.Table:
+    """
+    Calculate combined AC, AN, AF in gnomAD exomes and genomes
+    :param ht:
+    :param all_pops:
+    :return: 
+    """
     ht = ht.annotate(**gnomad_ac_dict(ht, all_pops), **gnomad_an_dict(ht, all_pops),)
     ht = ht.annotate(**gnomad_af_dict(ht, all_pops))
     return ht
