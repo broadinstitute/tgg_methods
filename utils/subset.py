@@ -74,7 +74,7 @@ def main(args):
         logger.warning(
             "Path to output VCF does not contain '.bgz'; export might be really slow"
         )
-    hl.export_vcf(mt, args.vcf, parallel=args.parallel)
+    hl.export_vcf(mt, args.vcf_out, parallel=args.parallel)
 
 
 if __name__ == "__main__":
@@ -82,7 +82,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         "This script subsets a MatrixTable and exports a VCF"
     )
-    parser.add_argument("-v", "--vcf_path", help="Path to input VCF")
+    parser.add_argument("--vcf_path", help="Path to input VCF")
     parser.add_argument(
         "--import_build",
         help="Reference build to use when importing VCF",
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--table_key", help="Field used to key sample Table", default="s"
     )
-    parser.add_argument("-v", "--vcf", help="Path to output VCF")
+    parser.add_argument("-v", "--vcf_out", help="Path to output VCF")
     parser.add_argument(
         "-p",
         "--parallel",
