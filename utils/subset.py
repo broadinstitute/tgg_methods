@@ -33,13 +33,12 @@ def subset_samples_and_variants(
 
     if anti_join_ht_count != 0:
         missing_samples = anti_join_ht.s.collect()
-        raise MatrixTableSampleSetError(
+        logger.error(
             f"Only {sample_count - anti_join_ht_count} out of {sample_count} "
             "subsetting-table IDs matched IDs in the variant callset.\n"
             f'IDs that aren"t in the callset: {missing_samples}\n'
-            f"All callset sample IDs:{mt.s.collect()}",
-            missing_samples,
         )
+        exit(1)
 
     mt = mt.semi_join_cols(sample_ht)
     mt = mt.filter_rows((hl.agg.any(mt.GT.is_non_ref())) > 0)
