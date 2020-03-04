@@ -29,6 +29,7 @@ def subset_samples_and_variants(
     sample_count = sample_ht.count()
     anti_join_ht = sample_ht.anti_join(mt.cols())
     anti_join_ht_count = anti_join_ht.count()
+    full_count = mt.count_cols()
 
     if anti_join_ht_count != 0:
         missing_samples = anti_join_ht.s.collect()
@@ -44,8 +45,8 @@ def subset_samples_and_variants(
     mt = mt.filter_rows((hl.agg.any(mt.GT.is_non_ref())) > 0)
 
     logger.info(
-        f"Finished subsetting samples. Kept {anti_join_ht_count} "
-        f"out of {mt.count()} samples in vds"
+        f"Finished subsetting samples. Kept {mt.count_cols()} "
+        f"out of {full_count} samples in MT"
     )
     return mt
 
