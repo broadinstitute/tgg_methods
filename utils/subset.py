@@ -70,7 +70,7 @@ def main(args):
     mt = subset_samples_and_variants(mt, args.samp, args.header, args.table_key)
 
     logger.info("Exporting VCF...")
-    if "bgz" not in args.vcf:
+    if "bgz" not in args.vcf_out:
         logger.warning(
             "Path to output VCF does not contain '.bgz'; export might be really slow"
         )
