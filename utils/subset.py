@@ -55,14 +55,10 @@ def main(args):
     hl.init(default_reference="GRCh38", log="/subset.log")
 
     logger.info("Reading in MT...")
-    if args.wes:
-        mt_path = args.wes
-    else:
-        mt_path = args.wgs
-    mt = hl.read_matrix_table(mt_path)
+    mt = hl.read_matrix_table(args.mt_path)
 
     logger.info("Subsetting to specified samples and their variants...")
-    mt = subset_samples_and_variants(mt, args.samp)
+    mt = subset_samples_and_variants(mt, args.samp, args.header, args.table_key)
 
     logger.info("Exporting VCF...")
     if "bgz" not in args.vcf:
@@ -73,24 +69,26 @@ def main(args):
 
 
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser(
         "This script subsets a MatrixTable and exports a VCF"
     )
-    parser.add_argument("-e", "--wes", help="Path to WES MatrixTable")
-    parser.add_argument("-g", "--wgs", help="Path to WGS MatrixTable")
+    parser.add_argument("-m", "--mt_path", help="Path to input MatrixTable")
     parser.add_argument(
         "-s", "--samp", help="Path to file with list of samples to subset"
+    )
+    parser.add_argument(
+        "--header", help="Whether sample list file has a header", action="store_false"
+    )
+    parser.add_argument(
+        "--table_key", help="Field used to key sample Table", default="s"
     )
     parser.add_argument("-v", "--vcf", help="Path to output VCF")
     parser.add_argument(
         "-p",
         "--parallel",
         help="Export sharded VCF (parallel output)",
-        action=store_true,
+        action="store_true",
     )
     args = parser.parse_args()
-
-    if not (args.wes or args.wgs):
-        parser.error("Need to specify one MatrixTable (one of --wes or --wgs)")
-
     main(args)
