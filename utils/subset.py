@@ -92,7 +92,7 @@ if __name__ == "__main__":
         "-s", "--samp", help="Path to file with list of samples to subset"
     )
     parser.add_argument(
-        "--header", help="Whether sample list file has a header", action="store_false"
+        "--header", help="Whether sample list file has a header. Specify only if False", action="store_false"
     )
     parser.add_argument(
         "--table_key", help="Field used to key sample Table", default="s"
