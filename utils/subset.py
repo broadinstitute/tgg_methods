@@ -87,8 +87,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "-p",
         "--parallel",
-        help="Export sharded VCF (parallel output)",
-        action="store_true",
+        help="Export sharded VCF (option to pass to hail for parallel output). Default is None for non-parallel output",
+        choices=("separate_header", "header_per_shard"),
     )
     args = parser.parse_args()
     main(args)
