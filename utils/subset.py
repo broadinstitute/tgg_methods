@@ -55,8 +55,16 @@ def main(args):
 
     hl.init(default_reference="GRCh38", log="/subset.log")
 
-    logger.info("Reading in MT...")
-    mt = hl.read_matrix_table(args.mt_path)
+    if args.vcf_path:
+        logger.info("Importing VCF...")
+        # Note: always assumes file is bgzipped
+        mt = hl.import_vcf(
+            args.vcf_path, force_bgz=True, reference_genome=args.import_build
+        )
+
+    else:
+        logger.info("Reading in MT...")
+        mt = hl.read_matrix_table(args.mt_path)
 
     logger.info("Subsetting to specified samples and their variants...")
     mt = subset_samples_and_variants(mt, args.samp, args.header, args.table_key)
@@ -73,6 +81,12 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         "This script subsets a MatrixTable and exports a VCF"
+    )
+    parser.add_argument("-v", "--vcf_path", help="Path to input VCF")
+    parser.add_argument(
+        "--import_build",
+        help="Reference build to use when importing VCF",
+        default="GRCh38",
     )
     parser.add_argument("-m", "--mt_path", help="Path to input MatrixTable")
     parser.add_argument(
@@ -92,4 +106,10 @@ if __name__ == "__main__":
         choices=("separate_header", "header_per_shard"),
     )
     args = parser.parse_args()
+
+    if not (args.vcf_path or args.mt_path):
+        parser.error(
+            "Need to specify at least one input (one of --vcf_path or --mt_path)"
+        )
+
     main(args)
