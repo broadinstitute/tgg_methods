@@ -1,6 +1,7 @@
 import argparse
 import logging
 import hail as hl
+from gnomad.utils.generic import subset_samples_and_variants
 
 
 logging.basicConfig(
@@ -9,45 +10,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("subset")
 logger.setLevel(logging.INFO)
-
-
-# Adapted from hail-elasticsearch-pipelines
-def subset_samples_and_variants(
-    mt: hl.MatrixTable, sample_path: str, header: bool = True, table_key: str = "s"
-) -> hl.MatrixTable:
-    """
-    Subset the MatrixTable to the provided list of samples and their variants
-    
-    :param MatrixTable mt: Input MatrixTable
-    :param str sample_path: Path to a file with list of samples
-    :param bool header: Whether file with samples has a header. Default is True
-    :param str table_key: Key to sample Table. Default is "s"
-    :return: MatrixTable subsetted to list of samples and their variants
-    :rtype: hl.Matrixtable
-    """
-    sample_ht = hl.import_table(sample_path, no_header=not header, key=table_key)
-    sample_count = sample_ht.count()
-    anti_join_ht = sample_ht.anti_join(mt.cols())
-    anti_join_ht_count = anti_join_ht.count()
-    full_count = mt.count_cols()
-
-    if anti_join_ht_count != 0:
-        missing_samples = anti_join_ht.s.collect()
-        logger.error(
-            f"Only {sample_count - anti_join_ht_count} out of {sample_count} "
-            "subsetting-table IDs matched IDs in the variant callset.\n"
-            f'IDs that aren"t in the callset: {missing_samples}\n'
-        )
-        exit(1)
-
-    mt = mt.semi_join_cols(sample_ht)
-    mt = mt.filter_rows((hl.agg.any(mt.GT.is_non_ref())) > 0)
-
-    logger.info(
-        f"Finished subsetting samples. Kept {mt.count_cols()} "
-        f"out of {full_count} samples in MT"
-    )
-    return mt
 
 
 def main(args):
