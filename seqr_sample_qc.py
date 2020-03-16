@@ -5,21 +5,37 @@ import pickle
 import hail as hl
 import hail.expr.aggregators as agg
 
-from gnomad_hail.utils.sample_qc import (
+from resources.resources_seqr_qc import (
+    callset_vcf_path,
+    mt_path,
+    missing_metrics_path,
+    rdg_gnomad_pop_pca_loadings_ht_path,
+    remap_path,
+    sample_qc_ht_path,
+    sample_qc_tsv_path,
+    seq_metrics_path,
+    val_coding_ht_path,
+    val_noncoding_ht_path,
+    VCFDataTypeError,
+)
+
+from gnomad.utils.sample_qc import (
     compute_callrate_mt,
+    get_qc_mt,
     run_platform_pca,
     assign_platform_from_pcs,
     compute_stratified_metrics_filter,
-    filter_rows_for_qc,
 )
-from gnomad_hail.utils.generic import (
+from gnomad.utils.generic import (
     pc_project,
     assign_population_pcs,
     filter_to_autosomes,
 )
-from gnomad_hail.utils.slack import try_slack
-from gnomad_qc.v2.resources import evaluation_intervals_path
-from resources.resources_seqr_qc import *
+from gnomad.utils.sample_qc import add_filters_expr
+from gnomad.utils.slack import try_slack
+from gnomad_qc.v2.resources.basics import evaluation_intervals_path
+
+
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 logger = logging.getLogger("seqr_sample_qc")
@@ -120,8 +136,7 @@ def apply_filter_flags_expr(mt: hl.MatrixTable, data_type: str, metric_threshold
             }
         )
 
-    return hl.set(hl.filter(lambda x: hl.is_defined(x),
-                            [hl.or_missing(filter_expr, name) for name, filter_expr in flags.items()]))
+    return add_filters_expr(flags)
 
 
 def get_all_sample_metadata(mt: hl.MatrixTable, build: int, data_type: str, data_source: str, version: int) -> hl.Table:
@@ -145,16 +160,15 @@ def get_all_sample_metadata(mt: hl.MatrixTable, build: int, data_type: str, data
     meta_ht = meta_ht.annotate(seqr_id=hl.if_else(hl.is_missing(meta_ht.seqr_id), meta_ht.SAMPLE, meta_ht.seqr_id))
 
     logger.info("Filtering to bi-allelic, high-callrate, common SNPs to calculate callrate...")
-    mt = filter_rows_for_qc(mt, min_af=0.001,
-                            min_callrate=0.99,
-                            bi_allelic_only=True,
-                            snv_only=True,
-                            apply_hard_filters=False,
-                            min_inbreeding_coeff_threshold=None,
-                            min_hardy_weinberg_threshold=None,
-                            )
-    callrate_ht = mt.select_cols(filtered_callrate=hl.agg.fraction(hl.is_defined(mt.GT))).cols()
-    meta_ht = meta_ht.annotate(**callrate_ht[meta_ht.key])
+    mt = get_qc_mt(mt,
+                   apply_hard_filters=False,
+                   filter_decoy=False,
+                   filter_segdup=False,
+                   min_inbreeding_coeff_threshold=None,
+                   min_hardy_weinberg_threshold=None,
+                   ld_r2=None,
+                   )
+    meta_ht = meta_ht.annotate(filtered_callrate=mt.cols()[meta_ht.key].sample_callrate)
     return meta_ht
 
 
@@ -171,7 +185,7 @@ def run_platform_imputation(mt: hl.MatrixTable, plat_min_cluster_size: int, plat
     """
     intervals = hl.import_locus_intervals(evaluation_intervals_path)
     callrate_mt = compute_callrate_mt(mt, intervals)
-    eigenvalues, scores_ht, ignore = run_platform_pca(callrate_mt)
+    eigenvalues, scores_ht, _ = run_platform_pca(callrate_mt)
     plat_ht = assign_platform_from_pcs(scores_ht, hdbscan_min_cluster_size=plat_min_cluster_size, hdbscan_min_samples=plat_min_sample_size)
     d = {f'plat_PC{i+1}': scores_ht.scores[i] for i in list(range(0, plat_assignment_pcs))}
     scores_ht = scores_ht.annotate(**d).drop('scores')
@@ -200,7 +214,7 @@ def run_population_pca(mt: hl.MatrixTable, build: int, pcs: int, pop_fit_path: s
     with hl.hadoop_open(pop_fit_path, 'rb') as f:
         fit = pickle.load(f)
 
-    pop_pca_ht, ignore = assign_population_pcs(scores, pc_cols=scores.scores, output_col='qc_pop', fit=fit)
+    pop_pca_ht, _ = assign_population_pcs(scores, pc_cols=scores.scores, output_col='qc_pop', fit=fit)
     pop_pca_ht = pop_pca_ht.key_by('s')
     d = {f'pop_PC{i+1}': scores.scores[i] for i in range(pcs)}
     scores = scores.annotate(**d).drop('scores', 'known_pop')
