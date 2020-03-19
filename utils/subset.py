@@ -27,8 +27,10 @@ def main(args):
         logger.info("Reading in MT...")
         mt = hl.read_matrix_table(args.mt_path)
 
+    logger.info(f"Input MT counts: {mt.count()}")
     logger.info("Subsetting to specified samples and their variants...")
-    mt = subset_samples_and_variants(mt, args.samp, args.header, args.table_key)
+    mt = subset_samples_and_variants(mt, args.samp, header=args.header, table_key=args.table_key)
+    logger.info(f"Subset MT counts: {mt.count()}")
 
     logger.info("Exporting VCF...")
     if "bgz" not in args.vcf_out:
