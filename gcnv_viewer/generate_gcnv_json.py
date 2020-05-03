@@ -1,93 +1,49 @@
 import collections
+import hail as hl
 import json
 import os
 
+#%%
+os.chdir("/Users/weisburd/code/methods/gcnv_viewer")
+print(os.getcwd())
 
 #%%
-files = """gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_10_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_11_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_12_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_13_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_13_2.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_14_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_15_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_15_2.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_15_3.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_16_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_17_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_18_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_18_2.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_19_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_1_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_1_2.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_20_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_21_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_21_2.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_22_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_22_2.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_23_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_24_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_24_2.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_24_3.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_24_4.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_25_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_26_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_26_2.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_27_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_28_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_29_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_29_2.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_29_3.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_29_4.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_2_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_30_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_30_2.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_31_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_31_2.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_31_3.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_3_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_3_2.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_3_3.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_4_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_4_2.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_4_3.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_4_4.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_5_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_5_2.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_6_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_6_2.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_7_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_7_2.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_7_3.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_8_1.dcr.bed.gz
-gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_9_1.dcr.bed.gz"""
 
-path_lookup = {f.split("/")[-1].replace(".dcr.bed.gz", ""): f for f in files.split()}
+google_storage_dir = "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs"
 
+assert hl.hadoop_is_dir(google_storage_dir)
 
-batch_to_samples = collections.defaultdict(list)
-for path in files.split():
-    for line in open("batch_info.txt"):
-        sample_id, batch_name = line.strip().split()
-        batch_to_samples[batch_name].append(sample_id)
+#%%
 
-        # check that there's a .bed file for this batch name
-        path = path_lookup[batch_name]
+batch_name_to_path_and_samples = {}
 
+for result in hl.hadoop_ls(google_storage_dir):
+
+    if not result['path'].endswith('.bed.gz') and not result['path'].endswith('.bed'):
+        continue
+
+    if result['size_bytes'] < 1000:
+        print(f"ERROR: file size of {result['path']} is too small: {result['size_bytes']}")
+
+    with hl.hadoop_open(result['path'], 'r') as f:
+        line = f.readline()
+        fields = line.rstrip("\n").split("\t")
+        sample_ids = fields[3:]
+
+    batch_name = os.path.basename(result['path']).replace(".dcr", "").replace(".bed", "").replace(".gz", "")
+    batch_name_to_path_and_samples[batch_name] = (result['path'], sample_ids)
+
+#%%
 rows = []
-for batch_name, sample_ids in batch_to_samples.items():
+for batch_name, (path, sample_ids) in batch_name_to_path_and_samples.items():
     rows.append({
         'name': batch_name,
         'data': [{
             'type': 'gcnv_bed',
-            'url': path_lookup[batch_name],
+            'url': path,
             'samples': sample_ids,
         }],
     })
-
-    #header = f.readline()
-    #fields = header.split()
-    #print(fields)
 
 #%%
 # output settings
@@ -99,18 +55,15 @@ settings_json = """
     "genome": "hg38",
     "locus": "chr15:92,835,700-93,031,800",
     "bamOptions": {
-	"showBams": false,
-        "trackHeight": 200,
+	    "trackHeight": 200,
         "viewAsPairs": false,
         "showSoftClips": true,
         "alignmentShading": "strand"
     },
     "sjOptions": {
-        "showCoverage": true,
-        "showJunctions": true,
         "trackHeight": 170,
         "colorBy": "strand",
-	"colorByNumReadsThreshold": 5,
+	    "colorByNumReadsThreshold": 5,
         "thicknessBasedOn": "numUniqueReads",
         "bounceHeightBasedOn": "random",
         "labelUniqueReadCount": true,
@@ -119,8 +72,8 @@ settings_json = """
         "labelMotif": false,
         "labelAnnotatedJunction": false,
         "labelAnnotatedJunctionValue": " [A]",
-	"showOnlyPlusStrand": false,
-	"showOnlyMinusStrand": false,
+	    "showOnlyPlusStrand": false,
+	    "showOnlyMinusStrand": false,
         "hideAnnotated": false,
         "hideUnannotated": false,
         "minUniquelyMappedReads": 0,
@@ -129,14 +82,9 @@ settings_json = """
         "minSplicedAlignmentOverhang": 0
     },
     "vcfOptions": {
-	"showVcfs": false,
-        "displayMode": "EXPANDED"
+	    "displayMode": "EXPANDED"
     },
     "rowsInCategories": [
-        {
-            "categoryName": "Reference Data",
-            "rows": []
-        },
         {
             "categoryName": "gCNV Batches",
             "rows": %(gcnv_rows)s
