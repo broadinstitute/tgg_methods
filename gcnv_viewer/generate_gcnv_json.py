@@ -53,7 +53,7 @@ settings_json = """
 {
     "genome": "hg38",
     "locus": "chr15:92,835,700-93,031,800",
-    "dataTypesToShow": [ "gcnv_bed" ],
+    "dataTypesToShow": [ "gcnv_bed", "coverage" ],
     "selectedRowNamesByCategoryName": {},
     "selectedSamplesByCategoryNameAndRowName": {},
     "bamOptions": {
