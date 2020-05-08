@@ -33,6 +33,51 @@
    },
    "rowsInCategories": [
       {
+         "categoryName": "Reference Tracks",
+         "rows": [
+            {
+               "name": "36-mer mappability ",
+               "description": "Mappability of 36-mers allowing for 2 mismatches. Generated using the same pipeline as the UCSC hg19 mappability tracks.",
+               "data": [
+                  {
+                     "type": "coverage",
+                     "url": "gs://tgg-viewer/ref/GRCh38/mappability/GRCh38_no_alt_analysis_set_GCA_000001405.15-k36_m2.bw"
+                  }
+               ]
+            },
+            {
+               "name": "50-mer mappability ",
+               "description": "Mappability of 50-mers allowing for 2 mismatches. Generated using the same pipeline as the UCSC hg19 mappability tracks.",
+               "data": [
+                  {
+                     "type": "coverage",
+                     "url": "gs://tgg-viewer/ref/GRCh38/mappability/GRCh38_no_alt_analysis_set_GCA_000001405.15-k50_m2.bw"
+                  }
+               ]
+            },
+            {
+               "name": "75-mer mappability ",
+               "description": "Mappability of 75-mers allowing for 2 mismatches. Generated using the same pipeline as the UCSC hg19 mappability tracks.",
+               "data": [
+                  {
+                     "type": "coverage",
+                     "url": "gs://tgg-viewer/ref/GRCh38/mappability/GRCh38_no_alt_analysis_set_GCA_000001405.15-k75_m2.bw"
+                  }
+               ]
+            },
+            {
+               "name": "100-mer mappability ",
+               "description": "Mappability of 100-mers allowing for 2 mismatches. Generated using the same pipeline as the UCSC hg19 mappability tracks.",
+               "data": [
+                  {
+                     "type": "coverage",
+                     "url": "gs://tgg-viewer/ref/GRCh38/mappability/GRCh38_no_alt_analysis_set_GCA_000001405.15-k100_m2.bw"
+                  }
+               ]
+            }
+         ]
+      },
+      {
          "categoryName": "gCNV Batches",
          "rows": [
             {
