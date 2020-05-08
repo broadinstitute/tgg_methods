@@ -1,4 +1,3 @@
-import collections
 import hail as hl
 import json
 import os
@@ -54,6 +53,9 @@ settings_json = """
 {
     "genome": "hg38",
     "locus": "chr15:92,835,700-93,031,800",
+    "dataTypesToShow": [ "gcnv_bed" ],
+    "selectedRowNamesByCategoryName": {},
+    "selectedSamplesByCategoryNameAndRowName": {},
     "bamOptions": {
 	    "trackHeight": 200,
         "viewAsPairs": false,
@@ -118,7 +120,6 @@ settings_json = """
                 }
             ]
         },
-        
         {
             "categoryName": "gCNV Batches",
             "rows": %(gcnv_rows)s
