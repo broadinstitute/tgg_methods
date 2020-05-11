@@ -92,24 +92,24 @@ settings_json = """
             "categoryName": "Phenotype Tracks",
             "rows": [
                 {
-                    "name": "ClinGen Haploinsufficiency Genes",
+                    "name": "Haploinsufficiency Genes",
                     "description": "ClinGen dosage sensitivity curation tracks from https://clinicalgenome.org/working-groups/dosage-sensitivity-curation",
                     "data": [
                         { "type": "bed", "url": "gs://tgg-viewer/ref/GRCh38/clingen/ClinGen_haploinsufficiency_gene_GRCh38.sorted.bed.gz" }
                     ]
                 },
                 {
-                    "name": "ClinGen Recurrent CNVs v1.1",
-                    "description": "ClinGen dosage sensitivity curation tracks from https://clinicalgenome.org/working-groups/dosage-sensitivity-curation",
-                    "data": [
-                        { "type": "bed", "url": "gs://tgg-viewer/ref/GRCh38/clingen/ClinGen_recurrent_CNV.V1.1.sorted.bed.gz" }
-                    ]
-                },
-                {
-                    "name": "ClinGen Triploinsufficiency Genes",
+                    "name": "Triploinsufficiency Genes",
                     "description": "ClinGen dosage sensitivity curation tracks from https://clinicalgenome.org/working-groups/dosage-sensitivity-curation",
                     "data": [
                         { "type": "bed", "url": "gs://tgg-viewer/ref/GRCh38/clingen/ClinGen_triplosensitivity_gene_GRCh38.sorted.bed.gz" }
+                    ]
+                },
+                {
+                    "name": "Recurrent CNVs v1.1",
+                    "description": "ClinGen dosage sensitivity curation tracks from https://clinicalgenome.org/working-groups/dosage-sensitivity-curation",
+                    "data": [
+                        { "type": "bed", "url": "gs://tgg-viewer/ref/GRCh38/clingen/ClinGen_recurrent_CNV.V1.1.sorted.bed.gz" }
                     ]
                 }
             ]
