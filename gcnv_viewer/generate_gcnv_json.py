@@ -8,7 +8,8 @@ print(os.getcwd())
 
 #%%
 
-google_storage_dir = "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs"
+#google_storage_dir = "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs"
+google_storage_dir = "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds"
 
 assert hl.hadoop_is_dir(google_storage_dir)
 
@@ -91,6 +92,27 @@ settings_json = """
             "categoryName": "Reference Tracks",
             "rows": [
                 {
+                    "name": "ClinGen Haploinsufficiency Genes",
+                    "description": "ClinGen dosage sensitivity curation tracks from https://clinicalgenome.org/working-groups/dosage-sensitivity-curation",
+                    "data": [
+                        { "type": "bed", "url": "gs://tgg-viewer/ref/GRCh38/clingen/ClinGen_haploinsufficiency_gene_GRCh38.sorted.bed.gz" }
+                    ]
+                },
+                {
+                    "name": "ClinGen Recurrent CNVs v1.1",
+                    "description": "ClinGen dosage sensitivity curation tracks from https://clinicalgenome.org/working-groups/dosage-sensitivity-curation",
+                    "data": [
+                        { "type": "bed", "url": "gs://tgg-viewer/ref/GRCh38/clingen/ClinGen_recurrent_CNV.V1.1.sorted.bed.gz" }
+                    ]
+                },
+                {
+                    "name": "ClinGen Triploinsufficiency Genes",
+                    "description": "ClinGen dosage sensitivity curation tracks from https://clinicalgenome.org/working-groups/dosage-sensitivity-curation",
+                    "data": [
+                        { "type": "bed", "url": "gs://tgg-viewer/ref/GRCh38/clingen/ClinGen_triplosensitivity_gene_GRCh38.sorted.bed.gz" }
+                    ]
+                },
+                {
                     "name": "36-mer mappability ",
                     "description": "Mappability of 36-mers allowing for 2 mismatches. Generated using the same pipeline as the UCSC hg19 mappability tracks.",
                     "data": [
@@ -131,3 +153,5 @@ settings_json = """
 #%%
 with open("gcnv_settings.json", "wt") as f:
     json.dump(json.loads(settings_json), f, indent=3)
+
+#%%

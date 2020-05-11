@@ -42,6 +42,36 @@
          "categoryName": "Reference Tracks",
          "rows": [
             {
+               "name": "ClinGen Haploinsufficiency Genes",
+               "description": "ClinGen dosage sensitivity curation tracks from https://clinicalgenome.org/working-groups/dosage-sensitivity-curation",
+               "data": [
+                  {
+                     "type": "bed",
+                     "url": "gs://tgg-viewer/ref/GRCh38/clingen/ClinGen_haploinsufficiency_gene_GRCh38.sorted.bed.gz"
+                  }
+               ]
+            },
+            {
+               "name": "ClinGen Recurrent CNVs v1.1",
+               "description": "ClinGen dosage sensitivity curation tracks from https://clinicalgenome.org/working-groups/dosage-sensitivity-curation",
+               "data": [
+                  {
+                     "type": "bed",
+                     "url": "gs://tgg-viewer/ref/GRCh38/clingen/ClinGen_recurrent_CNV.V1.1.sorted.bed.gz"
+                  }
+               ]
+            },
+            {
+               "name": "ClinGen Triploinsufficiency Genes",
+               "description": "ClinGen dosage sensitivity curation tracks from https://clinicalgenome.org/working-groups/dosage-sensitivity-curation",
+               "data": [
+                  {
+                     "type": "bed",
+                     "url": "gs://tgg-viewer/ref/GRCh38/clingen/ClinGen_triplosensitivity_gene_GRCh38.sorted.bed.gz"
+                  }
+               ]
+            },
+            {
                "name": "36-mer mappability ",
                "description": "Mappability of 36-mers allowing for 2 mismatches. Generated using the same pipeline as the UCSC hg19 mappability tracks.",
                "data": [
@@ -91,7 +121,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_1_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_1_1.dcr.bed.gz",
                      "samples": [
                         "RP-1314_OUN_HK127-001_D1_v1_Exome_GCP",
                         "RP-1314_OUN_HK127-003_D1_v1_Exome_GCP",
@@ -271,7 +301,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_1_2.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_1_2.dcr.bed.gz",
                      "samples": [
                         "RP-1314_OUN_HK127-002_D1_v1_Exome_GCP",
                         "RP-1314_OUN_HK133-001_D1_v1_Exome_GCP",
@@ -450,7 +480,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_2_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_2_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MBRU047_v1_Exome_GCP",
                         "C1847_MCOP111_v1_Exome_GCP",
@@ -692,7 +722,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_3_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_3_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MAAC050_v1_Exome_GCP",
                         "C1847_MANT020_v1_Exome_GCP",
@@ -885,7 +915,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_3_2.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_3_2.dcr.bed.gz",
                      "samples": [
                         "C1847_MAAC059_v1_Exome_GCP",
                         "C1847_MBEL229_v1_Exome_GCP",
@@ -1078,7 +1108,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_3_3.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_3_3.dcr.bed.gz",
                      "samples": [
                         "C1847_MAAC064_v1_Exome_GCP",
                         "C1847_MBEL258_v1_Exome_GCP",
@@ -1271,7 +1301,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_4_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_4_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MAAC063_v1_Exome_GCP",
                         "C1847_MBRU046_v1_Exome_GCP",
@@ -1440,7 +1470,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_4_2.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_4_2.dcr.bed.gz",
                      "samples": [
                         "C1847_MAAC065_v1_Exome_GCP",
                         "C1847_MCOP126_v1_Exome_GCP",
@@ -1609,7 +1639,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_4_3.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_4_3.dcr.bed.gz",
                      "samples": [
                         "C1847_MABE001_v1_Exome_GCP",
                         "C1847_MGHE022_v1_Exome_GCP",
@@ -1778,7 +1808,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_4_4.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_4_4.dcr.bed.gz",
                      "samples": [
                         "C1847_MBRU030_v1_Exome_GCP",
                         "C1847_MGIE030_v1_Exome_GCP",
@@ -1947,7 +1977,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_5_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_5_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT029_3_v1_Exome_GCP",
                         "C1847_MBEL287_v1_Exome_GCP",
@@ -2114,7 +2144,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_5_2.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_5_2.dcr.bed.gz",
                      "samples": [
                         "C1847_MBEL078_2_v1_Exome_GCP",
                         "C1847_MCAI030_v1_Exome_GCP",
@@ -2281,7 +2311,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_6_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_6_1.dcr.bed.gz",
                      "samples": [
                         "C1679_BON_B14_75_1_D1_v1_Exome_GCP",
                         "C1679_BON_B14_75_3_D1_v1_Exome_GCP",
@@ -2482,7 +2512,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_6_2.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_6_2.dcr.bed.gz",
                      "samples": [
                         "C1679_BON_B14_75_2_D1_v1_Exome_GCP",
                         "C1847_MANT053_v1_Exome_GCP",
@@ -2682,7 +2712,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_7_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_7_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT019_v1_Exome_GCP",
                         "C1847_MBRU043_v1_Exome_GCP",
@@ -2879,7 +2909,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_7_2.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_7_2.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT052_v1_Exome_GCP",
                         "C1847_MCAI029_v1_Exome_GCP",
@@ -3076,7 +3106,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_7_3.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_7_3.dcr.bed.gz",
                      "samples": [
                         "C1847_MBEL164_v1_Exome_GCP",
                         "C1847_MCAI042_v1_Exome_GCP",
@@ -3273,7 +3303,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_8_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_8_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MBRU056_v1_Exome_GCP",
                         "C1847_MCAI033_v1_Exome_GCP",
@@ -3513,7 +3543,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_9_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_9_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT057_v1_Exome_GCP",
                         "C1847_MIST005_2_v1_Exome_GCP",
@@ -3613,7 +3643,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_10_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_10_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT007_4_v1_Exome_GCP",
                         "C1847_MANT041_v1_Exome_GCP",
@@ -3908,7 +3938,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_11_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_11_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT044_v1_Exome_GCP",
                         "C1847_MANT048_v1_Exome_GCP",
@@ -4141,7 +4171,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_12_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_12_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MSOF013_v1_Exome_GCP",
                         "C1847_MSOF018_2_v1_Exome_GCP",
@@ -4230,7 +4260,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_13_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_13_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT055_v1_Exome_GCP",
                         "C1847_MBRI001_v1_Exome_GCP",
@@ -4399,7 +4429,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_13_2.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_13_2.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT067_v1_Exome_GCP",
                         "C1847_MERA012_v1_Exome_GCP",
@@ -4568,7 +4598,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_14_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_14_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MBRU057_v1_Exome_GCP",
                         "C1847_MGLA056_v1_Exome_GCP",
@@ -4660,7 +4690,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_15_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_15_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT046_v1_Exome_GCP",
                         "C1847_MANT054_v1_Exome_GCP",
@@ -4846,7 +4876,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_15_2.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_15_2.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT047_v1_Exome_GCP",
                         "C1847_MANT056_v1_Exome_GCP",
@@ -5031,7 +5061,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_15_3.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_15_3.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT051_v1_Exome_GCP",
                         "C1847_MANT059_v1_Exome_GCP",
@@ -5216,7 +5246,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_16_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_16_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT043_v1_Exome_GCP",
                         "C1847_MBRU028_v1_Exome_GCP",
@@ -5443,7 +5473,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_17_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_17_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT045_v1_Exome_GCP",
                         "C1847_MANT062_v1_Exome_GCP",
@@ -5715,7 +5745,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_18_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_18_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MBRU040_v1_Exome_GCP",
                         "C1847_MCAI045_v1_Exome_GCP",
@@ -5878,7 +5908,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_18_2.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_18_2.dcr.bed.gz",
                      "samples": [
                         "C1847_MCAI028_v1_Exome_GCP",
                         "C1847_MCOP140_v1_Exome_GCP",
@@ -6041,7 +6071,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_19_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_19_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT031_v1_Exome_GCP",
                         "C1847_MBEL134_2_v1_Exome_GCP",
@@ -6160,7 +6190,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_20_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_20_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MAAC003_v1_Exome_GCP",
                         "C1847_MAAC005_v1_Exome_GCP",
@@ -6402,7 +6432,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_21_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_21_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MAAC001_v1_Exome_GCP",
                         "C1847_MAAC004_v1_Exome_GCP",
@@ -6565,7 +6595,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_21_2.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_21_2.dcr.bed.gz",
                      "samples": [
                         "C1847_MAAC002_v1_Exome_GCP",
                         "C1847_MAAC006_v1_Exome_GCP",
@@ -6728,7 +6758,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_22_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_22_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MAMS005_v1_Exome_GCP",
                         "C1847_MAMS012_v3_Exome_GCP",
@@ -6897,7 +6927,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_22_2.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_22_2.dcr.bed.gz",
                      "samples": [
                         "C1847_MAMS011_v2_Exome_GCP",
                         "C1847_MANT001_v1_Exome_GCP",
@@ -7065,7 +7095,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_23_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_23_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MAMS006_v1_Exome_GCP",
                         "C1847_MAMS010_v1_Exome_GCP",
@@ -7360,7 +7390,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_24_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_24_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MABE006_v1_Exome_GCP",
                         "C1847_MANT021_v1_Exome_GCP",
@@ -7531,7 +7561,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_24_2.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_24_2.dcr.bed.gz",
                      "samples": [
                         "C1847_MABE007_v1_Exome_GCP",
                         "C1847_MANT026_v1_Exome_GCP",
@@ -7702,7 +7732,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_24_3.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_24_3.dcr.bed.gz",
                      "samples": [
                         "C1847_MAMS013_v1_Exome_GCP",
                         "C1847_MANT033_v1_Exome_GCP",
@@ -7873,7 +7903,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_24_4.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_24_4.dcr.bed.gz",
                      "samples": [
                         "C1847_MAMS016_v1_Exome_GCP",
                         "C1847_MANT035_v1_Exome_GCP",
@@ -8043,7 +8073,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_25_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_25_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MABE008_v1_Exome_GCP",
                         "C1847_MBEL188_v1_Exome_GCP",
@@ -8321,7 +8351,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_26_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_26_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT024_v1_Exome_GCP",
                         "C1847_MDRE003_v1_Exome_GCP",
@@ -8491,7 +8521,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_26_2.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_26_2.dcr.bed.gz",
                      "samples": [
                         "C1847_MBEL190_v1_Exome_GCP",
                         "C1847_MESS001_v1_Exome_GCP",
@@ -8661,7 +8691,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_27_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_27_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT027_v1_Exome_GCP",
                         "C1847_MANT032_v1_Exome_GCP",
@@ -8920,7 +8950,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_28_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_28_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MAMS031_v1_Exome_GCP",
                         "C1847_MANT003_v1_Exome_GCP",
@@ -9139,7 +9169,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_29_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_29_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MAAC061_v1_Exome_GCP",
                         "C1847_MBEL201_v1_Exome_GCP",
@@ -9317,7 +9347,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_29_2.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_29_2.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT012_v1_Exome_GCP",
                         "C1847_MBEL202_v1_Exome_GCP",
@@ -9495,7 +9525,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_29_3.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_29_3.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT022_v1_Exome_GCP",
                         "C1847_MBEL247_v1_Exome_GCP",
@@ -9672,7 +9702,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_29_4.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_29_4.dcr.bed.gz",
                      "samples": [
                         "C1847_MBEL200_v1_Exome_GCP",
                         "C1847_MBEL251_v1_Exome_GCP",
@@ -9849,7 +9879,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_30_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_30_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MBEL184_v1_Exome_GCP",
                         "C1847_MESP007_003_v1_Exome_GCP",
@@ -10032,7 +10062,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_30_2.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_30_2.dcr.bed.gz",
                      "samples": [
                         "C1847_MBEL286_v1_Exome_GCP",
                         "C1847_MINN002_v1_Exome_GCP",
@@ -10215,7 +10245,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_31_1.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_31_1.dcr.bed.gz",
                      "samples": [
                         "C1847_MAAC053_v1_Exome_GCP",
                         "C1847_MBIL011_3_v1_Exome_GCP",
@@ -10413,7 +10443,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_31_2.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_31_2.dcr.bed.gz",
                      "samples": [
                         "C1847_MANT004_2_v1_Exome_GCP",
                         "C1847_MBRU023_v1_Exome_GCP",
@@ -10610,7 +10640,7 @@
                "data": [
                   {
                      "type": "gcnv_bed",
-                     "url": "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs/cc_31_3.dcr.bed.gz",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds/cc_31_3.dcr.bed.gz",
                      "samples": [
                         "C1847_MBEL071_2_v1_Exome_GCP",
                         "C1847_MBRU032_v1_Exome_GCP",
