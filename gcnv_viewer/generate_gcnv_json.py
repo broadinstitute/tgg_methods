@@ -54,7 +54,7 @@ settings_json = """
 {
     "genome": "hg38",
     "locus": "chr15:92,835,700-93,031,800",
-    "dataTypesToShow": [ "gcnv_bed", "coverage" ],
+    "dataTypesToShow": [ "gcnv_bed", "coverage", "bed" ],
     "selectedRowNamesByCategoryName": {},
     "selectedSamplesByCategoryNameAndRowName": {},
     "bamOptions": {
@@ -89,7 +89,7 @@ settings_json = """
     },
     "rowsInCategories": [
         {
-            "categoryName": "Reference Tracks",
+            "categoryName": "Phenotype Tracks",
             "rows": [
                 {
                     "name": "ClinGen Haploinsufficiency Genes",
@@ -111,7 +111,12 @@ settings_json = """
                     "data": [
                         { "type": "bed", "url": "gs://tgg-viewer/ref/GRCh38/clingen/ClinGen_triplosensitivity_gene_GRCh38.sorted.bed.gz" }
                     ]
-                },
+                }
+            ]
+        },
+        {
+            "categoryName": "Phenotype Tracks",
+            "rows": [
                 {
                     "name": "36-mer mappability ",
                     "description": "Mappability of 36-mers allowing for 2 mismatches. Generated using the same pipeline as the UCSC hg19 mappability tracks.",
