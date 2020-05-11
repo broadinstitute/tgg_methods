@@ -115,7 +115,7 @@ settings_json = """
             ]
         },
         {
-            "categoryName": "Phenotype Tracks",
+            "categoryName": "Mappability",
             "rows": [
                 {
                     "name": "36-mer mappability ",
@@ -154,6 +154,7 @@ settings_json = """
     ]
 }
 """ % locals()
+
 
 #%%
 with open("gcnv_settings.json", "wt") as f:
