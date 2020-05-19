@@ -19,7 +19,7 @@ from gnomad.utils.liftover import lift_data, get_liftover_genome
 
 from gnomad_qc.v2.resources.sample_qc import qc_mt_path
 
-from typing import Tuple, List
+
 
 import re
 import io
@@ -27,6 +27,8 @@ import logging
 import argparse
 import itertools
 from collections import Counter
+from typing import Tuple, List
+from os.path import dirname
 import matplotlib.pyplot as plt
 
 logging.basicConfig(format="%(asctime)s (%(name)s %(lineno)s): %(message)s", datefmt='%m/%d/%Y %I:%M:%S %p')
@@ -43,6 +45,7 @@ def check_subset(input_mt: hl.MatrixTable,
     """
     Filters the MatrixTable to biallelics SNVs on the autosomes
     :param MatrixTable input_mt: MatrixTable
+    :param hl.Pedigree pedigree: pedigree file
     :return: mt subsetted to the samples given in the pedigree, list of samples in the pedigree, list of samples in the vcf
     :rtype: Tuple[hl.MatrixTable, list, list]
     """
@@ -68,7 +71,51 @@ def check_subset(input_mt: hl.MatrixTable,
     
     return(mt_subset, expected_samples, vcf_samples)
 
-    
+
+def remap_samples(original_mt_path: str,
+                 input_mt: hl.MatrixTable,
+                 pedigree: hl.Pedigree,
+                 kin_ht: hl.Table
+                ) -> Tuple[hl.MatrixTable, hl.Table]:
+    """
+    Renames s col in the MatrixTable and i and j cols in the kinship ht based on seqr remap files
+    :param str original_mt_path: path to original MatrixTable location
+    :param hl.MatrixTable input_mt: MatrixTable 
+    :param hl.Pedigree pedigree: pedigree file
+    :param hl.Table kin_ht: kinship table
+    :return: mt and kinship ht with sample names remapped
+    :rtype: Tuple[hl.MatrixTable, hl.Table]]
+    """
+
+
+    base_path = "/".join(dirname(original_mt_path).split("/")[:-1]) + ("/base/projects")
+    project_list = list(set(pedigree.Project.collect()))
+
+    remap_hts = []
+    for i in project_list:
+        remap = f'{base_path}/{i}/{i}_remap.tsv'
+        if hl.hadoop_is_file(remap):
+            remap_ht = hl.import_table(remap)
+            remap_ht = remap_ht.key_by('s', 'seqr_id')
+            remap_hts.append(remap_ht)
+        
+
+    if len(remap_hts) > 0:
+        ht = remap_hts[0]
+        for next_ht in remap_hts[1:]:
+            ht = ht.join(next_ht, how = "outer")
+        ht = ht.key_by('s')
+        input_mt = input_mt.annotate_cols(seqr_id = ht[input_mt.col_key].seqr_id)
+        input_mt = input_mt.key_cols_by(s = hl.if_else(hl.is_missing(input_mt.seqr_id), input_mt.s, input_mt.seqr_id))
+        kin_ht = kin_ht.annotate(seqr_id_i = ht[kin_ht.i].seqr_id)
+        kin_ht = kin_ht.annotate(i = hl.if_else(hl.is_missing(kin_ht.seqr_id_i), kin_ht.i, kin_ht.seqr_id_i))
+        kin_ht = kin_ht.annotate(seqr_id_j = ht[kin_ht.j].seqr_id)
+        kin_ht = kin_ht.annotate(j = hl.if_else(hl.is_missing(kin_ht.seqr_id_j), kin_ht.j, kin_ht.seqr_id_j))
+        kin_ht = kin_ht.drop('seqr_id_j', 'seqr_id_i')
+
+    return(input_mt, kin_ht)
+
+
 
 def filter_to_biallelic_auto_snvs(input_mt: hl.MatrixTable) -> hl.MatrixTable:
     """
@@ -114,16 +161,8 @@ def ld_prune(input_mt: hl.MatrixTable, build: str, gnomad_ld: bool) -> hl.Matrix
         pruned_mt = hl.read_matrix_table(qc_mt_path('joint', ld_pruned=True))
 
         if build == "GRCh38":
-            grch38 = hl.get_reference('GRCh38')
-
-            lift_pruned_path = "gs://seqr-kml/pedigree_inference_resources/pruned_mt.mt"
-
-            pruned_mt = lift_data(t = pruned_mt, # should test this (locus, alleles)
-                gnomad = False,
-                data_type = "exomes",
-                path = lift_pruned_path,
-                rg = grch38,
-                overwrite = False)
+            pruned_mt_path = "gs://seqr-kml/pedigree_inference_resources/pruned_mt_lift.mt"
+            pruned_mt = hl.read_matrix_table(pruned_mt_path)
 
         input_mt = input_mt.filter_rows(hl.is_defined(pruned_mt.index_rows(input_mt.row_key)))
         
@@ -711,7 +750,7 @@ def main(args):
     input_pedigree = args.input_pedigree
 
     gnomad_ld = args.gnomad_ld
-    run_ibd_and_subsetting = args.run_ibd_and_subsetting
+    run_ibd = args.run_ibd
     first_degree_pi_hat = args.first_degree_pi_hat
     grandparent_pi_hat = args.grandparent_pi_hat
     grandparent_ibd1 = args.grandparent_ibd1
@@ -721,7 +760,6 @@ def main(args):
     ibd0_second_degree_threshold = args.ibd0_second_degree_threshold
     second_degree_min_kin = args.second_degree_min_kin
     ibd1_100_min = args.ibd1_100_min
-
 
     ibd2_0_max = args.ibd2_0_max
     ibd0_0_max = args.ibd0_0_max
@@ -736,50 +774,57 @@ def main(args):
     pedigree = hl.import_table(input_pedigree, impute=True)
     build = get_reference_genome(mt.locus).name  # infer build of the mt
 
-    mt_subset, expected_samples, vcf_samples = check_subset(mt, pedigree, output_dir, output_name)
 
-    num_ped = len(expected_samples)
-    num_vcf = len(vcf_samples)
+    mt = filter_to_biallelic_auto_snvs(mt)
 
-    mt_subset = filter_to_biallelic_auto_snvs(mt_subset)
+    mt = ld_prune(mt, build, gnomad_ld)
 
-    mt_subset = ld_prune(mt_subset, build, gnomad_ld)
+    out_mt = "{output_dir}/{output_name}_processed_mt.mt".format(**locals())
 
 
     # IBD
-    ibd_results_ht = hl.identity_by_descent(mt_subset, maf=mt_subset.info.AF, min=0.10, max=1.0)
+    ibd_results_ht = hl.identity_by_descent(mt, maf=mt.info.AF, min=0.10, max=1.0)
     ibd_results_ht = ibd_results_ht.annotate(ibd0 = ibd_results_ht.ibd.Z0,
                                 ibd1 = ibd_results_ht.ibd.Z1,
                                 ibd2 = ibd_results_ht.ibd.Z2,
                                 pi_hat = ibd_results_ht.ibd.PI_HAT).drop("ibs0", "ibs1", "ibs2", "ibd")
 
 
-    # write out matrix and hail tables
-    if run_ibd_and_subsetting:
-        logger.info("Running IBD and subsetting....")
 
-        # subsetting
-        out_mt = "{output_dir}/{output_name}_processed_mt.mt".format(**locals())
-        mt_subset.write(out_mt, overwrite=True)
+    # write out matrix and hail tables
+    if run_ibd:
+        logger.info("Running IBD...")
 
         # ibd
         out_ht = "{output_dir}/{output_name}_ibd_kinship.tsv".format(**locals())
         ibd_results_ht.export(out_ht)
-    
+
+        mt.write(out_mt, overwrite=True)
+
     else:
-        logger.warn("Skipping IBD and subsetting - using previous calculations....")
+        logger.warn("Skipping IBD - using previous calculations...")
 
 
-    # read in matrix table and ht
+
+    logger.info('Reading in mt...')
     mt = hl.read_matrix_table("{output_dir}/{output_name}_processed_mt.mt".format(**locals()))
-    kin_ht = hl.import_table("{output_dir}/{output_name}_ibd_kinship.tsv".format(**locals()), impute=True)
-
-    out_summary = hl.hadoop_open("{output_dir}/{output_name}_ped_check_summary.txt".format(**locals()), 'w')
-
-
+    mt_path = input_mt
 
     logger.info('Reading in kinship ht...')
     kin_ht = hl.import_table("{output_dir}/{output_name}_ibd_kinship.tsv".format(**locals()), impute=True)
+
+    logger.info('Remapping sample names...')
+    mt, kin_ht = remap_samples(mt_path, mt, pedigree, kin_ht)
+
+    # subset mt to the samples in the pedigree
+    mt_subset, expected_samples, vcf_samples = check_subset(mt, pedigree, output_dir, output_name)
+    num_ped = len(expected_samples)
+    num_vcf = len(vcf_samples)
+
+    # subset ht to the samples in the pedigree
+    subset = hl.literal(expected_samples)
+    kin_ht = kin_ht.filter(subset.contains(kin_ht.i) | subset.contains(kin_ht.j))
+
     # output_name = "WK_TEST"  # temp, remove this later
     kin_ht = kin_ht.key_by("i", "j")
     original_kin_ht = kin_ht  # save the original kin_ht as it will be filtered downstream
@@ -870,7 +915,6 @@ def main(args):
 
     logger.info('Evaluating grandparents...')
     kin_ht, master_kin_ht = evaluate_grandparents(kin_ht, hl_sibs_accounted_list, master_kin_ht, out_summary)
-
 
 
 
@@ -1055,13 +1099,13 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='This script checks a given pedigree to against ibd kinship output')
-    parser.add_argument('-d', '--output_dir', help='path to directoy to output results')
+    parser.add_argument('-d', '--output_dir', help='path to directory to output results')
     parser.add_argument('-n', '--output_name', help='output prefix to use for results')
     parser.add_argument('-s', '--sex_check', help='path to sex check output')
     parser.add_argument('-i', '--input_mt', help='path to input MatrixTable')
     parser.add_argument('-p', '--input_pedigree', help='path to input pedigree')
     parser.add_argument('--gnomad_ld', help='use variants from gnomAD for ld prune', action='store_true')
-    parser.add_argument('--run_ibd_and_subsetting', help='run IBD and subset the MatrixTable to the given samples', action='store_true')
+    parser.add_argument('--run_ibd', help='run IBD', action='store_true')
     
     parser.add_argument('--first_degree_pi_hat', help='minimum pi_hat threshold to use to filter the kinship table to first degree relatives', nargs='?', const=1, type=float, default=.40)
     parser.add_argument('--grandparent_pi_hat', help='minimum pi_hat threshold to use to filter the kinship table to grandparents', nargs='?', const=1, type=float, default=.20)
