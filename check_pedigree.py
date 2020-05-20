@@ -26,7 +26,7 @@ import io
 import logging
 import argparse
 import itertools
-from collections import Counter
+from collections import Counter, defaultdict
 from typing import Tuple, List
 from os.path import dirname
 import matplotlib.pyplot as plt
@@ -75,7 +75,8 @@ def check_subset(input_mt: hl.MatrixTable,
 def remap_samples(original_mt_path: str,
                  input_mt: hl.MatrixTable,
                  pedigree: hl.Pedigree,
-                 kin_ht: hl.Table
+                 kin_ht: hl.Table,
+                 sample_sexes: dict
                 ) -> Tuple[hl.MatrixTable, hl.Table]:
     """
     Renames s col in the MatrixTable and i and j cols in the kinship ht based on seqr remap files
@@ -83,8 +84,9 @@ def remap_samples(original_mt_path: str,
     :param hl.MatrixTable input_mt: MatrixTable 
     :param hl.Pedigree pedigree: pedigree file
     :param hl.Table kin_ht: kinship table
-    :return: mt and kinship ht with sample names remapped
-    :rtype: Tuple[hl.MatrixTable, hl.Table]]
+    :param dict sample_sexes: dictionary of sample sexes
+    :return: mt, kinship ht, and sex dictionary with sample names remapped
+    :rtype: Tuple[hl.MatrixTable, hl.Table, dict]
     """
 
 
@@ -104,6 +106,9 @@ def remap_samples(original_mt_path: str,
         ht = remap_hts[0]
         for next_ht in remap_hts[1:]:
             ht = ht.join(next_ht, how = "outer")
+
+        rename_dict = dict(hl.tuple([ht.s, ht.seqr_id]).collect())
+
         ht = ht.key_by('s')
         input_mt = input_mt.annotate_cols(seqr_id = ht[input_mt.col_key].seqr_id)
         input_mt = input_mt.key_cols_by(s = hl.if_else(hl.is_missing(input_mt.seqr_id), input_mt.s, input_mt.seqr_id))
@@ -113,7 +118,15 @@ def remap_samples(original_mt_path: str,
         kin_ht = kin_ht.annotate(j = hl.if_else(hl.is_missing(kin_ht.seqr_id_j), kin_ht.j, kin_ht.seqr_id_j))
         kin_ht = kin_ht.drop('seqr_id_j', 'seqr_id_i')
 
-    return(input_mt, kin_ht)
+        sexes_renamed = {}
+        for sample,sex in sample_sexes.items():
+            if sample in rename_dict:
+                new_sample_id = rename_dict[sample]
+                sexes_renamed[new_sample_id] = sex
+            else:
+                sexes_renamed[sample] = sex
+
+    return(input_mt, kin_ht, sexes_renamed)
 
 
 
@@ -332,7 +345,7 @@ def get_given_ped_rels(
     ped_duos = []
 
     given_families = {}
-    seqr_projects = {}
+    seqr_projects = defaultdict(str)
     
     
     out_new_ped = hl.hadoop_open("{output_dir}/{output_name}_functioning_pedigree.ped".format(**locals()),'w')
@@ -813,8 +826,23 @@ def main(args):
     logger.info('Reading in kinship ht...')
     kin_ht = hl.import_table("{output_dir}/{output_name}_ibd_kinship.tsv".format(**locals()), impute=True)
 
+    logger.info('Reading sex check into dictionary...')  # code here is based on old sex check, need new sex check that works on dense data
+    sample_sexes = {}
+    with hl.hadoop_open(sex_check,'r') as infile:
+        next(infile)
+        for line in infile:
+            line = line.rstrip()
+            items = line.split('\t')
+            sample = items[0]
+            sex = items[6]
+            if sex == "female":
+                sample_sexes[sample] = True
+            elif sex == "male":
+                sample_sexes[sample] = False
+
+
     logger.info('Remapping sample names...')
-    mt, kin_ht = remap_samples(mt_path, mt, pedigree, kin_ht)
+    mt, kin_ht, sample_sexes = remap_samples(mt_path, mt, pedigree, kin_ht, sample_sexes)
 
     # subset mt to the samples in the pedigree
     mt_subset, expected_samples, vcf_samples = check_subset(mt, pedigree, output_dir, output_name)
@@ -861,23 +889,6 @@ def main(args):
 
     logger.info('Finding duplicate samples...')
     dups = get_duplicated_samples(kin_ht)
-
-
-    logger.info('Reading sex check into dictionary...')  # code here is based on old sex check, need new sex check that works on dense data
-    sample_sexes = {}
-    with hl.hadoop_open(sex_check,'r') as infile:
-        next(infile)
-        for line in infile:
-            line = line.rstrip()
-            items = line.split('\t')
-            sample = items[0]
-            sex = items[6]
-            if sex == "female":
-                sample_sexes[sample] = True
-            elif sex == "male":
-                sample_sexes[sample] = False
-
-
 
     logger.info('Generating rank table...')
     rank_table = create_rank_table(kin_ht)
