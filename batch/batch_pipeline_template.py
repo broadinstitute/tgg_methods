@@ -9,7 +9,7 @@ import hail as hl  # used for hadoop file utils
 import hailtop.batch as hb
 import logging
 import os
-from batch.batch_utils import switch_gcloud_auth_to_user_account
+from batch.batch_utils import init_job, switch_gcloud_auth_to_user_account
 
 logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,9 +29,12 @@ def parse_args():
     grp.add_argument("--local", action="store_true", help="Batch: run locally")
     p.add_argument("-r", "--raw", action="store_true", help="Batch: run directly on the machine, without using a docker image")
     p.add_argument("--batch-billing-project", default="tgg-rare-disease", help="Batch: billing project. Required if submitting to cluster.")
-    p.add_argument("--batch-job-name", help="Batch: (optional) job name")
-    p.add_argument("--cpu", type=float, help="Batch: (optional) number of CPUs to request", default=1, choices=[0.25, 0.5, 1, 2, 4, 8, 16])
-    p.add_argument("--memory", type=float, help="Batch: (optional) memory in gigabytes", default=3.75)
+    p.add_argument("--batch-name", help="Batch: (optional) batch name")
+    p.add_argument("--batch-temp-bucket", default="macarthurlab-rnaseq", help="Batch: bucket where it stores temp files. "
+        "The batch service-account must have Admin permissions for this bucket. These can be added by running "
+        "gsutil iam ch serviceAccount:[SERVICE_ACCOUNT_NAME]:objectAdmin gs://[BUCKET_NAME]")
+    p.add_argument("-t", "--cpu", type=float, help="Batch: (optional) number of CPUs (eg. 0.5)", default=1, choices=[0.25, 0.5, 1, 2, 4, 8, 16])
+    p.add_argument("-m", "--memory", type=float, help="Batch: (optional) memory in gigabytes (eg. 3.75)", default=3.75)
     p.add_argument("--force", action="store_true", help="Recompute and overwrite cached or previously computed data")
     args = p.parse_args()
 
@@ -51,9 +54,11 @@ def main():
         else:
             backend = hb.LocalBackend(gsa_key_file=os.path.expanduser("~/.config/gcloud/misc-270914-cb9992ec9b25.json"))
     else:
-        backend = hb.ServiceBackend(args.batch_billing_project)
+        backend = hb.ServiceBackend(billing_project=args.batch_billing_project, bucket=args.batch_temp_bucket)
 
-    b = hb.Batch(backend=backend, name=args.batch_job_name)
+    b = hb.Batch(backend=backend, name=args.batch_name)
+
+    logger.info("Working dir: " + working_dir)
 
     # define workflow inputs
     if args.local:
@@ -76,7 +81,6 @@ def main():
         if args.local:
             bam_size = None
         else:
-            import hail as hl  # used for hadoop file utils
             if hl.hadoop_is_file(output_file_path) and not args.force:
                 logger.info(f"{sample_id} output file already exists: {output_file_path}. Skipping...")
                 continue
@@ -84,20 +88,9 @@ def main():
             file_stats = hl.hadoop_stat(bam_path)
             bam_size = int(round(file_stats['size_bytes']/10.**9))
 
-        # define majiq build commands for this sample
-        j = b.new_job(name=args.batch_job_name)
-        if not args.raw:
-            j.image("weisburd/some-image:latest")
-        if bam_size:
-            j.storage(f'{bam_size*2}Gi')
-        j.cpu(args.cpu)  # Batch default is 1
-        if args.memory:
-            j.memory(f"{args.memory}G")  # Batch default is 3.75G
-        else:
-            j.memory(f"{3.75*args.cpu}G")  # Batch default is 3.75G
+        # init job commands
         logger.info(f'Requesting: {j._storage or "default"} storage, {j._cpu or "default"} CPU, {j._memory or "default"} memory')
-
-        # switch to user account
+        j = init_job(b, name=args.batch_job_name, cpu=args.cpu, memory=args.memory, disk_size=bam_size*2, image=DOCKER_IMAGE if not args.raw else None)
         switch_gcloud_auth_to_user_account(j, GCLOUD_CREDENTIALS_LOCATION, GCLOUD_USER_ACCOUNT, GCLOUD_PROJECT)
 
         # run commands
@@ -107,25 +100,18 @@ def main():
             j.command(f"mv {genes_gtf} gencode.gff3")
             j.command(f"mv {input_read_data.bam} {sample_id}.bam")
             j.command(f"mv {input_read_data.bai} {sample_id}.bam.bai")
-        j.command(f"pwd >> {j.logfile}")
-        j.command(f"ls >> {j.logfile}")
-        j.command(f"date >> {j.logfile}")
+        j.command(f"ls")
+        j.command(f"date")
 
-        j.command(f"majiq build gencode.gff3 -c majiq_build.cfg -j 1 -o majiq_build_{sample_id} >> {j.logfile}")
-
+        j.command(f"majiq build gencode.gff3 -c majiq_build.cfg -j 1 -o majiq_build_{sample_id}")
         j.command(f"tar czf majiq_build_{sample_id}.tar.gz majiq_build_{sample_id}")
         j.command(f"cp majiq_build_{sample_id}.tar.gz {j.output_tar_gz}")
-        j.command(f"echo Done: {output_file_path} >> {j.logfile}")
-        j.command(f"date >> {j.logfile}")
+        j.command(f"echo Done: {output_file_path}")
+        j.command(f"date")
 
         # copy output
         b.write_output(j.output_tar_gz, output_file_path)
         print("Output file path: ", output_file_path)
-
-        log_file_path = os.path.join(output_dir, f"{sample_id}.log")
-        b.write_output(j.logfile, log_file_path)
-        print("Log file path: ", log_file_path)
-
     b.run()
 
     if isinstance(backend, hb.ServiceBackend):
