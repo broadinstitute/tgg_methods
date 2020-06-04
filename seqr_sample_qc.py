@@ -4,6 +4,14 @@ import pickle
 
 import hail as hl
 import hail.expr.aggregators as agg
+from gnomad.sample_qc.pipeline import compute_callrate_mt, compute_stratified_metrics_filter, get_qc_mt
+from gnomad.sample_qc.platform import run_platform_pca, assign_platform_from_pcs
+from gnomad.sample_qc.ancestry import pc_project, assign_population_pcs
+from gnomad.sample_qc.filtering import filter_to_autosomes, add_filters_expr
+from gnomad.utils.slack import try_slack
+
+from gnomad_qc.v2.resources.basics import evaluation_intervals_path
+
 
 from resources.resources_seqr_qc import (
     callset_vcf_path,
@@ -18,24 +26,6 @@ from resources.resources_seqr_qc import (
     val_noncoding_ht_path,
     VCFDataTypeError,
 )
-
-from gnomad.utils.sample_qc import (
-    compute_callrate_mt,
-    get_qc_mt,
-    run_platform_pca,
-    assign_platform_from_pcs,
-    compute_stratified_metrics_filter,
-)
-from gnomad.utils.generic import (
-    pc_project,
-    assign_population_pcs,
-    filter_to_autosomes,
-)
-from gnomad.utils.sample_qc import add_filters_expr
-from gnomad.utils.slack import try_slack
-from gnomad_qc.v2.resources.basics import evaluation_intervals_path
-
-
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 logger = logging.getLogger("seqr_sample_qc")
