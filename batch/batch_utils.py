@@ -4,8 +4,70 @@ Shared methods for Batch pipelines.
 Batch docs:  https://hail.is/docs/batch/api/batch/hailtop.batch.job.Job.html#hailtop.batch.job.Job
 """
 
+import configargparse
+import contextlib
 import os
+
+import hailtop.batch as hb
 from hailtop.batch.job import Job
+
+def init_arg_parser(
+    default_billing_project="tgg-rare-disease",
+    default_temp_bucket="macarthurlab-cromwell",
+    default_cpu=1,
+    default_memory=3.75,
+    parser=configargparse.ArgumentParser(formatter_class=configargparse.ArgumentDefaultsRawHelpFormatter),
+    gsa_key_file=None,
+):
+    """Initializes and returns an argparse instance with common pipeline args pre-defined."""
+
+    local_or_cluster_grp = parser.add_mutually_exclusive_group(required=True)
+    local_or_cluster_grp.add_argument("--local", action="store_true", help="Batch: run locally")
+    local_or_cluster_grp.add_argument("--cluster", action="store_true", help="Batch: submit to cluster")
+    parser.add_argument("-r", "--raw", action="store_true", help="Batch: run directly on the machine, without using a docker image")
+
+    parser.add_argument("--gsa-key-file", default=gsa_key_file, help="Batch: path of gcloud service account .json "
+        "key file. If provided, Batch will mount this file into the docker image so gcloud commands can run as this service account.")
+    parser.add_argument("--batch-billing-project", default=default_billing_project, help="Batch: this billing project will be "
+        "charged when running jobs on the Batch cluster. To set up a billing project name, contact the hail team.")
+    parser.add_argument("--batch-name", help="Batch: label for the current Batch run")
+    parser.add_argument("--batch-temp-bucket", default=default_temp_bucket, help="Batch: bucket where it stores temp "
+        "files. The batch service-account must have Admin permissions for this bucket. These can be added by running "
+        "gsutil iam ch serviceAccount:[SERVICE_ACCOUNT_NAME]:objectAdmin gs://[BUCKET_NAME]")
+    parser.add_argument("-t", "--cpu", type=float, default=default_cpu, choices=[0.25, 0.5, 1, 2, 4, 8, 16], help="Batch: number of CPUs (eg. 0.5)")
+    parser.add_argument("-m", "--memory", type=float, default=default_memory, help="Batch: memory in gigabytes (eg. 3.75)")
+    parser.add_argument("-f", "--force", action="store_true", help="Recompute and overwrite cached or previously computed data")
+    parser.add_argument("--start-with", type=int, help="Start from this step in the pipeline")
+    parser.add_argument("--dry-run", action="store_true", help="Don't run commands, just print them.")
+    parser.add_argument("--verbose", action="store_true", help="Verbose log output.")
+    return parser
+
+
+@contextlib.contextmanager
+def run_batch(args):
+    """Wrapper around creating, running, and then closing a Batch run.
+
+    Usage:
+        with run_batch(args) as batch:
+            ... batch job definitions ...
+    """
+
+    if args.local:
+        backend = hb.LocalBackend() if args.raw else hb.LocalBackend(gsa_key_file=args.gsa_key_file)
+    else:
+        backend = hb.ServiceBackend(billing_project=args.batch_billing_project, bucket=args.batch_temp_bucket)
+
+    try:
+        batch = hb.Batch(backend=backend, name=args.batch_name)
+
+        yield batch  # returned to with ... as batch:
+
+        # run on end of with..: block
+        batch.run(dry_run=args.dry_run, verbose=args.verbose)
+
+    finally:
+        if isinstance(backend, hb.ServiceBackend):
+            backend.close()
 
 
 def init_job(
@@ -38,10 +100,10 @@ def init_job(
         j.cpu(cpu)  # Batch default is 1
 
     if memory:
-        if memory < 0.1 or memory > 64:
-            raise ValueError(f"Memory arg is {memory}. This is outside the range of 0.1 to 64 Gb")
+        if memory < 0.1 or memory > 60:
+            raise ValueError(f"Memory arg is {memory}. This is outside the range of 0.1 to 60 Gb")
 
-        j.memory(f"{memory}G")  # Batch default is 3.75G
+        j.memory(f"{memory}Gi")  # Batch default is 3.75G
 
     if disk_size:
         if disk_size < 1 or disk_size > 1000:

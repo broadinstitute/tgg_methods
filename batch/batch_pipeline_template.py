@@ -22,28 +22,10 @@ GCLOUD_CREDENTIALS_LOCATION = "gs://weisburd-misc/creds"
 OUTPUT_BUCKET = "gs://some-bucket"          # TODO edit this
 DOCKER_IMAGE = "weisburd/some-image:latest" # TODO edit this
 
-def parse_args():
-    p = argparse.ArgumentParser()
-    grp = p.add_mutually_exclusive_group(required=True)
-    grp.add_argument("--cluster", action="store_true", help="Batch: submit to cluster")
-    grp.add_argument("--local", action="store_true", help="Batch: run locally")
-    p.add_argument("-r", "--raw", action="store_true", help="Batch: run directly on the machine, without using a docker image")
-    p.add_argument("--batch-billing-project", default="tgg-rare-disease", help="Batch: billing project. Required if submitting to cluster.")
-    p.add_argument("--batch-name", help="Batch: (optional) batch name")
-    p.add_argument("--batch-temp-bucket", default="macarthurlab-rnaseq", help="Batch: bucket where it stores temp files. "
-        "The batch service-account must have Admin permissions for this bucket. These can be added by running "
-        "gsutil iam ch serviceAccount:[SERVICE_ACCOUNT_NAME]:objectAdmin gs://[BUCKET_NAME]")
-    p.add_argument("-t", "--cpu", type=float, help="Batch: (optional) number of CPUs (eg. 0.5)", default=1, choices=[0.25, 0.5, 1, 2, 4, 8, 16])
-    p.add_argument("-m", "--memory", type=float, help="Batch: (optional) memory in gigabytes (eg. 3.75)", default=3.75)
-    p.add_argument("--force", action="store_true", help="Recompute and overwrite cached or previously computed data")
-    args = p.parse_args()
-
-    return args
-
 
 def main():
-
-    args = parse_args()
+    p = batch_utils.init_arg_parser()
+    args = p.parse_args()
 
     # see https://hail.zulipchat.com/#narrow/stream/223457-Batch-support/topic/auth.20as.20user.20account for more details
     working_dir = ""
