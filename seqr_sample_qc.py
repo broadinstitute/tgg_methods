@@ -4,12 +4,27 @@ import pickle
 
 import hail as hl
 import hail.expr.aggregators as agg
+from gnomad.sample_qc.pipeline import get_qc_mt
+from gnomad.sample_qc.platform import compute_callrate_mt, run_platform_pca, assign_platform_from_pcs
+from gnomad.sample_qc.ancestry import pc_project, assign_population_pcs
+from gnomad.sample_qc.filtering import add_filters_expr, compute_stratified_metrics_filter, filter_to_autosomes
+from gnomad.utils.slack import slack_notifications
 
-from gnomad_hail import *
-from gnomad_hail.resources.sample_qc import *
-from gnomad_hail.utils import *
-from gnomad_hail.utils.sample_qc import *
-from resources_seqr_qc import *
+from gnomad_qc.v2.resources.basics import evaluation_intervals_path
+
+from resources.resources_seqr_qc import (
+    callset_vcf_path,
+    mt_path,
+    missing_metrics_path,
+    rdg_gnomad_pop_pca_loadings_ht_path,
+    remap_path,
+    sample_qc_ht_path,
+    sample_qc_tsv_path,
+    seq_metrics_path,
+    val_coding_ht_path,
+    val_noncoding_ht_path,
+    VCFDataTypeError,
+)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 logger = logging.getLogger("seqr_sample_qc")
@@ -98,16 +113,19 @@ def apply_filter_flags_expr(mt: hl.MatrixTable, data_type: str, metric_threshold
         'chimera': mt.AL_PCT_CHIMERAS > metric_thresholds['chimera_thres']
     }
     if data_type == 'WES':
-        flags.update({
+        flags.update(
+            {
             'coverage': mt.HS_PCT_TARGET_BASES_20X < metric_thresholds['wes_cov_thres']
-        })
+            }
+        )
     else:
-        flags.update({
+        flags.update(
+            {
             'coverage': mt.WGS_MEAN_COVERAGE < metric_thresholds['wgs_cov_thres']
-        })
+            }
+        )
 
-    return hl.set(hl.filter(lambda x: hl.is_defined(x),
-                            [hl.or_missing(filter_expr, name) for name, filter_expr in flags.items()]))
+    return add_filters_expr(flags)
 
 
 def get_all_sample_metadata(mt: hl.MatrixTable, build: int, data_type: str, data_source: str, version: int) -> hl.Table:
@@ -131,16 +149,15 @@ def get_all_sample_metadata(mt: hl.MatrixTable, build: int, data_type: str, data
     meta_ht = meta_ht.annotate(seqr_id=hl.if_else(hl.is_missing(meta_ht.seqr_id), meta_ht.SAMPLE, meta_ht.seqr_id))
 
     logger.info("Filtering to bi-allelic, high-callrate, common SNPs to calculate callrate...")
-    mt = filter_rows_for_qc(mt, min_af=0.001,
-                            min_callrate=0.99,
-                            bi_allelic_only=True,
-                            snv_only=True,
-                            apply_hard_filters=False,
-                            min_inbreeding_coeff_threshold=None,
-                            min_hardy_weinberg_threshold=None,
-                            )
-    callrate_ht = mt.select_cols(filtered_callrate=hl.agg.fraction(hl.is_defined(mt.GT))).cols()
-    meta_ht = meta_ht.annotate(**callrate_ht[meta_ht.key])
+    mt = get_qc_mt(mt,
+                   apply_hard_filters=False,
+                   filter_decoy=False,
+                   filter_segdup=False,
+                   min_inbreeding_coeff_threshold=None,
+                   min_hardy_weinberg_threshold=None,
+                   ld_r2=None,
+                   )
+    meta_ht = meta_ht.annotate(filtered_callrate=mt.cols()[meta_ht.key].sample_callrate)
     return meta_ht
 
 
@@ -186,7 +203,7 @@ def run_population_pca(mt: hl.MatrixTable, build: int, pcs: int, pop_fit_path: s
     with hl.hadoop_open(pop_fit_path, 'rb') as f:
         fit = pickle.load(f)
 
-    pop_pca_ht, ignore = assign_population_pcs(scores, pc_cols=scores.scores, output_col='qc_pop', fit=fit)
+    pop_pca_ht, _ = assign_population_pcs(scores, pc_cols=scores.scores, output_col='qc_pop', fit=fit)
     pop_pca_ht = pop_pca_ht.key_by('s')
     d = {f'pop_PC{i+1}': scores.scores[i] for i in range(pcs)}
     scores = scores.annotate(**d).drop('scores', 'known_pop')
@@ -194,12 +211,13 @@ def run_population_pca(mt: hl.MatrixTable, build: int, pcs: int, pop_fit_path: s
     return pop_pca_ht
 
 
-def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
+def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str, data_source: str) -> hl.MatrixTable:
     """
     Runs Hail's built in sample qc function on the MatrixTable. Splits the MatrixTable in order to calculate inbreeding
     coefficient and annotates the result back onto original MatrixTable. Applies flags by population and platform groups.
     :param MatrixTable mt: QC MatrixTable
     :param str data_type: WGS or WES for write path
+    :param str data_source: External or Internal data
     :return: MatrixTable annotated with hails sample qc metrics as well as pop and platform outliers
     :rtype: MatrixTable
     """
@@ -211,7 +229,7 @@ def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
     mt = mt.annotate_cols(idx=mt.qc_pop + "_" + hl.str(mt.qc_platform))
 
     sample_qc = ['n_snp', 'r_ti_tv', 'r_insertion_deletion', 'n_insertion', 'n_deletion', 'r_het_hom_var']
-    if data_type == "WGS":
+    if not (data_type == "WES" and data_source == "External"):
         sample_qc = sample_qc + ['call_rate']
 
     strat_ht = mt.cols()
@@ -220,9 +238,9 @@ def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
 
     metric_ht = compute_stratified_metrics_filter(strat_ht, qc_metrics, strata)
     checkpoint_pass = metric_ht.aggregate(hl.agg.count_where(hl.len(metric_ht.qc_metrics_filters) == 0))
-    logger.info('{0} samples found passing pop/platform-specific filtering'.format(checkpoint_pass))
+    logger.info(f'{checkpoint_pass} samples found passing pop/platform-specific filtering')
     checkpoint_fail = metric_ht.aggregate(hl.agg.count_where(hl.len(metric_ht.qc_metrics_filters) != 0))
-    logger.info('{0} samples found failing pop/platform-specific filtering'.format(checkpoint_fail))
+    logger.info(f'{checkpoint_fail} samples found failing pop/platform-specific filtering')
     metric_ht = metric_ht.annotate(sample_qc=mt.cols()[metric_ht.key].sample_qc)
     return metric_ht
 
@@ -289,7 +307,7 @@ def main(args):
     mt = mt.annotate_cols(**pop_ht[mt.col_key])
 
     logger.info('Running Hail\'s sample qc...')
-    hail_metric_ht = run_hail_sample_qc(mt, data_type)
+    hail_metric_ht = run_hail_sample_qc(mt, data_type, data_source)
     mt = mt.annotate_cols(**hail_metric_ht[mt.col_key])
 
     logger.info('Exporting sample QC tables...')
@@ -302,7 +320,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--data-type', help="Sequencing data type (WES or WGS)", choices=["WES", "WGS"], required=True)
-    parser.add_argument('-b', '--build', help='Reference build, 37 or 38', type=int, choices=[37, 38],  required=True)
+    parser.add_argument('-b', '--build', help='Reference build, 37 or 38', type=int, choices=[37, 38], required=True)
     parser.add_argument('-v', '--callset-version', help='Version of callset vcf', type=int, required=True)
     parser.add_argument('--data-source', help="Data source (Internal or External)", choices=["Internal", "External"], required=True)
     parser.add_argument('--is-test', help='To run a test of the pipeline using test files and directories',
@@ -310,8 +328,8 @@ if __name__ == '__main__':
     parser.add_argument('--callrate-low-threshold', help="Lower threshold at which to flag samples for low callrate", default=0.85)
     parser.add_argument('--contam-up-threshold', help="Upper threshold at which to flag samples for elevated contamination", default=5)
     parser.add_argument('--chimera-up-threshold', help="Upper threshold at which to flag samples for elevated chimera", default=5)
-    parser.add_argument('--wes-coverage-low-threshold',help="Lower threshold at which to flag exome samples for low coverage", default=85)
-    parser.add_argument('--wgs-coverage-low-threshold',help="Lower threshold at which to flag genome samples for low coverage", default=30)
+    parser.add_argument('--wes-coverage-low-threshold', help="Lower threshold at which to flag exome samples for low coverage", default=85)
+    parser.add_argument('--wgs-coverage-low-threshold', help="Lower threshold at which to flag genome samples for low coverage", default=30)
     parser.add_argument('--plat-min-cluster-size', help='Minimum cluster size for platform pca labeling', default=40)
     parser.add_argument('--plat-min-sample-size', help='Minimum sample size for platform pca labeling', default=40)
     parser.add_argument('--pop-assignment-pcs', help='Number of principal components to use in population assignment RF', default=6)
@@ -327,6 +345,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.slack_channel:
-        try_slack(args.slack_channel, main, args)
+        from slack_creds import slack_token
+        with slack_notifications(slack_token, args.slack_channel):
+            main(args)
     else:
         main(args)
