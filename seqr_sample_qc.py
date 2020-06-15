@@ -12,7 +12,6 @@ from gnomad.utils.slack import slack_notifications
 
 from gnomad_qc.v2.resources.basics import evaluation_intervals_path
 
-
 from resources.resources_seqr_qc import (
     callset_vcf_path,
     mt_path,
