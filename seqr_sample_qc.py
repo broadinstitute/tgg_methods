@@ -4,11 +4,11 @@ import pickle
 
 import hail as hl
 import hail.expr.aggregators as agg
-from gnomad.sample_qc.pipeline import compute_callrate_mt, compute_stratified_metrics_filter, get_qc_mt
-from gnomad.sample_qc.platform import run_platform_pca, assign_platform_from_pcs
+from gnomad.sample_qc.pipeline import get_qc_mt
+from gnomad.sample_qc.platform import compute_callrate_mt, run_platform_pca, assign_platform_from_pcs
 from gnomad.sample_qc.ancestry import pc_project, assign_population_pcs
-from gnomad.sample_qc.filtering import filter_to_autosomes, add_filters_expr
-from gnomad.utils.slack import try_slack
+from gnomad.sample_qc.filtering import add_filters_expr, compute_stratified_metrics_filter, filter_to_autosomes
+from gnomad.utils.slack import slack_notifications
 
 from gnomad_qc.v2.resources.basics import evaluation_intervals_path
 
@@ -212,12 +212,13 @@ def run_population_pca(mt: hl.MatrixTable, build: int, pcs: int, pop_fit_path: s
     return pop_pca_ht
 
 
-def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
+def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str, data_source: str) -> hl.MatrixTable:
     """
     Runs Hail's built in sample qc function on the MatrixTable. Splits the MatrixTable in order to calculate inbreeding
     coefficient and annotates the result back onto original MatrixTable. Applies flags by population and platform groups.
     :param MatrixTable mt: QC MatrixTable
     :param str data_type: WGS or WES for write path
+    :param str data_source: External or Internal data
     :return: MatrixTable annotated with hails sample qc metrics as well as pop and platform outliers
     :rtype: MatrixTable
     """
@@ -229,7 +230,7 @@ def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
     mt = mt.annotate_cols(idx=mt.qc_pop + "_" + hl.str(mt.qc_platform))
 
     sample_qc = ['n_snp', 'r_ti_tv', 'r_insertion_deletion', 'n_insertion', 'n_deletion', 'r_het_hom_var']
-    if data_type == "WGS":
+    if not (data_type == "WES" and data_source == "External"):
         sample_qc = sample_qc + ['call_rate']
 
     strat_ht = mt.cols()
@@ -307,7 +308,7 @@ def main(args):
     mt = mt.annotate_cols(**pop_ht[mt.col_key])
 
     logger.info('Running Hail\'s sample qc...')
-    hail_metric_ht = run_hail_sample_qc(mt, data_type)
+    hail_metric_ht = run_hail_sample_qc(mt, data_type, data_source)
     mt = mt.annotate_cols(**hail_metric_ht[mt.col_key])
 
     logger.info('Exporting sample QC tables...')
@@ -345,6 +346,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.slack_channel:
-        try_slack(args.slack_channel, main, args)
+        from slack_creds import slack_token
+        with slack_notifications(slack_token, args.slack_channel):
+            main(args)
     else:
         main(args)
