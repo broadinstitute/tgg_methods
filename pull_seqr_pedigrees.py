@@ -1,57 +1,92 @@
-import requests
-import getpass
 import argparse
+import getpass
+import logging
+
+import requests
+
+logging.basicConfig(
+    format="%(asctime)s): %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p",
+)
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 
-def pull_project_peds(args):
+def pull_project_peds(email: str, projects: set):
     """
     Uses the seqr API to retrieve a list of projects' pedigrees. Writes a single pedigree,
-    'pulled_seqr_pedigrees.txt', using the retrieved pedigrees. Failing projects are written
+    'seqr_pedigrees.txt', using the retrieved pedigrees. Failing projects are written
     to 'projects_not_pulled.txt'
+    :param email: email used for seqr login
+    : param projects:  set of seqr project GUIDs
     """
-    email=args.email
-    projects=args.projects
-
     with requests.Session() as s:
         p = s.post(
-            "https://seqr.broadinstitute.org/api/login", 
-            json={
-                'email': email,
-                'password': getpass.getpass(),
-            }
+            "https://seqr.broadinstitute.org/api/login",
+            json={"email": email, "password": getpass.getpass(),},
         )
-        final_ped = open('seqr_pedigrees.txt', 'w')
-        final_ped.write('Project_GUID\tFamily_ID\tIndividual_ID\tPaternal_ID\tMaternal_ID\tSex\n') 
-        errors = open('projects_not_pulled.txt', 'w')
-
-        with open(projects, 'r') as project_list:
-            for project_guid in project_list:
+        with open("seqr_pedigrees.txt", "w") as final_ped, open("projects_not_pulled.txt", "w") as errors:
+            final_ped.write(
+                "Project_GUID\tFamily_ID\tIndividual_ID\tPaternal_ID\tMaternal_ID\tSex\n"
+            )
+            for project_guid in projects:
                 project_guid = project_guid.rstrip()
-                r = s.get(f'https://seqr.broadinstitute.org/api/project/{project_guid}/details') 
-                if r.status_code != requests.codes['ok']:
-                    errors.write(f'{project_guid}\n')
+                r = s.get(
+                    f"https://seqr.broadinstitute.org/api/project/{project_guid}/details"
+                )
+
+                if r.status_code != requests.codes["ok"]:
+                    logger.info(f"Could not find {project_guid} in seqr")
+                    errors.write(f"{project_guid}\n")
                 else:
-                    fams = r.json()['familiesByGuid']
+                    fams = r.json()["familiesByGuid"]
                     fams_dict = {}
-                    for key in fams:
-                        fams_dict[fams[key]['familyGuid']] = fams[key]['familyId']
-                    inds = r.json()['individualsByGuid']
-                    for key in inds:
-                        family_id = fams_dict[inds[key]['familyGuid']]
-                        project_guid = inds[key]['projectGuid']
-                        individual_id = inds[key]['individualId']
-                        paternal_id = inds[key]['paternalId']
-                        maternal_id = inds[key]['maternalId']
-                        sex = inds[key]['sex']
-                        final_ped.write(f'{project_guid}\t{family_id}\t{individual_id}\t{paternal_id}\t{maternal_id}\t{sex}\n')
-        final_ped.close()
-        errors.close()
+                    for fam in fams.values():
+                        fams_dict[fam["familyGuid"]] = fam["familyId"]
+                    inds = r.json()["individualsByGuid"]
+                    for ind in inds.values():
+                        family_id = fams_dict[ind["familyGuid"]]
+                        project_guid = ind["projectGuid"]
+                        individual_id = ind["individualId"]
+                        paternal_id = ind["paternalId"]
+                        maternal_id = ind["maternalId"]
+                        sex = ind["sex"]
+                        final_ped.write(
+                            "\t".join(
+                                [
+                                    project_guid,
+                                    family_id,
+                                    individual_id,
+                                    str(paternal_id),
+                                    str(maternal_id),
+                                    sex,
+                                ]
+                            )
+                            + "\n"
+                        )
 
 
-if __name__ == '__main__':
+def main(args):
+    email = args.email
+    projects = set([])
+
+    with open(args.projects, "r") as project_list:
+        logger.info("Retreiving the following projects pedigrees:")
+        for project_guid in project_list:
+            project_guid = project_guid.rstrip()
+            logger.info(f"{project_guid}")
+            projects.add(project_guid)
+
+    pull_project_peds(email, projects)
+
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--email', help="Email used for seqr login", required=True)
-    parser.add_argument('-p', '--projects', help="Text file with a list of projects to pull", required=True)
+    parser.add_argument("--email", help="Email used for seqr login", required=True)
+    parser.add_argument(
+        "-p",
+        "--projects",
+        help="Text file with a list of seqr projects to pull",
+        required=True,
+    )
     args = parser.parse_args()
-    pull_project_peds(args)
-    
+    main(args)
