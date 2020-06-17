@@ -17,7 +17,7 @@ def pull_project_peds(email: str, projects: set):
     'seqr_pedigrees.txt', using the retrieved pedigrees. Failing projects are written
     to 'projects_not_pulled.txt'
     :param email: email used for seqr login
-    : param projects:  set of seqr project GUIDs
+    :param projects:  set of seqr project GUIDs
     """
     with requests.Session() as s:
         p = s.post(
@@ -45,21 +45,19 @@ def pull_project_peds(email: str, projects: set):
                     inds = r.json()["individualsByGuid"]
                     for ind in inds.values():
                         family_id = fams_dict[ind["familyGuid"]]
-                        project_guid = ind["projectGuid"]
-                        individual_id = ind["individualId"]
-                        paternal_id = ind["paternalId"]
-                        maternal_id = ind["maternalId"]
-                        sex = ind["sex"]
                         final_ped.write(
                             "\t".join(
-                                [
-                                    project_guid,
-                                    family_id,
-                                    individual_id,
-                                    str(paternal_id),
-                                    str(maternal_id),
-                                    sex,
-                                ]
+                                map(
+                                    str,
+                                    [
+                                        ind["projectGuid"],
+                                        family_id,
+                                        ind["individualId"],
+                                        ind["paternalId"],
+                                        ind["maternalId"],
+                                        ind["sex"],
+                                    ],
+                                )
                             )
                             + "\n"
                         )
