@@ -55,7 +55,7 @@ def pull_project_peds(email: str, projects: set):
                                         ind["individualId"],
                                         ind["paternalId"],
                                         ind["maternalId"],
-                                        ind["sex"],
+                                        ind["sex"] if ind["sex"] != "U" else "None",
                                     ],
                                 )
                             )
@@ -79,7 +79,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--email", help="Email used for seqr login", required=True)
+    parser.add_argument("-e", "--email", help="Email used for seqr login", required=True)
     parser.add_argument(
         "-p",
         "--projects",
