@@ -1007,6 +1007,10 @@ def main(args):
         OUT_PROJECT_REVIEW = hl.hadoop_open("{output_dir}/{project}/{output_name}_{project}_needs_review.txt".format(**locals()),'w')
         OUT_PROJECT_REVIEW.write("status\tsamples\tkin_results[pi_hat,idb0,ibd1,ibd2]\n")
         
+        
+        OUT_PM = hl.hadoop_open("{output_dir}/{project}/{output_name}_{project}_pm.txt".format(**locals()),'w')
+
+        
         project_ht = master_kin_ht.filter((master_kin_ht.seqr_id_i == project) | (master_kin_ht.seqr_id_j == project))
         project_ht_org = original_kin_ht.filter((original_kin_ht.seqr_id_i == project) | (original_kin_ht.seqr_id_j == project))
 
@@ -1015,11 +1019,33 @@ def main(args):
             if seqr_projects[trio.s] == project or seqr_projects[trio.pat_id] == project or seqr_projects[trio.mat_id] == project:
                 n_given_only_trios += 1
                 OUT_PROJECT_REVIEW.write("given_only_trio\t[s:{trio.s}, pat_id:{trio.pat_id}, mat_id:{trio.mat_id}]\t.\n".format(**locals()))
+                
+                status = False
+                evaluation = "given_only_trio"
+                family_id_1 = given_families.get(trio.s)
+                family_id_2 = given_families.get(trio.pat_id)
+                family_id_3 = given_families.get(trio.mat_id)
+                pedigree = re.sub("'", "", str(["s:" + str(trio.s), "pat_id:" + str(trio.pat_id), "mat_id:" + str(trio.mat_id)]))
+                ibd_values = "NA"
+                kinship = "NA"
+                OUT_PM.write("{status}\t{evaluation}\t{family_id_1}\t{family_id_2}\t{family_id_3}\t{pedigree}\t{ibd_values}\t{kinship}\n".format(**locals()))
+
         
         n_confirmed_trios = 0
         for trio in complete_inferred_trios:
             if seqr_projects[trio.s] == project or seqr_projects[trio.pat_id] == project or seqr_projects[trio.mat_id] == project:
-                n_confirmed_trios += 1
+                if trio not in inferred_only_trios:
+                    n_confirmed_trios += 1
+                    status = True
+                    evaluation = "confirmed_trio"
+                    family_id_1 = given_families.get(trio.s)
+                    family_id_2 = given_families.get(trio.pat_id)
+                    family_id_3 = given_families.get(trio.mat_id)
+                    pedigree = "NA"
+                    ibd_values = "NA"
+                    kinship = re.sub("'", "", str(["s:" + str(trio.s), "pat_id:" + str(trio.pat_id), "mat_id:" + str(trio.mat_id)]))
+                    OUT_PM.write("{status}\t{evaluation}\t{family_id_1}\t{family_id_2}\t{family_id_3}\t{pedigree}\t{ibd_values}\t{kinship}\n".format(**locals()))
+
 
         n_inferred_only_trios = 0
         for trio in inferred_only_trios: # should change this variable name to include trio later!
@@ -1027,6 +1053,18 @@ def main(args):
                 n_inferred_only_trios += 1
                 OUT_PROJECT_REVIEW.write("inferred_only_trio\t[s:{trio.s}, pat_id:{trio.pat_id}, mat_id:{trio.mat_id}]\t.\n".format(**locals()))
         
+                status = False
+                evaluation = "inferred_only_trio"
+                family_id_1 = given_families.get(trio.s)
+                family_id_2 = given_families.get(trio.pat_id)
+                family_id_3 = given_families.get(trio.mat_id)
+                pedigree = "NA"
+                ibd_values = "NA"
+                kinship = re.sub("'", "", str(["s:" + str(trio.s), "pat_id:" + str(trio.pat_id), "mat_id:" + str(trio.mat_id)]))
+                OUT_PM.write("{status}\t{evaluation}\t{family_id_1}\t{family_id_2}\t{family_id_3}\t{pedigree}\t{ibd_values}\t{kinship}\n".format(**locals()))
+
+                
+                
         n_given_only_duos = 0
         for duo in given_only_duos:
             duo_out = re.sub("'","",str(duo)) 
@@ -1035,6 +1073,18 @@ def main(args):
             if seqr_projects[s1] == project or seqr_projects[s2] == project:
                 n_given_only_duos += 1
                 OUT_PROJECT_REVIEW.write("given_only_duo\t{duo_out}\t.\n".format(**locals()))
+                
+                status = False    
+                evaluation = "given_only_duo"
+                family_id_1 = given_families.get(s1)
+                family_id_2 = given_families.get(s1)
+                family_id_3 = given_families.get("NA")
+                pedigree = "NA"
+                ibd_values = "NA"
+                kinship = re.sub("'", "", str([s1, s2]))
+                OUT_PM.write("{status}\t{evaluation}\t{family_id_1}\t{family_id_2}\t{family_id_3}\t{pedigree}\t{ibd_values}\t{kinship}\n".format(**locals()))
+
+                
                 
         # compute struct with one aggregation, hl.struct?
         n_confirmed_trio_component = project_ht.aggregate(hl.agg.count_where(project_ht.final_evaluation == "confirmed_trio_component"))
@@ -1099,9 +1149,34 @@ def main(args):
         df = df.sort_values(by=['final_evaluation'])
         for index, row in df.iterrows():
             OUT_PROJECT_REVIEW.write(row['final_evaluation'] + '\t' + str(re.sub("'", "", str(row['pair']))) + '\t[' + ','.join(map(str,([row['pi_hat'],row['ibd0'],row['ibd1'],row['ibd2']]))) + "]\n")
-        OUT_PROJECT_REVIEW.close() 
         
+        non_trio = project_ht.filter(project_ht.final_evaluation.contains("trio"), keep = False)
+        df_all = non_trio.to_pandas()
+        df_all = df_all.sort_values(by=['final_evaluation'])
+        for index, row in df_all.iterrows():
+            
+                if row['status'] == "needs_review":
+                    status = False
+                else:
+                    status = True
+                evaluation = row['final_evaluation']
+
+                family_id_1 = given_families.get(row['pair'][0])
+                family_id_2 = given_families.get(row['pair'][1])
+                family_id_3 = "NA"
+                pedigree = "NA"
+                ibd_values = re.sub("'", "", str([','.join(map(str,([row['pi_hat'],row['ibd0'],row['ibd1'],row['ibd2']])))]))
+                kinship = str(re.sub("'", "", str(row['pair'])))
+                
+                
+                OUT_PM.write("{status}\t{evaluation}\t{family_id_1}\t{family_id_2}\t{family_id_3}\t{pedigree}\t{ibd_values}\t{kinship}\n".format(**locals()))
+                
+            OUT_PROJECT_REVIEW.write(row['final_evaluation'] + '\t' + str(re.sub("'", "", str(row['pair']))) + '\t[' + ','.join(map(str,([row['pi_hat'],row['ibd0'],row['ibd1'],row['ibd2']]))) + "]\n")
         
+        OUT_PROJECT_REVIEW.close()
+        OUT_PM.close()
+        
+
         project_ht.export("{output_dir}/{project}/{output_name}_{project}_annotated_kin.txt".format(**locals()))
         plot_ibd(project_ht_org,"{output_dir}/{project}/{output_name}_{project}_ibd_org.png".format(**locals()))
 
