@@ -23,17 +23,20 @@ def compare_md5_dict(origin_md5_dict, dest_md5_dict):
     """
     needs_attention = {}
     files_missing = set([])
-    logger.info('In comparison module')
+    logger.info("In comparison module")
     for key in origin_md5_dict:
         if key in dest_md5_dict:
-            if not origin_md5_dict[key]['md5'] == dest_md5_dict[key]['md5']:
-                needs_attention[key] = [origin_md5_dict[key]['path'], dest_md5_dict[key]['path']]
+            if not origin_md5_dict[key]["md5"] == dest_md5_dict[key]["md5"]:
+                needs_attention[key] = [
+                    origin_md5_dict[key]["path"],
+                    dest_md5_dict[key]["path"],
+                ]
         else:
-            files_missing.add(origin_md5_dict[key]['path'])
+            files_missing.add(origin_md5_dict[key]["path"])
     return needs_attention, files_missing
 
 
-def create_md5_dict(file_dict)->dict:
+def create_md5_dict(file_dict) -> dict:
     """Create a dictionary for each subfile in a directory with file key 
     being directory + subfile path and values being the full path and md5
     containing md5s.
@@ -42,11 +45,11 @@ def create_md5_dict(file_dict)->dict:
     """
     md5_dict = {}
     for key in file_dict:
-        logger.info(f'Examining the directory: {key}')
+        logger.info(f"Examining the directory: {key}")
         for subfile in file_dict[key]:
-            subfile_key = subfile[subfile.find(key.split("/")[-1]):]
+            subfile_key = subfile[subfile.find(key.split("/")[-1]) :]
             size, int_size, md5 = get_file_stats(subfile)
-            md5_dict[subfile_key] = {'path' : subfile, 'md5' : md5}
+            md5_dict[subfile_key] = {"path": subfile, "md5": md5}
     return md5_dict
 
 
@@ -57,11 +60,11 @@ def read_hail_paths(bucket, bucket_file):
     :param bucket_file: Path to file containing columns of origin and destination files
     :return set of origin files, set of destination files
     """
-    bucket.get_blob(bucket_file).download_to_filename('paths')
+    bucket.get_blob(bucket_file).download_to_filename("paths")
     origin = []
     dest = []
-    with open('paths', 'r') as paths:
-        csv_input = csv.reader(paths, delimiter='\t', skipinitialspace=True)
+    with open("paths", "r") as paths:
+        csv_input = csv.reader(paths, delimiter="\t", skipinitialspace=True)
         for rows in csv_input:
             origin.append(rows[0])
             dest.append(rows[1])
@@ -76,15 +79,17 @@ def create_file_dict(directory_list):
     """
     file_dict = {}
     for directory in directory_list:
-        logger.info(f'Building dictionary for {directory}')
-       # Remove file string from file name and then convert "/" to "_", no need for new key assignm
+        logger.info(f"Building dictionary for {directory}")
+        # Remove file string from file name and then convert "/" to "_", no need for new key assignm
         subfiles = (
-                subprocess.check_output(["gsutil", "ls", "-r", directory])
-                .decode("utf8")
-                .strip()
-                .split("\n")
-            )
-        subfiles = [f for f in subfiles if not (f.endswith("/") or f.endswith(":") or f == '')]
+            subprocess.check_output(["gsutil", "ls", "-r", directory])
+            .decode("utf8")
+            .strip()
+            .split("\n")
+        )
+        subfiles = [
+            f for f in subfiles if not (f.endswith("/") or f.endswith(":") or f == "")
+        ]
         file_dict[directory] = subfiles
     return file_dict
 
@@ -105,24 +110,35 @@ def main(args):
         dest_file_dict = create_file_dict(dest)
         origin_md5_dict = create_md5_dict(origin_file_dict)
         dest_md5_dict = create_md5_dict(dest_file_dict)
-        needs_attention, files_missing = compare_md5_dict(origin_md5_dict, dest_md5_dict)
-        
+        needs_attention, files_missing = compare_md5_dict(
+            origin_md5_dict, dest_md5_dict
+        )
+
         output = bucket.blob(output_bucket_file)
         results = []
         if len(needs_attention) != 0:
-            logger.info(f'md5 mismatch:\n {needs_attention}')
-            results.append(f'md5 mismatch: {needs_attention}')
+            logger.info(f"md5 mismatch:\n {needs_attention}")
+            results.append(f"md5 mismatch: {needs_attention}")
         if len(files_missing) != 0:
-            logger.info(f'Files not copied:\n {files_missing}')
-            results.append(f'Files not copied: {files_missing}')
-        
-        output.upload_from_string('\n'.join(results))
+            logger.info(f"Files not copied:\n {files_missing}")
+            results.append(f"Files not copied: {files_missing}")
+
+        output.upload_from_string("\n".join(results))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input-bucket-file", help="File with two columns: origin and destination", required=True)
-    parser.add_argument("--output-bucket-file", help="File to output comparison results", required=True)
-    parser.add_argument("--bucket", help="Bucket where input and ouptut files live", required=True)
+    parser.add_argument(
+        "--input-bucket-file",
+        help="File with two columns: origin and destination",
+        required=True,
+    )
+    parser.add_argument(
+        "--output-bucket-file", help="File to output comparison results", required=True
+    )
+    parser.add_argument(
+        "--bucket", help="Bucket where input and ouptut files live", required=True
+    )
 
     args = parser.parse_args()
     main(args)
