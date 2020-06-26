@@ -9,7 +9,8 @@ print(os.getcwd())
 #%%
 
 #google_storage_dir = "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs"
-google_storage_dir = "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds"
+#google_storage_dir = "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds"
+google_storage_dir = "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v2/beds"
 
 assert hl.hadoop_is_dir(google_storage_dir)
 
@@ -32,6 +33,7 @@ for result in hl.hadoop_ls(google_storage_dir):
 
     batch_name = os.path.basename(result['path']).replace(".dcr", "").replace(".bed", "").replace(".gz", "")
     batch_name_to_path_and_samples[batch_name] = (result['path'], sample_ids)
+
 
 #%%
 rows = []
@@ -157,7 +159,7 @@ settings_json = """
 
 
 #%%
-with open("gcnv_settings.json", "wt") as f:
+with open("gcnv_settings_v2.json", "wt") as f:
     json.dump(json.loads(settings_json), f, indent=3)
 
 #%%
