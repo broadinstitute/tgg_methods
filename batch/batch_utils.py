@@ -11,6 +11,18 @@ import os
 import hailtop.batch as hb
 from hailtop.batch.job import Job
 
+
+class HG38_REF_PATHS:
+    fasta = "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta"
+    fai = "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai"
+    dict = "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict"
+
+class HG37_REF_PATHS:
+    fasta = "gs://gcp-public-data--broad-references/hg19/v0/Homo_sapiens_assembly19.fasta"
+    fai = "gs://gcp-public-data--broad-references/hg19/v0/Homo_sapiens_assembly19.fasta.fai"
+    dict = "gs://gcp-public-data--broad-references/hg19/v0/Homo_sapiens_assembly19.dict"
+
+
 def init_arg_parser(
     default_billing_project="tgg-rare-disease",
     default_temp_bucket="macarthurlab-cromwell",
@@ -30,7 +42,7 @@ def init_arg_parser(
         "key file. If provided, Batch will mount this file into the docker image so gcloud commands can run as this service account.")
     parser.add_argument("--batch-billing-project", default=default_billing_project, help="Batch: this billing project will be "
         "charged when running jobs on the Batch cluster. To set up a billing project name, contact the hail team.")
-    parser.add_argument("--batch-name", help="Batch: label for the current Batch run")
+    parser.add_argument("--batch-name", nargs="+", help="Batch: label for the current Batch run")
     parser.add_argument("--batch-temp-bucket", default=default_temp_bucket, help="Batch: bucket where it stores temp "
         "files. The batch service-account must have Admin permissions for this bucket. These can be added by running "
         "gsutil iam ch serviceAccount:[SERVICE_ACCOUNT_NAME]:objectAdmin gs://[BUCKET_NAME]")
@@ -44,8 +56,11 @@ def init_arg_parser(
 
 
 @contextlib.contextmanager
-def run_batch(args):
+def run_batch(args, batch_name=None):
     """Wrapper around creating, running, and then closing a Batch run.
+
+    :param args: Parsed args from the ArgumentParser created via the init_arg_parser method
+    :param batch_name: (optional) batch label which will show up in the Batch web UI
 
     Usage:
         with run_batch(args) as batch:
@@ -58,7 +73,7 @@ def run_batch(args):
         backend = hb.ServiceBackend(billing_project=args.batch_billing_project, bucket=args.batch_temp_bucket)
 
     try:
-        batch = hb.Batch(backend=backend, name=args.batch_name)
+        batch = hb.Batch(backend=backend, name=" ".join(args.batch_name) if args.batch_name else batch_name)
 
         yield batch  # returned to with ... as batch:
 
