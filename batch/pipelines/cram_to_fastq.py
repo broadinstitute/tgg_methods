@@ -33,31 +33,37 @@ def main():
     if {"sample_id", "cram_path"} - set(df.columns):
         p.error(f"{args.tsv_path} must contain a 'sample_id' and 'cram_path' columns")
 
+    filtered_rows = []
+    for _, row in df.iterrows():
+        if args.sample_id and row.sample_id not in set(args.sample_id):
+            continue
+        filtered_rows.append(row)
+
     if not args.force:
         hl.init(log="/dev/null", quiet=True)
 
     # process samples
-    with batch_utils.run_batch(args, batch_name=f"cram => fastq: {len(df)} files") as batch:
-        for _, row in df.iterrows():
-            if args.sample_id and row.sample_id not in set(args.sample_id):
-                continue
-
-            j = batch_utils.init_job(batch, f"cram => fastq: {row.sample_id}", DOCKER_IMAGE if not args.raw else None, args.cpu, args.memory)
-            batch_utils.switch_gcloud_auth_to_user_account(j, GCLOUD_CREDENTIALS_LOCATION, GCLOUD_USER_ACCOUNT, GCLOUD_PROJECT)
-
+    with batch_utils.run_batch(args, batch_name=f"cram => fastq: {len(filtered_rows)} files") as batch:
+        for row in filtered_rows:
 
             input_filename = os.path.basename(row.cram_path)
             prefix = input_filename.replace(".bam", "").replace(".cram", "")
 
             output_filename_r1 = f"{prefix}__R1.fastq.gz"
             output_filename_r2 = f"{prefix}__R2.fastq.gz"
-            if not args.force and hl.hadoop_is_file(output_filename_r1) and hl.hadoop_is_file(output_filename_r2):
-                logger.info(f"Output files exist: {output_filename_r1} . Skipping {input_filename}...")
+            output_path_r1 = os.path.join(OUTPUT_DIR, output_filename_r1)
+            output_path_r2 = os.path.join(OUTPUT_DIR, output_filename_r2)
+
+            if not args.force and hl.hadoop_is_file(output_path_r1) and hl.hadoop_is_file(output_path_r2):
+                logger.info(f"Output files exist (eg. {output_filename_r1}). Skipping {input_filename}...")
                 continue
+
+            j = batch_utils.init_job(batch, f"cram => fastq: {row.sample_id}", DOCKER_IMAGE if not args.raw else None, args.cpu, args.memory)
+            batch_utils.switch_gcloud_auth_to_user_account(j, GCLOUD_CREDENTIALS_LOCATION, GCLOUD_USER_ACCOUNT, GCLOUD_PROJECT)
 
             # copy inputs
             REF_PATHS = batch_utils.HG38_REF_PATHS if args.reference == "38" else batch_utils.HG37_REF_PATHS
-            j.command(f"""gsutil -m cp {row.cram_path} .""")
+            j.command(f"""gsutil -m -u {GCLOUD_PROJECT} cp {row.cram_path} .""")
             j.command(f"""gsutil -m cp {REF_PATHS.fasta} {REF_PATHS.fai} {REF_PATHS.dict} .""")
 
             j.command(f"samtools fastq -1 {output_filename_r1} -2 {output_filename_r2} {input_filename}")
