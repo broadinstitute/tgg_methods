@@ -33,18 +33,14 @@ def main():
     if {"sample_id", "cram_path"} - set(df.columns):
         p.error(f"{args.tsv_path} must contain a 'sample_id' and 'cram_path' columns")
 
-    filtered_rows = []
-    for _, row in df.iterrows():
-        if args.sample_id and row.sample_id not in set(args.sample_id):
-            continue
-        filtered_rows.append(row)
-
     if not args.force:
         hl.init(log="/dev/null", quiet=True)
 
     # process samples
-    with batch_utils.run_batch(args, batch_name=f"cram => fastq: {len(filtered_rows)} files") as batch:
-        for row in filtered_rows:
+    with batch_utils.run_batch(args, batch_name=f"cram => fastq") as batch:
+        for _, row in df.iterrows():
+            if args.sample_id and row.sample_id not in set(args.sample_id):
+                continue
 
             input_filename = os.path.basename(row.cram_path)
             prefix = input_filename.replace(".bam", "").replace(".cram", "")
