@@ -1,6 +1,8 @@
 import argparse
 import logging
+
 import hail as hl
+
 from gnomad.utils.filtering import subset_samples_and_variants
 
 
@@ -12,41 +14,45 @@ logger = logging.getLogger("subset")
 logger.setLevel(logging.INFO)
 
 
-def remap_sample_ids(mt, remap_path):
+def remap_sample_ids(mt: hl.MatrixTable, remap_path: str):
     """
-    Remap the MatrixTable's sample ID, 's', field to the sample ID used within seqr, 'seqr_id'
-    If the sample 's' does not have a 'seqr_id' in the remap file, 's' becomes 'seqr_id'
-    :param mt: MatrixTable from VCF
-    :param remap_path: Path to a file with two columns 's' and 'seqr_id'
-    :return: MatrixTable remapped and keyed to use seqr_id
+    Maps the MatrixTable's sample ID field ('s') to the sample ID used within seqr ('seqr_id').
+
+    If the sample does not have a mapping in the remap file, their ID becomes their seqr ID.
+
+    :param hl.MatrixTable mt: Input MatrixTable.
+    :param str remap_path: Path to a file with two columnsL 's' and 'seqr_id'.
+    :return: MatrixTable with VCF sample IDs mapped to seqr IDs and keyed with seqr ID.
+    :rtype: hl.MatrixTable
     """
-    remap_ht = hl.import_table(remap_path, key='s')
+    remap_ht = hl.import_table(remap_path, key="s")
     missing_samples = remap_ht.anti_join(mt.cols()).collect()
     remap_count = remap_ht.count()
 
     if len(missing_samples) != 0:
         logger.error(
-            f'Only {remap_ht.semi_join(mt.cols()).count()} out of {remap_count} '
-            'remap IDs matched IDs in the variant callset.\n'
-            f'IDs that aren\'t in the callset: {missing_samples}\n'
-            f'All callset sample IDs:{mt.s.collect()}', missing_samples
+            f"Only {remap_ht.semi_join(mt.cols()).count()} out of {remap_count} "
+            "remap IDs matched IDs in the variant callset.\n"
+            f"IDs that aren't in the callset: {missing_samples}\n"
+            f"All callset sample IDs:{mt.s.collect()}",
+            missing_samples,
         )
 
     mt = mt.annotate_cols(**remap_ht[mt.s])
     remap_expr = hl.cond(hl.is_missing(mt.seqr_id), mt.s, mt.seqr_id)
     mt = mt.annotate_cols(seqr_id=remap_expr, vcf_id=mt.s)
     mt = mt.key_cols_by(s=mt.seqr_id)
-    logger.info(f'Remapped {remap_count} sample ids...')
+    logger.info(f"Remapped {remap_count} sample ids...")
     return mt
 
 
 def main(args):
 
-    hl.init(default_reference="GRCh38", log="/subset.log")
+    hl.init(log="/subset.log", default_reference="GRCh38")
 
     if args.vcf_path:
         logger.info("Importing VCF...")
-        # Note: always assumes file is bgzipped
+        logger.warning("Assuming VCF is bgzipped!")
         mt = hl.import_vcf(
             args.vcf_path, force_bgz=True, reference_genome=args.import_build
         )
@@ -58,18 +64,20 @@ def main(args):
     logger.info(f"Input MT counts: {mt.count()}")
 
     if args.mapping:
-        logger.info("Mapping sample IDs")
+        logger.info("Mapping VCF IDs to seqr IDs...")
         logger.warning("Assuming mapping file has header!")
-        mt = remap_sample_ids(mt, args.mapping)       
- 
+        mt = remap_sample_ids(mt, args.mapping)
+
     logger.info("Subsetting to specified samples and their variants...")
-    mt = subset_samples_and_variants(mt, args.samp, header=args.header, table_key=args.table_key)
-    logger.info(f"Subset MT counts: {mt.count()}")
+    mt = subset_samples_and_variants(
+        mt, args.samp, header=args.no_header, table_key=args.table_key
+    )
+    logger.info(f"MT counts after subsetting: {mt.count()}")
 
     logger.info("Exporting VCF...")
     if "bgz" not in args.vcf_out:
         logger.warning(
-            "Path to output VCF does not contain '.bgz'; export might be really slow"
+            "Path to output VCF does not contain '.bgz'; export might be really slow!"
         )
     hl.export_vcf(mt, args.vcf_out, parallel=args.parallel)
 
@@ -87,11 +95,13 @@ if __name__ == "__main__":
     )
     parser.add_argument("-m", "--mt_path", help="Path to input MatrixTable")
     parser.add_argument(
-        "-s", "--samp", help="Path to file with list of samples to subset"
+        "-s", "--samp", help="Path to file with list of sample IDs to subset"
     )
-    parser.add_argument("--mapping", help="Path to file with sample ID mapping")
+    parser.add_argument("--mapping", help="Path to file with VCF to seqr ID mapping")
     parser.add_argument(
-        "--header", help="Whether sample list file has a header. Specify only if False", action="store_false"
+        "--no_header",
+        help="Whether sample list file is missing a header. Specify only if False",
+        action="store_false",
     )
     parser.add_argument(
         "--table_key", help="Field used to key sample Table", default="s"
