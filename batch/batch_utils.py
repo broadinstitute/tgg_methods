@@ -167,6 +167,7 @@ def switch_gcloud_auth_to_user_account(
     :return:
     """
 
+    batch_job.command(f"gcloud auth list")
     batch_job.command(f"gcloud auth activate-service-account --key-file /gsa-key/key.json")
     batch_job.command(f"gsutil -m cp -r {os.path.join(gs_path_of_gcloud_credentials, '.config')} /tmp/")
     batch_job.command(f"rm -rf ~/.config")
@@ -174,4 +175,5 @@ def switch_gcloud_auth_to_user_account(
     batch_job.command(f"gcloud config set account {gcloud_user_account}")
     if gcloud_project:
         batch_job.command(f"gcloud config set project {gcloud_project}")
+    batch_job.command(f"gcloud auth list")
 
