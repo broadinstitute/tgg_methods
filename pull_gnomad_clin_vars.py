@@ -1,12 +1,9 @@
 import argparse
 import hail as hl
-from gnomad_qc.v2.resources.variant_qc import (
-    release_ht_path,
-    RELEASE_VERSION,
-    get_gnomad_public_data,
-)
-from gnomad_hail.utils.slack import try_slack
+from gnomad_qc.v2.resources.variant_qc import release_ht_path, RELEASE_VERSION
+from gnomad_qc.v2.resources.basics import get_gnomad_public_data
 
+# from gnomad_hail.utils.slack import try_slack
 
 CONSEQUENCES = {
     "stop_gained",
@@ -95,16 +92,17 @@ def filter_export_to_gene_list(ht, genes):
     :return: Filtered table
     :rtype: Table
     """
+
     gene_names = hl.literal(genes)
     ht = ht.annotate(
         gene_of_interest=gene_names.find(
             lambda x: ht.vep.transcript_consequences.gene_symbol == x
         )
     )
+    ht.vep.transcript_consequences.gene_symbol.show()
     ht = ht.filter(
         hl.is_defined(ht.gene_of_interest)
-        & hl.is_defined(ht.vep.transcript_consequences.hgvsc)
-    )  #  TODO: check on hgvsc utility
+     )  #  TODO: check on hgvsc utility
     return ht
 
 
@@ -135,7 +133,7 @@ def filter_clinvar_ht_to_sigs(ht: hl.Table, sig: set) -> hl.Table:
     sig = hl.literal(sig)
     ht = ht.explode(ht.clinvar_clin_sig)
     ht = ht.transmute(clin_sig=sig.contains(ht.clinvar_clin_sig))
-    ht = ht.filter(hl.is_defined(ht.clin_sig))
+    ht = ht.filter(ht.clin_sig)
     return ht
 
 
@@ -153,30 +151,50 @@ def hgmd_path_filter(ht: hl.Table, sig: set) -> hl.Table:
 
 def make_ucsc_url(ht: hl.Table, window_size: hl.int) -> hl.Table:
     """Create UCSC url and annotate ht with it"""
+    #build = "19" if ht.locus.dtype.reference_genome == "GRCh37" else "38"
+    ucsc_url = f"http://genome.ucsc.edu/cgi-bin/hgTracks?db=hg19&position=chr"
 
-    build = "19" if ht.locus.dtype.reference_genome == "GRCh37" else "38"
-    ucsc_url = f"http://genome.ucsc.edu/cgi-bin/hgTracks?db=hg{build}&position=chr"
-
-    return f"{ucsc_url}{ht.vep.seq_region_nam}%3A{hl.str(ht.vep.start - 1)}-{hl.str(ht.vep.end - 1)}&position=chr{ht.vep.seq_region_name}%3A{hl.str(ht.vep.start - (window_size / 2))}-{hl.str(ht.vep.end + (window_size / 2))}"
-
+    return hl.format(
+        "%s%s%s%s%s%s%s%s%s%s%s",
+        ucsc_url,
+        ht.vep.seq_region_name,
+        "%3A",
+        hl.str(ht.vep.start - 1),
+        "-",
+        hl.str(ht.vep.end - 1),
+        "&position=chr",
+        ht.vep.seq_region_name,
+        "%3A",
+        hl.str(ht.vep.start - (window_size / 2)),
+        "=",
+        hl.str(ht.vep.end + (window_size / 2)),
+    )
 
 def make_clinvar_url(ht: hl.Table) -> hl.Table:
     """Create clinvar variant URL and annotate ht with it"""
     # http://www.ncbi.nlm.nih.gov/clinvar?term=rs75822236%5BVariant%20ID%5D
-    return f"https://www.ncbi.nlm.nih.gov/clinvar/variation/{hl.str(ht.VariationID)}"
+    return hl.format(
+        "%s%s", "https://www.ncbi.nlm.nih.gov/clinvar/variation/", ht.VariationID
+    )
 
 
 def make_hgmd_url(ht: hl.Table) -> hl.Table:
     """Create HGMD pro link and annotate file with it"""
-    return f"https://portal.biobase-international.com/hgmd/pro/mut.php?acc={hl.str(ht.hgmd_rsid)}"
+    return hl.if_else(
+        hl.is_defined(ht.hgmd_rsid),
+        hl.format(
+            "%s%s",
+            "https://portal.biobase-international.com/hgmd/pro/mut.php?acc=",
+            ht.hgmd_rsid,
+        ),
+        "NA",
+    )
 
 
 def get_datatype_pop(ht, data_type, pop, data_type_pops, stat):
     """"""
     return (
-        ht[f"{data_type}_{gnomad_pop_expr(pop, stat)}"]
-        if pop in data_type_pops[data_type]
-        else 0
+        ht[f"{data_type}_{gnomad_pop_expr(pop, stat)}"] if pop in data_type_pops else 0
     )
 
 
@@ -190,6 +208,7 @@ def gnomad_pop_expr(pop, stat) -> hl.str:
 
 
 def gnomad_ac_dict(ht, all_pops) -> hl.dict:
+    print("Building AC Dict")
     return {
         f'{gnomad_pop_expr(pop,"AC")}': (
             hl.or_else(get_datatype_pop(ht, "exomes", pop, E_POPS, "AC"), 0)
@@ -200,9 +219,10 @@ def gnomad_ac_dict(ht, all_pops) -> hl.dict:
 
 
 def gnomad_an_dict(ht, all_pops) -> hl.dict:
+    print("Building AN dict")
     return {
         f'{gnomad_pop_expr(pop,"AN")}': (
-            hl.or_else(get_datatype_pop(ht, "genomes", pop, E_POPS, "AN"), 0)
+            hl.or_else(get_datatype_pop(ht, "exomes", pop, E_POPS, "AN"), 0)
             + hl.or_else(get_datatype_pop(ht, "genomes", pop, G_POPS, "AN"), 0)
         )
         for pop in all_pops
@@ -232,7 +252,9 @@ def calc_gnomad_allele_stats(ht: hl.Table, all_pops) -> hl.Table:
 
 def filter_gnomad_to_genes_consq(data_type, genes, consequences) -> hl.Table:
     ht = get_gnomad_public_data(data_type, split=True)
-    ht = hl.filter_intervals(ht, hl.experimental.get_gene_intervals(gene_symbols=genes))
+    print(genes)
+    ht = hl.filter_intervals(
+        ht, hl.experimental.get_gene_intervals(gene_symbols=genes))
     consequence_ht = consequence_filter(ht, consequences, genes)
     ht = ht.annotate(
         lof=consequence_ht[ht.key].lof, csq_term=consequence_ht[ht.key].csq_term
@@ -243,10 +265,10 @@ def filter_gnomad_to_genes_consq(data_type, genes, consequences) -> hl.Table:
 def prep_clinvar_data(genes, sig, output_path) -> hl.Table:
 
     clinvar_ht = hl.read_table(
-        "gs://seqr-reference-data/GRCh37/clinvar/clinvar.GRCh37.ht"
+        "gs://seqr-reference-data/GRCh37/clinvar/clinvar.GRCh37.ht"  # TODO: Update clinvar and gnomad resources to requester pays
     )
     clinvar_ht = hl.filter_intervals(
-        clinvar_ht, hl.experimental.get_gene_intervals(gene_symbols=genes)
+        clinvar_ht, hl.experimental.get_gene_intervals(gene_symbols=genes, reference_genome="GRCh37")
     )  # TODO: Add build arg
     clinvar_ht = clinvar_ht.select(
         clinvar_rsid=clinvar_ht.rsid,
@@ -257,8 +279,8 @@ def prep_clinvar_data(genes, sig, output_path) -> hl.Table:
     clinvar_ht = filter_clinvar_ht_to_sigs(clinvar_ht, sig)
     clinvar_ht = clinvar_ht.checkpoint(output_path + "clinvar.ht", overwrite=True)
     clinvar_vs = hl.read_table(
-        "gs://seqr-datasets/methods_dev/test_data/genzyme/variant_summary_09162019.ht"
-    )
+        "gs://seqr-datasets/methods_dev/test_data/genzyme/variant_summary_09162020.ht"
+    ).key_by('#AlleleID')
     clinvar_vs = clinvar_vs.select(
         "VariationID",
         "Chromosome",
@@ -275,16 +297,18 @@ def prep_clinvar_data(genes, sig, output_path) -> hl.Table:
         {"#AlleleID": "AlleleID", "RS# (dbSNP)": "clinvar_rsid"}
     )
     clinvar_vs = filter_variant_summary_to_genes(clinvar_vs, genes, "GRCh37")
-    clinvar_ht = clinvar_ht.annotate(**clinvar_vs[clinvar_ht.allele_id])  # TODO: Some variants duplicated
+    clinvar_ht = clinvar_ht.annotate(
+        **clinvar_vs[clinvar_ht.allele_id]
+    )  # TODO: Some variants duplicated
     return clinvar_ht
 
 
 def prep_hgmd_data(genes, sig) -> hl.Table:
-    hgmd = hl.read_matrix_table(
-        "gs://seqr-datasets/methods_dev/test_data/genzyme/hgmd.mt"
-    ).rows()  # TODO: get_hgmd_path
+    hgmd = hl.read_table(
+        "gs://seqr-reference-data-private/GRCh37/HGMD/hgmd_pro_2020_1_19.ht"
+    )  # TODO: get_hgmd_path
     hgmd = hl.filter_intervals(
-        hgmd, hl.experimental.get_gene_intervals(gene_symbols=genes)
+        hgmd, [hl.parse_locus_interval("22:17659679-17739126")]  # (gene_symbols=genes)
     )
     hgmd = hgmd_path_filter(hgmd, sig)
     return hgmd
@@ -296,12 +320,12 @@ def annotate_ht_w_all_data(
     ht = ht.annotate(**clinvar_ht[ht.key])
     ht = ht.annotate(**hgmd_ht[ht.key])
     ht = ht.filter(
-        hl.is_defined(ht.clin_sig)
+        ht.clin_sig
         | hl.is_defined(ht.hgmd_sig)
         | hl.is_defined(ht.csq_term)
     )
     ht = ht.checkpoint(
-        f"{output_path}_gnomad_{data_type}_w_clinvar_hgmd.ht", overwrite=True
+        f"{output_path}gnomad_{data_type}_w_clinvar_hgmd.ht", overwrite=True
     )
     ht = ht.annotate(
         ucsc_url=make_ucsc_url(ht, 50),
@@ -345,7 +369,7 @@ def annotate_ht_w_all_data(
     )
     ht_export_flat = ht_export.flatten()
     ht_export_flat.write(
-        f"{output_path}_gnomad_{data_type}_w_clinvar_hgmd_flat_export.ht",
+        f"{output_path}gnomad_{data_type}_w_clinvar_hgmd_flat_export.ht",
         overwrite=True,
     )
     ht_export_flat.export(output_path + f"gnomad_{data_type}_w_clinvar_hgmd_export.tsv")
@@ -365,7 +389,8 @@ def get_ac_an(data_type, pops, genes) -> hl.Table:
             f"{data_type}", release_tag=RELEASE_VERSION, nested=False, with_subsets=True
         )
     )
-    ht = hl.filter_intervals(ht, hl.experimental.get_gene_intervals(gene_symbols=genes))
+    ht = hl.filter_intervals(
+        ht, hl.experimental.get_gene_intervals(gene_symbols=genes))
     stats = [f"gnomad_AC_adj_{pop}" if pop != "" else "gnomad_AC_adj" for pop in pops]
     stats.extend(
         [f"gnomad_AN_adj_{pop}" if pop != "" else "gnomad_AN_adj" for pop in pops]
@@ -407,16 +432,16 @@ def main(args):
     ht = ht.select_globals()
     ht = ht.annotate(
         ENST_hgvsc=hl.cond(
-            hl.is_defined(ht.hgvsc), ht.hgvsc.split(":")[0], hl.null(hl.str)
+            hl.is_defined(ht.hgvsc), ht.hgvsc.split(":")[0], hl.null(hl.tstr)
         ),
         hgvsc_split=hl.cond(
-            hl.is_defined(ht.hgvsc), ht.hgvsc.split(":")[1], hl.null(hl.str)
+            hl.is_defined(ht.hgvsc), ht.hgvsc.split(":")[1], hl.null(hl.tstr)
         ),
         ENST_hgvsp=hl.cond(
-            hl.is_defined(ht.hgvsp), ht.hgvsp.split(":")[0], hl.null(hl.str)
+            hl.is_defined(ht.hgvsp), ht.hgvsp.split(":")[0], hl.null(hl.tstr)
         ),
         hgvsp_split=hl.cond(
-            hl.is_defined(ht.hgvsp), ht.hgvsp.split(":")[1], hl.null(hl.str)
+            hl.is_defined(ht.hgvsp), ht.hgvsp.split(":")[1], hl.null(hl.tstr)
         ),
     )
     ht = ht.drop("hgvsp", "hgvsc").rename(
