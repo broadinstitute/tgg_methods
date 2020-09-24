@@ -3,10 +3,12 @@ Shared methods for Batch pipelines.
 
 Batch docs:  https://hail.is/docs/batch/api/batch/hailtop.batch.job.Job.html#hailtop.batch.job.Job
 """
+from typing import Union
 
 import configargparse
 import contextlib
 import os
+import subprocess
 
 import hailtop.batch as hb
 from hailtop.batch.job import Job
@@ -177,3 +179,62 @@ def switch_gcloud_auth_to_user_account(
         batch_job.command(f"gcloud config set project {gcloud_project}")
     batch_job.command(f"gcloud auth list")
 
+
+class StorageBucketRegionException(Exception):
+    pass
+
+
+def check_storage_bucket_region(google_storage_paths: Union[str, list], gcloud_project: str = None, verbose: bool = True):
+    """Checks whether the given google storage path(s) are stored in US-CENTRAL1 - the region where the hail Batch
+    cluster is located. Localizing data from other regions will be slower and result in egress charges.
+
+    :param google_storage_paths: a gs:// path or a list of gs:// paths to check.
+    :param gcloud_project: (optional) if specified, it will be added to the gsutil command with the -u arg.
+    :raises StorageRegionException: If the given path(s) is not stored in the same region as the Batch cluster.
+
+    """
+    if isinstance(google_storage_paths, str):
+        google_storage_paths = [google_storage_paths]
+
+    buckets = set([path.split("/")[2] for path in google_storage_paths])
+    for bucket in buckets:
+        gsutil_command = f"gsutil"
+        if gcloud_project:
+            gsutil_command += f" -u {gcloud_project}"
+
+        output = subprocess.check_output(f"{gsutil_command} ls -L -b gs://{bucket}", shell=True, encoding="UTF-8")
+        for line in output.split("\n"):
+            if "Location constraint:" in line:
+                location = line.strip().split()[-1]
+                break
+        else:
+            raise StorageBucketRegionException(f"ERROR: Couldn't determine gs://{bucket} bucket region.")
+
+        if location not in {"US", "US-CENTRAL1"}:
+            raise StorageBucketRegionException(f"ERROR: gs://{bucket} is located in {location}. This may cause egress "
+                f"charges when copying files to the Batch cluster which is in US-CENTRAL.")
+
+        if verbose:
+            print(f"Confirmed gs://{bucket} is in {location}")
+
+
+def localize_file(job, google_storage_path: str, gcloud_project: str = None):
+    """Copies a file from a google bucket to the local filesystem and returns the new absolute local path.
+    Requires gsutil to exist inside the docker container.
+
+    :param job: batch Job object
+    :param google_storage_path: gs:// path of file to localize
+    :param gcloud_project: (optional) if specified, it will be added to the gsutil command with the -u arg.
+    """
+
+    gsutil_command = f"gsutil"
+    if gcloud_project:
+        gsutil_command += f" -u {gcloud_project}"
+
+    path = google_storage_path.replace("gs://", "")
+    dirname = os.path.dirname(path)
+    filename = os.path.basename(path)
+    local_dir = os.path.join("/data", dirname)
+    job.command(f"mkdir -p {local_dir}; {gsutil_command} -m cp {google_storage_path} {local_dir}/{filename}")
+
+    return f"{local_dir}/{filename}"
