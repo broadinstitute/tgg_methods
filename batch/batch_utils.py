@@ -3,10 +3,12 @@ Shared methods for Batch pipelines.
 
 Batch docs:  https://hail.is/docs/batch/api/batch/hailtop.batch.job.Job.html#hailtop.batch.job.Job
 """
+from typing import Union
 
 import configargparse
 import contextlib
 import os
+import subprocess
 
 import hailtop.batch as hb
 from hailtop.batch.job import Job
@@ -167,6 +169,7 @@ def switch_gcloud_auth_to_user_account(
     :return:
     """
 
+    batch_job.command(f"gcloud auth list")
     batch_job.command(f"gcloud auth activate-service-account --key-file /gsa-key/key.json")
     batch_job.command(f"gsutil -m cp -r {os.path.join(gs_path_of_gcloud_credentials, '.config')} /tmp/")
     batch_job.command(f"rm -rf ~/.config")
@@ -174,4 +177,77 @@ def switch_gcloud_auth_to_user_account(
     batch_job.command(f"gcloud config set account {gcloud_user_account}")
     if gcloud_project:
         batch_job.command(f"gcloud config set project {gcloud_project}")
+    batch_job.command(f"gcloud auth list")
 
+
+class StorageBucketRegionException(Exception):
+    pass
+
+
+def check_storage_bucket_region(google_storage_paths: Union[str, list], gcloud_project: str = None, verbose: bool = True):
+    """Checks whether the given google storage path(s) are stored in US-CENTRAL1 - the region where the hail Batch
+    cluster is located. Localizing data from other regions will be slower and result in egress charges.
+
+    :param google_storage_paths: a gs:// path or a list of gs:// paths to check.
+    :param gcloud_project: (optional) if specified, it will be added to the gsutil command with the -u arg.
+    :raises StorageRegionException: If the given path(s) is not stored in the same region as the Batch cluster.
+
+    """
+    if isinstance(google_storage_paths, str):
+        google_storage_paths = [google_storage_paths]
+
+    buckets = set([path.split("/")[2] for path in google_storage_paths])
+    for bucket in buckets:
+        gsutil_command = f"gsutil"
+        if gcloud_project:
+            gsutil_command += f" -u {gcloud_project}"
+
+        output = subprocess.check_output(f"{gsutil_command} ls -L -b gs://{bucket}", shell=True, encoding="UTF-8")
+        for line in output.split("\n"):
+            if "Location constraint:" in line:
+                location = line.strip().split()[-1]
+                break
+        else:
+            raise StorageBucketRegionException(f"ERROR: Couldn't determine gs://{bucket} bucket region.")
+
+        if location not in {"US", "US-CENTRAL1"}:
+            raise StorageBucketRegionException(f"ERROR: gs://{bucket} is located in {location}. This may cause egress "
+                f"charges when copying files to the Batch cluster which is in US-CENTRAL.")
+
+        if verbose:
+            print(f"Confirmed gs://{bucket} is in {location}")
+
+
+_GCSFUSE_MOUNTED_BUCKETS = set()  # cache mounted buckets to avoid mounting the same bucket 2x
+
+def localize_file(job, google_storage_path: str, gcloud_project: str = None, use_gcsfuse: bool = False) -> str:
+    """Copies a file from a google bucket to the local filesystem and returns the new absolute local path.
+    Requires gsutil to exist inside the docker container.
+
+    :param job: batch Job object
+    :param google_storage_path: gs:// path of file to localize
+    :param gcloud_project: (optional) if specified, it will be added to the gsutil command with the -u arg.
+    :param use_gcsfuse: instead of copying the file, use gcsfuse to mount the bucket containing this file.
+    :returns: Local file path after localization.
+    """
+
+    gsutil_command = f"gsutil"
+    if gcloud_project:
+        gsutil_command += f" -u {gcloud_project}"
+
+    path = google_storage_path.replace("gs://", "")
+    bucket_name = path.split("/")[0]
+    dirname = os.path.dirname(path)
+    filename = os.path.basename(path)
+    local_dir = os.path.join("/data", dirname)
+    if bucket_name not in _GCSFUSE_MOUNTED_BUCKETS:
+        if use_gcsfuse:
+            local_bucket_dir = os.path.join("/data", bucket_name)
+            job.command(f"mkdir -p {local_bucket_dir}")
+            job.gcsfuse(bucket_name, local_bucket_dir, read_only=True)
+            _GCSFUSE_MOUNTED_BUCKETS.add(bucket_name)
+        else:
+            job.command(f"mkdir -p {local_dir}; {gsutil_command} -m cp {google_storage_path} {local_dir}/{filename}")
+        # TODO raise error on attempts to both mount and copy files from the same bucket
+
+    return f"{local_dir}/{filename}"
