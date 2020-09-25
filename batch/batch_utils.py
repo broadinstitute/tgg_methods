@@ -218,13 +218,17 @@ def check_storage_bucket_region(google_storage_paths: Union[str, list], gcloud_p
             print(f"Confirmed gs://{bucket} is in {location}")
 
 
-def localize_file(job, google_storage_path: str, gcloud_project: str = None):
+_GCSFUSE_MOUNTED_BUCKETS = set()  # cache mounted buckets to avoid mounting the same bucket 2x
+
+def localize_file(job, google_storage_path: str, gcloud_project: str = None, use_gcsfuse: bool = False) -> str:
     """Copies a file from a google bucket to the local filesystem and returns the new absolute local path.
     Requires gsutil to exist inside the docker container.
 
     :param job: batch Job object
     :param google_storage_path: gs:// path of file to localize
     :param gcloud_project: (optional) if specified, it will be added to the gsutil command with the -u arg.
+    :param use_gcsfuse: instead of copying the file, use gcsfuse to mount the bucket containing this file.
+    :returns: Local file path after localization.
     """
 
     gsutil_command = f"gsutil"
@@ -232,9 +236,18 @@ def localize_file(job, google_storage_path: str, gcloud_project: str = None):
         gsutil_command += f" -u {gcloud_project}"
 
     path = google_storage_path.replace("gs://", "")
+    bucket_name = path.split("/")[0]
     dirname = os.path.dirname(path)
     filename = os.path.basename(path)
     local_dir = os.path.join("/data", dirname)
-    job.command(f"mkdir -p {local_dir}; {gsutil_command} -m cp {google_storage_path} {local_dir}/{filename}")
+    if bucket_name not in _GCSFUSE_MOUNTED_BUCKETS:
+        if use_gcsfuse:
+            local_bucket_dir = os.path.join("/data", bucket_name)
+            job.command(f"mkdir -p {local_bucket_dir}")
+            job.gcsfuse(bucket_name, local_bucket_dir, read_only=True)
+            _GCSFUSE_MOUNTED_BUCKETS.add(bucket_name)
+        else:
+            job.command(f"mkdir -p {local_dir}; {gsutil_command} -m cp {google_storage_path} {local_dir}/{filename}")
+        # TODO raise error on attempts to both mount and copy files from the same bucket
 
     return f"{local_dir}/{filename}"
