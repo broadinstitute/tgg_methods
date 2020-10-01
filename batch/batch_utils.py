@@ -13,6 +13,7 @@ import subprocess
 import hailtop.batch as hb
 from hailtop.batch.job import Job
 
+_GCLOUD_PROJECT = None
 
 class HG38_REF_PATHS:
     fasta = "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta"
@@ -23,6 +24,11 @@ class HG37_REF_PATHS:
     fasta = "gs://gcp-public-data--broad-references/hg19/v0/Homo_sapiens_assembly19.fasta"
     fai = "gs://gcp-public-data--broad-references/hg19/v0/Homo_sapiens_assembly19.fasta.fai"
     dict = "gs://gcp-public-data--broad-references/hg19/v0/Homo_sapiens_assembly19.dict"
+
+
+def set_gcloud_project(gcloud_project):
+    global _GCLOUD_PROJECT
+    _GCLOUD_PROJECT = gcloud_project
 
 
 def init_arg_parser(
@@ -175,9 +181,10 @@ def switch_gcloud_auth_to_user_account(
     batch_job.command(f"rm -rf ~/.config")
     batch_job.command(f"mv /tmp/.config ~/")
     batch_job.command(f"gcloud config set account {gcloud_user_account}")
-    if gcloud_project:
-        batch_job.command(f"gcloud config set project {gcloud_project}")
-    batch_job.command(f"gcloud auth list")
+    if gcloud_project or _GCLOUD_PROJECT:
+        batch_job.command(f"gcloud config set project {gcloud_project or _GCLOUD_PROJECT}")
+
+    batch_job.command(f"gcloud auth list")  # print auth list again to show that 'gcloud config set account' succeeded.
 
 
 class StorageBucketRegionException(Exception):
@@ -199,8 +206,8 @@ def check_storage_bucket_region(google_storage_paths: Union[str, list], gcloud_p
     buckets = set([path.split("/")[2] for path in google_storage_paths])
     for bucket in buckets:
         gsutil_command = f"gsutil"
-        if gcloud_project:
-            gsutil_command += f" -u {gcloud_project}"
+        if gcloud_project or _GCLOUD_PROJECT:
+            gsutil_command += f" -u {gcloud_project or _GCLOUD_PROJECT}"
 
         output = subprocess.check_output(f"{gsutil_command} ls -L -b gs://{bucket}", shell=True, encoding="UTF-8")
         for line in output.split("\n"):
@@ -232,22 +239,25 @@ def localize_file(job, google_storage_path: str, gcloud_project: str = None, use
     """
 
     gsutil_command = f"gsutil"
-    if gcloud_project:
-        gsutil_command += f" -u {gcloud_project}"
+    if gcloud_project or _GCLOUD_PROJECT:
+        gsutil_command += f" -u {gcloud_project or _GCLOUD_PROJECT}"
 
     path = google_storage_path.replace("gs://", "")
-    bucket_name = path.split("/")[0]
     dirname = os.path.dirname(path)
-    filename = os.path.basename(path)
-    local_dir = os.path.join("/data", dirname)
-    if bucket_name not in _GCSFUSE_MOUNTED_BUCKETS:
-        if use_gcsfuse:
-            local_bucket_dir = os.path.join("/data", bucket_name)
+    bucket_name = path.split("/")[0]
+
+    if use_gcsfuse:
+        root_dir = "/gcsfuse_mounts"
+        local_bucket_dir = os.path.join(root_dir, bucket_name)
+        local_file_path = os.path.join(root_dir, path)
+        if bucket_name not in _GCSFUSE_MOUNTED_BUCKETS:
             job.command(f"mkdir -p {local_bucket_dir}")
             job.gcsfuse(bucket_name, local_bucket_dir, read_only=True)
             _GCSFUSE_MOUNTED_BUCKETS.add(bucket_name)
-        else:
-            job.command(f"mkdir -p {local_dir}; {gsutil_command} -m cp {google_storage_path} {local_dir}/{filename}")
-        # TODO raise error on attempts to both mount and copy files from the same bucket
+    else:
+        root_dir = "/localized"
+        local_dir = os.path.join(root_dir, dirname)
+        local_file_path = os.path.join(root_dir, path)
+        job.command(f"mkdir -p {local_dir}; {gsutil_command} -m cp {google_storage_path} {local_file_path}")
 
-    return f"{local_dir}/{filename}"
+    return local_file_path
