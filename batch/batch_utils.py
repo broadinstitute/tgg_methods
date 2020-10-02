@@ -3,8 +3,8 @@ Shared methods for Batch pipelines.
 
 Batch docs:  https://hail.is/docs/batch/api/batch/hailtop.batch.job.Job.html#hailtop.batch.job.Job
 """
-from typing import Union
 
+import collections
 import configargparse
 import contextlib
 import os
@@ -12,6 +12,7 @@ import subprocess
 
 import hailtop.batch as hb
 from hailtop.batch.job import Job
+from typing import Union
 
 _GCLOUD_PROJECT = None
 
@@ -134,7 +135,7 @@ def init_job(
 
         j.storage(f'{disk_size}Gi')
 
-    j.command("set -x")  # shell should print commands before running them - this can be useful for debugging
+    j.command("set -euxo pipefail")  # set bash options for easier debugging and to make command execution more robust
 
     return j
 
@@ -225,7 +226,10 @@ def check_storage_bucket_region(google_storage_paths: Union[str, list], gcloud_p
             print(f"Confirmed gs://{bucket} is in {location}")
 
 
-_GCSFUSE_MOUNTED_BUCKETS = set()  # cache mounted buckets to avoid mounting the same bucket 2x
+# dictionary that maps a job id to the set of buckets that have been gcsfuse-mounted into this job, to avoid mounting
+# the same bucket 2x
+_GCSFUSE_MOUNTED_BUCKETS_PER_JOB = collections.defaultdict(set)
+
 
 def localize_file(job, google_storage_path: str, gcloud_project: str = None, use_gcsfuse: bool = False) -> str:
     """Copies a file from a google bucket to the local filesystem and returns the new absolute local path.
@@ -250,14 +254,17 @@ def localize_file(job, google_storage_path: str, gcloud_project: str = None, use
         root_dir = "/gcsfuse_mounts"
         local_bucket_dir = os.path.join(root_dir, bucket_name)
         local_file_path = os.path.join(root_dir, path)
-        if bucket_name not in _GCSFUSE_MOUNTED_BUCKETS:
+        job_hash = hash(job)
+        if bucket_name not in _GCSFUSE_MOUNTED_BUCKETS_PER_JOB[job_hash]:
             job.command(f"mkdir -p {local_bucket_dir}")
             job.gcsfuse(bucket_name, local_bucket_dir, read_only=True)
-            _GCSFUSE_MOUNTED_BUCKETS.add(bucket_name)
+            _GCSFUSE_MOUNTED_BUCKETS_PER_JOB[job_hash].add(bucket_name)
     else:
         root_dir = "/localized"
         local_dir = os.path.join(root_dir, dirname)
         local_file_path = os.path.join(root_dir, path)
         job.command(f"mkdir -p {local_dir}; {gsutil_command} -m cp {google_storage_path} {local_file_path}")
+
+    job.command(f"ls -lh {local_file_path}")  # make sure file exists
 
     return local_file_path
