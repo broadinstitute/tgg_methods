@@ -23,8 +23,10 @@ OUTPUT_DIR = "gs://rgp-fastq-files-for-illumina"
 
 
 def main():
-    p = batch_utils.init_arg_parser(default_cpu=1, gsa_key_file=os.path.expanduser("~/.config/gcloud/misc-270914-cb9992ec9b25.json"))
+    p = batch_utils.init_arg_parser(default_cpu=8, gsa_key_file=os.path.expanduser("~/.config/gcloud/misc-270914-cb9992ec9b25.json"))
     p.add_argument("-R", "--reference", choices={"37", "38"}, default="38")
+    p.add_argument("--dont-sort", action="store_true", help="The bam/cram needs to be sorted by read name prior to "
+        "fastq conversion. If it's already sorted this way, use this option to skip the sorting step.")
     p.add_argument("tsv_path", help="Table with 1 header line and columns: sample_id, cram_path")
     p.add_argument("sample_id", nargs="*", help="(optional) 1 or more sample_ids to process. If not specified, all rows in the .tsv will be processed.")
     args = p.parse_args()
@@ -62,8 +64,9 @@ def main():
             j.command(f"""gsutil -m -u {GCLOUD_PROJECT} cp {row.cram_path} .""")
             j.command(f"""gsutil -m cp {REF_PATHS.fasta} {REF_PATHS.fai} {REF_PATHS.dict} .""")
 
-            j.command(f"samtools fastq -1 {output_filename_r1} -2 {output_filename_r2} {input_filename}")
-
+            if not args.dont_sort:
+                j.command(f"samtools sort -n -@ {max(1, int(args.cpu))} -m 3G  {input_filename} -o {prefix}.sorted.cram")
+            j.command(f"samtools fastq -1 {output_filename_r1} -2 {output_filename_r2} {prefix}.sorted.cram")
             j.command(f"""gsutil -m cp {output_filename_r1} {output_filename_r2} {OUTPUT_DIR}""")
 
             logger.info(f"Output: {output_filename_r1} {output_filename_r2}")
