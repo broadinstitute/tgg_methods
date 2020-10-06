@@ -263,7 +263,7 @@ def localize_file(job, google_storage_path: str, gcloud_project: str = None, use
         root_dir = "/localized"
         local_dir = os.path.join(root_dir, dirname)
         local_file_path = os.path.join(root_dir, path)
-        job.command(f"mkdir -p {local_dir}; {gsutil_command} -m cp {google_storage_path} {local_file_path}")
+        job.command(f"mkdir -p {local_dir}; time {gsutil_command} -m cp {google_storage_path} {local_file_path}")
 
     job.command(f"ls -lh {local_file_path}")  # make sure file exists
 
