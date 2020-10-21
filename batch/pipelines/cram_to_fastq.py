@@ -28,7 +28,7 @@ def main():
     p.add_argument("--dont-sort", action="store_true", help="The bam/cram needs to be sorted by read name prior to "
         "fastq conversion. If it's already sorted this way, use this option to skip the sorting step.")
     p.add_argument("tsv_path", help="Table with 1 header line and columns: sample_id, cram_path")
-    p.add_argument("sample_id", nargs="*", help="(optional) 1 or more sample_ids to process. If not specified, all rows in the .tsv will be processed.")
+    p.add_argument("sample_id", nargs="*", help="(optional) 1 or more sample_id prefixes to process. If not specified, all rows in the .tsv will be processed.")
     args = p.parse_args()
 
     df = pd.read_table(args.tsv_path)
@@ -38,10 +38,19 @@ def main():
     if not args.force:
         hl.init(log="/dev/null", quiet=True)
 
+    if args.sample_id:
+        missing = 0
+        for sample_id in args.sample_id:
+            if not any(df.sample_id.str.startswith(sample_id)):
+                missing += 1
+                logger.error(f"Couldn't find any matches for {sample_id}")
+        if missing:
+            p.error(f"Couldn't find matches for {missing} of the {len(args.sample_id)} args")
+                
     # process samples
     with batch_utils.run_batch(args, batch_name=f"cram => fastq") as batch:
         for _, row in df.iterrows():
-            if args.sample_id and row.sample_id not in set(args.sample_id):
+            if args.sample_id and not any([row.sample_id.startswith(prefix) for prefix in set(args.sample_id)]):
                 continue
 
             input_filename = os.path.basename(row.cram_path)
