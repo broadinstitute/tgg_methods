@@ -7,7 +7,9 @@ Batch docs:  https://hail.is/docs/batch/api/batch/hailtop.batch.job.Job.html#hai
 import collections
 import configargparse
 import contextlib
+import logging
 import os
+import random
 import subprocess
 
 import hailtop.batch as hb
@@ -83,6 +85,8 @@ def run_batch(args, batch_name=None):
 
     try:
         batch = hb.Batch(backend=backend, name=" ".join(args.batch_name) if args.batch_name else batch_name)
+
+        batch.batch_utils_temp_bucket = args.batch_temp_bucket
 
         yield batch  # returned to with ... as batch:
 
@@ -242,10 +246,6 @@ def localize_file(job, google_storage_path: str, gcloud_project: str = None, use
     :returns: Local file path after localization.
     """
 
-    gsutil_command = f"gsutil"
-    if gcloud_project or _GCLOUD_PROJECT:
-        gsutil_command += f" -u {gcloud_project or _GCLOUD_PROJECT}"
-
     path = google_storage_path.replace("gs://", "")
     dirname = os.path.dirname(path)
     bucket_name = path.split("/")[0]
@@ -260,11 +260,57 @@ def localize_file(job, google_storage_path: str, gcloud_project: str = None, use
             job.gcsfuse(bucket_name, local_bucket_dir, read_only=True)
             _GCSFUSE_MOUNTED_BUCKETS_PER_JOB[job_hash].add(bucket_name)
     else:
+        gsutil_command = f"gsutil"
+        if gcloud_project or _GCLOUD_PROJECT:
+            gsutil_command += f" -u {gcloud_project or _GCLOUD_PROJECT}"
+
         root_dir = "/localized"
         local_dir = os.path.join(root_dir, dirname)
         local_file_path = os.path.join(root_dir, path)
-        job.command(f"mkdir -p {local_dir}; time {gsutil_command} -m cp {google_storage_path} {local_file_path}")
+        job.command(f"mkdir -p '{local_dir}'; time {gsutil_command} -m cp -r '{google_storage_path}' '{local_file_path}'")
 
-    job.command(f"ls -lh {local_file_path}")  # make sure file exists
+    job.command(f"ls -lh '{local_file_path}'")  # make sure file exists
 
     return local_file_path
+
+
+def localize_via_temp_bucket_and_delete_later(job, file_path: str, gcloud_project: str = None, use_gcsfuse: bool = False, temp_bucket: str = None):
+    gsutil_command_prefix = f"gsutil"
+    if gcloud_project or _GCLOUD_PROJECT:
+        gsutil_command_prefix += f" -u {gcloud_project or _GCLOUD_PROJECT}"
+
+    batch = job._batch
+    batch_id = getattr(batch, "batch_utils_batch_id", random.randint(10**8, 10**9))
+    batch.batch_utils_batch_id = batch_id
+
+    temp_bucket = temp_bucket if temp_bucket else getattr(batch, "batch_utils_temp_bucket", None)
+    if not temp_bucket:
+        raise ValueError("temp bucket not specified.")
+
+    filename = os.path.basename(file_path)
+    temp_file_path = f"gs://{temp_bucket}/{batch_id}/{filename}"
+    job.command(f"{gsutil_command_prefix} -m cp -r {file_path} gs://{temp_bucket}/{batch_id}/{temp_file_path}")
+
+    # temp file cleanup job
+    cleanup_job = init_job(batch, f"{job.name} cleanup", job._image, cpu=0.25)
+    cleanup_job.always_run()
+    cleanup_job.command(f"gsutil -m rm -r {temp_file_path}")
+
+    return localize_file(job, temp_file_path, gcloud_project=gcloud_project, use_gcsfuse=use_gcsfuse)
+
+
+def generate_path_to_file_size_dict(glob):
+    """Runs "gsutil ls -l {glob}" and returns a dictionary that maps the gs:// file paths to
+    their size in bytes. This appears to be faster than using hl.hadoop_ls.
+    """
+    logging.info(f"Listing {glob}")
+    gsutil_output = subprocess.check_output(
+        f"gsutil -m ls -l {glob}",
+        shell=True,
+        encoding="UTF-8")
+
+    records = [r.strip().split("  ") for r in gsutil_output.strip().split("\n") if not r.startswith("TOTAL: ")]
+    return {r[2]: int(r[0]) for r in records}  # map path to size in bytes
+
+
+
