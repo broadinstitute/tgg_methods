@@ -191,6 +191,9 @@ def switch_gcloud_auth_to_user_account(
 
     batch_job.command(f"gcloud auth list")  # print auth list again to show that 'gcloud config set account' succeeded.
 
+    # attach credentials to batch_job object
+    batch_job._batch_utils_gs_path_of_gcloud_credentials = gs_path_of_gcloud_credentials
+    batch_job._batch_utils_gcloud_user_account = gcloud_user_account
 
 class StorageBucketRegionException(Exception):
     pass
@@ -274,34 +277,70 @@ def localize_file(job, google_storage_path: str, gcloud_project: str = None, use
     return local_file_path
 
 
-def localize_via_temp_bucket_and_delete_later(job, file_path: str, gcloud_project: str = None, use_gcsfuse: bool = False, temp_bucket: str = None):
+def localize_via_temp_bucket(
+    job,
+    google_storage_path: str,
+    gcloud_project: str = None,
+    temp_bucket: str = None,
+    gs_path_of_gcloud_credentials: str = None,
+    gcloud_user_account: str = None,
+):
+    """This method provides a work-around to allow using gcs_fuse on a bucket where you can't grant read access to the
+    Batch service account. It works by
+    1. copying the file to a temp bucket that you control (and where you have granted read access to the Batch service account)
+    2. localizing that file to your job using gcs_fuse
+    3. deleting the temp copy created in step 1
+
+    Requires gsutil to exist inside the docker container.
+
+    :param job: batch Job object
+    :param google_storage_path: gs:// path of file to localize
+    :param gcloud_project: (optional) if specified, it will be added to the gsutil command with the -u arg.
+    :param use_gcsfuse: instead of copying the file, use gcsfuse to mount the bucket containing this file.
+    :param temp_bucket: (optional) temp bucket to use.
+    :param gs_path_of_gcloud_credentials: (not needed if switch_gcloud_auth_to_user_account was called on job)
+        this arg will be forwarded to switch_gcloud_auth_to_user_account (see that method for more details)
+    :param gcloud_user_account: (not needed if switch_gcloud_auth_to_user_account was called on job)
+        this arg will be forwarded to switch_gcloud_auth_to_user_account (see that method for more details)
+    :returns: Local file path after localization.
+    """
     gsutil_command_prefix = f"gsutil"
     if gcloud_project or _GCLOUD_PROJECT:
         gsutil_command_prefix += f" -u {gcloud_project or _GCLOUD_PROJECT}"
 
     batch = job._batch
-    batch_id = getattr(batch, "batch_utils_batch_id", random.randint(10**8, 10**9))
-    batch.batch_utils_batch_id = batch_id
+    batch_id = getattr(batch, "_batch_utils_batch_id", random.randint(10**8, 10**9))
+    batch._batch_utils_batch_id = batch_id
 
-    temp_bucket = temp_bucket if temp_bucket else getattr(batch, "batch_utils_temp_bucket", None)
+    temp_bucket = temp_bucket or getattr(batch, "batch_utils_temp_bucket", None)
     if not temp_bucket:
         raise ValueError("temp bucket not specified.")
 
-    filename = os.path.basename(file_path)
-    temp_file_path = f"gs://{temp_bucket}/{batch_id}/{filename}"
-    job.command(f"{gsutil_command_prefix} -m cp -r {file_path} gs://{temp_bucket}/{batch_id}/{temp_file_path}")
+    temp_file_path = f"gs://{temp_bucket}/batch_{batch_id}/" + google_storage_path.replace("gs://", "")
+    job.command(f"{gsutil_command_prefix} -m cp -r {google_storage_path} {temp_file_path}")
 
     # temp file cleanup job
-    cleanup_job = init_job(batch, f"{job.name} cleanup", job._image, cpu=0.25)
+    cleanup_job_name = f"{job.name} cleanup {os.path.basename(temp_file_path)}"
+    cleanup_job = init_job(batch, cleanup_job_name, job._image, cpu=0.25)
     cleanup_job.always_run()
-    cleanup_job.command(f"gsutil -m rm -r {temp_file_path}")
 
-    return localize_file(job, temp_file_path, gcloud_project=gcloud_project, use_gcsfuse=use_gcsfuse)
+    gs_path_of_gcloud_credentials = gs_path_of_gcloud_credentials or getattr(job, "_batch_utils_gs_path_of_gcloud_credentials", None)
+    gcloud_user_account = gcloud_user_account or getattr(job, "_batch_utils_gcloud_user_account", None)
+    if not gs_path_of_gcloud_credentials:
+        raise ValueError("gs_path_of_gcloud_credentials not specified")
+    if not gcloud_user_account:
+        raise ValueError("gcloud_user_account not specified")
+    switch_gcloud_auth_to_user_account(cleanup_job, gs_path_of_gcloud_credentials, gcloud_user_account)
+
+    cleanup_job.command(f"gsutil -m rm -r {temp_file_path}")
+    cleanup_job.depends_on(job)
+
+    return localize_file(job, temp_file_path, gcloud_project=gcloud_project, use_gcsfuse=True)
 
 
 def generate_path_to_file_size_dict(glob):
-    """Runs "gsutil ls -l {glob}" and returns a dictionary that maps the gs:// file paths to
-    their size in bytes. This appears to be faster than using hl.hadoop_ls.
+    """Runs "gsutil ls -l {glob}" and returns a dictionary that maps each gs:// file to
+    its size in bytes. This appears to be faster than running hl.hadoop_ls(..).
     """
     logging.info(f"Listing {glob}")
     gsutil_output = subprocess.check_output(
