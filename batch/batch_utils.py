@@ -343,10 +343,17 @@ def generate_path_to_file_size_dict(glob):
     its size in bytes. This appears to be faster than running hl.hadoop_ls(..).
     """
     logging.info(f"Listing {glob}")
-    gsutil_output = subprocess.check_output(
-        f"gsutil -m ls -l {glob}",
-        shell=True,
-        encoding="UTF-8")
+    try:
+        gsutil_output = subprocess.check_output(
+            f"gsutil -m ls -l {glob}",
+            shell=True,
+            stderr=subprocess.STDOUT,
+            encoding="UTF-8")
+    except subprocess.CalledProcessError as e:
+        if "One or more URLs matched no objects." in e.output:
+            return {}
+        else:
+            raise e
 
     records = [r.strip().split("  ") for r in gsutil_output.strip().split("\n") if not r.startswith("TOTAL: ")]
     return {r[2]: int(r[0]) for r in records}  # map path to size in bytes
