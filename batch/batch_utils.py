@@ -9,7 +9,6 @@ import configargparse
 import contextlib
 import logging
 import os
-import random
 import subprocess
 
 import hailtop.batch as hb
@@ -277,6 +276,11 @@ def localize_file(job, google_storage_path: str, gcloud_project: str = None, use
     return local_file_path
 
 
+# dictionary that maps a job id to the set of paths that have been localized via temp buckets. This avoids localizing
+# the same path 2x and creating a race condition for deletion of this path from the temp bucket.
+_PATHS_LOCALIZED_VIA_TEMP_BUCKET_PER_JOB = collections.defaultdict(set)
+
+
 def localize_via_temp_bucket(
     job,
     google_storage_path: str,
@@ -308,20 +312,25 @@ def localize_via_temp_bucket(
     if gcloud_project or _GCLOUD_PROJECT:
         gsutil_command_prefix += f" -u {gcloud_project or _GCLOUD_PROJECT}"
 
-    batch = job._batch
-    batch_id = getattr(batch, "_batch_utils_batch_id", random.randint(10**8, 10**9))
-    batch._batch_utils_batch_id = batch_id
+    batch = job._batch  # the _batch attribute is set within Batch when the Job object is created.
+    batch_id = abs(hash(batch)) % 10**9
+    job_id = abs(hash(job)) % 10**9
 
     temp_bucket = temp_bucket or getattr(batch, "batch_utils_temp_bucket", None)
     if not temp_bucket:
         raise ValueError("temp bucket not specified.")
 
-    temp_file_path = f"gs://{temp_bucket}/batch_{batch_id}/" + google_storage_path.replace("gs://", "")
+    temp_file_path = f"gs://{temp_bucket}/batch_{batch_id}/job_{job_id}/" + google_storage_path.replace("gs://", "")
+
+    if temp_file_path in _PATHS_LOCALIZED_VIA_TEMP_BUCKET_PER_JOB[job_id]:
+        raise ValueError(f"{google_storage_path} has already been localized via temp bucket.")
+    _PATHS_LOCALIZED_VIA_TEMP_BUCKET_PER_JOB[job_id].add(temp_file_path)
+
     job.command(f"{gsutil_command_prefix} -m cp -r {google_storage_path} {temp_file_path}")
 
     # temp file cleanup job
     cleanup_job_name = f"{job.name} cleanup {os.path.basename(temp_file_path)}"
-    cleanup_job = init_job(batch, cleanup_job_name, job._image, cpu=0.25)
+    cleanup_job = init_job(batch, cleanup_job_name, job._image, cpu=0.25, memory=0.25*3.75)
     cleanup_job.always_run()
 
     gs_path_of_gcloud_credentials = gs_path_of_gcloud_credentials or getattr(job, "_batch_utils_gs_path_of_gcloud_credentials", None)
