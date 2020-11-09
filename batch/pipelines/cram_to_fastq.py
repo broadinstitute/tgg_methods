@@ -46,7 +46,7 @@ def main():
                 logger.error(f"Couldn't find any matches for {sample_id}")
         if missing:
             p.error(f"Couldn't find matches for {missing} of the {len(args.sample_id)} args")
-                
+
     # process samples
     with batch_utils.run_batch(args, batch_name=f"cram => fastq") as batch:
         for _, row in df.iterrows():
@@ -68,14 +68,18 @@ def main():
             j = batch_utils.init_job(batch, f"cram => fastq: {row.sample_id}", DOCKER_IMAGE if not args.raw else None, args.cpu, args.memory)
             batch_utils.switch_gcloud_auth_to_user_account(j, GCLOUD_CREDENTIALS_LOCATION, GCLOUD_USER_ACCOUNT, GCLOUD_PROJECT)
 
-            # copy inputs
-            REF_PATHS = batch_utils.HG38_REF_PATHS if args.reference == "38" else batch_utils.HG37_REF_PATHS
-            j.command(f"""gsutil -m -u {GCLOUD_PROJECT} cp {row.cram_path} .""")
-            j.command(f"""gsutil -m cp {REF_PATHS.fasta} {REF_PATHS.fai} {REF_PATHS.dict} .""")
+            # localize inputs
+            #REF_PATHS = batch_utils.HG38_REF_PATHS if args.reference == "38" else batch_utils.HG37_REF_PATHS
+            #local_fasta = batch_utils.localize_file(j, REF_PATHS.fasta, use_gcsfuse=True)
+            #local_fasta_fai = batch_utils.localize_file(j, REF_PATHS.fai, use_gcsfuse=True)
+            #local_fasta_dict = batch_utils.localize_file(j, REF_PATHS.dict, use_gcsfuse=True)
+
+            local_cram = batch_utils.localize_via_temp_bucket(j, row.cram_path)
 
             if not args.dont_sort:
-                j.command(f"samtools sort -n -@ {max(1, int(args.cpu))} -m 3G  {input_filename} -o {prefix}.sorted.cram")
-            j.command(f"samtools fastq -1 {output_filename_r1} -2 {output_filename_r2} {prefix}.sorted.cram")
+                j.command(f"samtools sort -n -@ {max(1, int(args.cpu))} -m 3G  {local_cram} -o {prefix}.sorted.cram")
+                local_cram = f"{prefix}.sorted.cram"
+            j.command(f"samtools fastq -1 {output_filename_r1} -2 {output_filename_r2} {local_cram}")
             j.command(f"""gsutil -m cp {output_filename_r1} {output_filename_r2} {OUTPUT_DIR}""")
 
             logger.info(f"Output: {output_filename_r1} {output_filename_r2}")
