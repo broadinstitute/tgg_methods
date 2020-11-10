@@ -7,6 +7,7 @@ Batch docs:  https://hail.is/docs/batch/api/batch/hailtop.batch.job.Job.html#hai
 import collections
 import configargparse
 import contextlib
+import itertools
 import logging
 import os
 import subprocess
@@ -52,7 +53,6 @@ def init_arg_parser(
         "key file. If provided, Batch will mount this file into the docker image so gcloud commands can run as this service account.")
     parser.add_argument("--batch-billing-project", default=default_billing_project, help="Batch: this billing project will be "
         "charged when running jobs on the Batch cluster. To set up a billing project name, contact the hail team.")
-    parser.add_argument("--batch-name", nargs="+", help="Batch: label for the current Batch run")
     parser.add_argument("--batch-temp-bucket", default=default_temp_bucket, help="Batch: bucket where it stores temp "
         "files. The batch service-account must have Admin permissions for this bucket. These can be added by running "
         "gsutil iam ch serviceAccount:[SERVICE_ACCOUNT_NAME]:objectAdmin gs://[BUCKET_NAME]")
@@ -83,7 +83,7 @@ def run_batch(args, batch_name=None):
         backend = hb.ServiceBackend(billing_project=args.batch_billing_project, bucket=args.batch_temp_bucket)
 
     try:
-        batch = hb.Batch(backend=backend, name=" ".join(args.batch_name) if args.batch_name else batch_name)
+        batch = hb.Batch(backend=backend, name=batch_name)
 
         batch.batch_utils_temp_bucket = args.batch_temp_bucket
 
@@ -368,4 +368,52 @@ def generate_path_to_file_size_dict(glob):
     return {r[2]: int(r[0]) for r in records}  # map path to size in bytes
 
 
+def batch_iter(iterable, batch_size=1):
+    """Takes a list, set, tuple or any other iterable and breaks it up into batches.
+
+    Args:
+        iterable: a list, tuple or any other object that can be looped over
+        batch_size (int): size of batches to return
+
+    Yields:
+         batches of size 'batch_size'.
+    """
+
+    if batch_size < 1:
+        raise ValueError(f"batch_size={{batch_size}}. It needs to be a positive integer.")
+
+    it = iter(iterable)
+    while True:
+        batch = tuple(itertools.islice(it, batch_size))
+        if not batch:
+            break
+        yield batch
+
+
+_PREV_MEMORY_BYTES = 0
+
+
+def print_memory_stats(message="", run_gc=False):
+    """Prints current memory usage, as well as change in usage since this method was last called.
+
+    Args:
+        message (str): Print this message along with the memory usage.
+        run_gc (bool): If True, calls gc.collect() before printing memory use.
+    """
+    import gc
+    import psutil
+
+    global _PREV_MEMORY_BYTES
+    if message:
+        message = " - " + message
+
+    if run_gc:
+        gc.collect()
+
+    memory_bytes = psutil.Process(os.getpid()).memory_info().rss
+
+    logging.info(
+        f"memory used {message}: {memory_bytes//10**6} Mb    delta: {(memory_bytes - _PREV_MEMORY_BYTES)//10**6} Mb")
+
+    _PREV_MEMORY_BYTES = memory_bytes
 
