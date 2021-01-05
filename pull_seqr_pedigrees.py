@@ -20,9 +20,11 @@ def pull_project_peds(email: str, projects: set):
     :param projects:  set of seqr project GUIDs
     """
     with requests.Session() as s:
+        s.get("https://seqr.broadinstitute.org") # Intialize session
         p = s.post(
             "https://seqr.broadinstitute.org/api/login",
             json={"email": email, "password": getpass.getpass(),},
+            cookies=s.cookies, headers={'x-csrftoken': s.cookies.get('csrf_token')}
         )
         with open("seqr_pedigrees.txt", "w") as final_ped, open("projects_not_pulled.txt", "w") as errors:
             final_ped.write(
