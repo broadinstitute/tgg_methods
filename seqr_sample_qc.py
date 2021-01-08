@@ -7,7 +7,8 @@ import hail.expr.aggregators as agg
 from gnomad.sample_qc.pipeline import get_qc_mt
 from gnomad.sample_qc.platform import compute_callrate_mt, run_platform_pca, assign_platform_from_pcs
 from gnomad.sample_qc.ancestry import pc_project, assign_population_pcs
-from gnomad.sample_qc.filtering import add_filters_expr, compute_stratified_metrics_filter, filter_to_autosomes
+from gnomad.sample_qc.filtering import compute_stratified_metrics_filter
+from gnomad.utils.filtering import add_filters_expr, filter_to_autosomes
 from gnomad.utils.slack import slack_notifications
 
 from gnomad_qc.v2.resources.basics import evaluation_intervals_path
