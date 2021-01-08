@@ -258,11 +258,12 @@ def main(args):
     version = args.callset_version
     is_test = args.is_test
     overwrite = args.overwrite
+    sharded = args.sharded
 
     logger.info("Importing callset...")
     if not args.skip_write_mt:
         logger.info("Converting vcf to MatrixTable...")
-        vcf = callset_vcf_path(build, data_type, data_source, version, is_test)
+        vcf = callset_vcf_path(build, data_type, data_source, version, sharded)
         hl.import_vcf(vcf, force_bgz=True, reference_genome=f'GRCh{build}',
                       min_partitions=4).write(mt_path(build, data_type, data_source, version, is_test), overwrite=True)
     mt = hl.read_matrix_table(mt_path(build, data_type, data_source, version, is_test))
@@ -326,6 +327,7 @@ if __name__ == '__main__':
     parser.add_argument('--data-source', help="Data source (Internal or External)", choices=["Internal", "External"], required=True)
     parser.add_argument('--is-test', help='To run a test of the pipeline using test files and directories',
                         action='store_true')
+    parser.add_argument('--sharded', help='Callset VCF is sharded', action='store_true')
     parser.add_argument('--callrate-low-threshold', help="Lower threshold at which to flag samples for low callrate", default=0.85)
     parser.add_argument('--contam-up-threshold', help="Upper threshold at which to flag samples for elevated contamination", default=5)
     parser.add_argument('--chimera-up-threshold', help="Upper threshold at which to flag samples for elevated chimera", default=5)
