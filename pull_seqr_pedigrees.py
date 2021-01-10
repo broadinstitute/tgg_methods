@@ -10,6 +10,7 @@ logging.basicConfig(
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+SEQR_URL = "https://seqr.broadinstitute.org"
 
 def pull_project_peds(email: str, projects: set):
     """
@@ -20,10 +21,13 @@ def pull_project_peds(email: str, projects: set):
     :param projects:  set of seqr project GUIDs
     """
     with requests.Session() as s:
-        p = s.post(
-            "https://seqr.broadinstitute.org/api/login",
+        s.get(SEQR_URL) # Intialize session
+        resp = s.post(
+            f"{SEQR_URL}/api/login",
             json={"email": email, "password": getpass.getpass(),},
+            cookies=s.cookies, headers={'x-csrftoken': s.cookies.get('csrf_token'), 'referer': SEQR_URL}
         )
+        resp.raise_for_status()
         with open("seqr_pedigrees.txt", "w") as final_ped, open("projects_not_pulled.txt", "w") as errors:
             final_ped.write(
                 "Project_GUID\tFamily_ID\tIndividual_ID\tPaternal_ID\tMaternal_ID\tSex\n"
@@ -31,7 +35,7 @@ def pull_project_peds(email: str, projects: set):
             for project_guid in projects:
                 project_guid = project_guid.rstrip()
                 r = s.get(
-                    f"https://seqr.broadinstitute.org/api/project/{project_guid}/details"
+                    f"{SEQR_URL}/api/project/{project_guid}/details"
                 )
 
                 if r.status_code != requests.codes["ok"]:
