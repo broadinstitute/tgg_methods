@@ -329,7 +329,7 @@ def localize_via_temp_bucket(
     job.command(f"{gsutil_command_prefix} -m cp -r {google_storage_path} {temp_file_path}")
 
     # temp file cleanup job
-    cleanup_job_name = f"{job.name} cleanup {os.path.basename(temp_file_path)}"
+    cleanup_job_name = (f"{job.name} " if job.name else "") + f"cleanup {os.path.basename(temp_file_path)}"
     cleanup_job = init_job(batch, cleanup_job_name, job._image, cpu=0.25, memory=0.25*3.75)
     cleanup_job.always_run()
 
