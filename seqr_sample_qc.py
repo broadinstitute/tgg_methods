@@ -168,7 +168,7 @@ def get_all_sample_metadata(
     logger.info("Importing and annotating seqr ID names...")
     remap_ht = hl.import_table(
         remap_path(build, data_type, data_source, version), impute=True
-    ).key_by("vcf_id")
+    ).key_by("s")
     meta_ht = meta_ht.annotate(**remap_ht[meta_ht.key])
     meta_ht = meta_ht.annotate(
         seqr_id=hl.if_else(
