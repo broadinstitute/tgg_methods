@@ -20,7 +20,7 @@ def pull_project_peds(session_id: str, projects: set):
     :param projects:  set of seqr project GUIDs
     """
     with requests.Session() as s:
-        s.get(SEQR_URL) # Intialize session
+        # Initialize session with authenticated cookie
         s.cookies.set_cookie(requests.cookies.create_cookie('sessionid', session_id))
 
         with open("seqr_pedigrees.txt", "w") as final_ped, open("projects_not_pulled.txt", "w") as errors:
