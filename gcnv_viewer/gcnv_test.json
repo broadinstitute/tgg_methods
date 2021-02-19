@@ -130,6 +130,15 @@
                      "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v3/beds/cluster_10.bed.gz"
                   }
                ]
+            },
+            {
+               "name": "cluster_12",
+               "data": [
+                  {
+                     "type": "gcnv_bed",
+                     "url": "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v3/beds/cluster_12.bed.gz"
+                  }
+               ]
             }
          ]
       }
