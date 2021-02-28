@@ -104,51 +104,58 @@ for cluster_name, paths in sorted(grouped_gcnv_cluster_to_sample_bed_paths.items
     #    cluster_df = None
     #    for path in tqdm.tqdm(paths[i*250:(i+1)*250], unit=" paths"):
     cluster_bed_bucket_path = f"gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v3/beds/{cluster_name}.bed.gz"
-    if hl.hadoop_is_file(cluster_bed_bucket_path):
+    if hl.hadoop_is_file(f"{cluster_bed_bucket_path}.tbi"):
         print(f"{cluster_bed_bucket_path} already exists. Skipping..")
         continue
 
     cluster_df = None
     paths.sort(key=lambda path: os.path.basename(path))
     for path in tqdm.tqdm(paths, unit=" paths"):
-            sample_name = os.path.basename(path).replace("denoised_copy_ratios-", "")
-            sample_name = re.sub(".tsv$", "", sample_name)
+        sample_name = os.path.basename(path).replace("denoised_copy_ratios-", "")
+        sample_name = re.sub(".tsv$", "", sample_name)
 
-            column_name = sample_name
-            if cluster_df is not None:
-                while column_name in set(cluster_df.columns):
-                    print(f"WARNING: Duplicate sample name: {column_name}  {path}")
-                    column_name += "_2"
+        column_name = sample_name
+        if cluster_df is not None:
+            while column_name in set(cluster_df.columns):
+                print(f"WARNING: Duplicate sample name: {column_name}  {path}")
+                column_name += "_2"
 
-            with hl.hadoop_open(path) as f:
-                # skip header
-                while next(f).startswith("@"):
-                    continue
+        with hl.hadoop_open(path) as f:
+            # skip header
+            while next(f).startswith("@"):
+                continue
 
-                # read table
-                df = pd.read_table(f, names=["chr", "start", "end", column_name]).set_index(["chr", "start", "end"])
-                df = df.round({column_name: 2})
+            # read table
+            df = pd.read_table(f, names=["chr", "start", "end", column_name]).set_index(["chr", "start", "end"])
+            df = df.round({column_name: 2})
 
-            if cluster_df is None:
-                cluster_df = df
-            else:
-                df_length = len(df)
-                if len(cluster_df) != df_length:
-                    raise ValueError(f"Table {path} has {df_length} rows instead of the expected {len(cluster_df)}")
+        if cluster_df is None:
+            cluster_df = df
+        else:
+            df_length = len(df)
+            cluster_df_length = len(cluster_df)
+            if cluster_df_length != df_length:
+                print(f"ERROR: Table {path} has {df_length} rows instead of the expected {len(cluster_df)}")
+                print(f"Chroms unique to new .tsv: {set(df.reset_index().chr) - set(cluster_df.reset_index().chr)}")
+                print(f"Chroms unique to previous .tsvs: {set(cluster_df.reset_index().chr) - set(df.reset_index().chr)}")
+                print(f"Will left-join the new .tsv to previous .tsvs anyway...")
 
-                cluster_df = cluster_df.join(df, how="outer")
-                if len(cluster_df) != df_length:
-                    raise ValueError(f"Outer join with {path} resulted in {len(cluster_df)} rows instead of the expected {df_length}")
+            cluster_df = cluster_df.join(df, how="left")
+            if len(cluster_df) != cluster_df_length:
+                print(f"ERROR: Left join with {path} resulted in the number of rows in the combined table changing from {cluster_df_length} before the join to {len(cluster_df)}. Need to investigate if this is ok...")
+                print("Skipping {cluster_name}...")
+                break
 
             #if len(cluster_df.columns) > 5:
             #    break
-
-    print(f"Writing to {cluster_name}.bed.gz")
-    cluster_df.reset_index().to_csv(f"{cluster_name}.temp.bed.gz", header=True, index=False, sep="\t", compression="gzip")
-    cluster_df = None
-    run(f"gunzip -c {cluster_name}.temp.bed.gz | bgzip > {cluster_name}.bed.gz")
-    run(f"rm {cluster_name}.temp.bed.gz")
-    run(f"tabix -f -S 1 -s 1 -b 2 -e 3 {cluster_name}.bed.gz")
-    run(f"gsutil -m cp {cluster_name}.bed.gz {cluster_bed_bucket_path}")
-    run(f"gsutil -m cp {cluster_name}.bed.gz.tbi {cluster_bed_bucket_path}.tbi")
-    run(f"rm {cluster_name}.bed.gz {cluster_name}.bed.gz.tbi")
+    else:
+        # if no errors resulted in 'break', write out the file
+        print(f"Writing to {cluster_name}.bed.gz")
+        cluster_df.reset_index().to_csv(f"{cluster_name}.temp.bed.gz", header=True, index=False, sep="\t", compression="gzip")
+        cluster_df = None
+        run(f"gunzip -c {cluster_name}.temp.bed.gz | bgzip > {cluster_name}.bed.gz")
+        run(f"rm {cluster_name}.temp.bed.gz")
+        run(f"tabix -f -S 1 -s 1 -b 2 -e 3 {cluster_name}.bed.gz")
+        run(f"gsutil -m cp {cluster_name}.bed.gz {cluster_bed_bucket_path}")
+        run(f"gsutil -m cp {cluster_name}.bed.gz.tbi {cluster_bed_bucket_path}.tbi")
+        run(f"rm {cluster_name}.bed.gz {cluster_name}.bed.gz.tbi")
