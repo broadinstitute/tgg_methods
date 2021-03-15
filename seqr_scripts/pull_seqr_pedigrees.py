@@ -1,5 +1,4 @@
 import argparse
-import getpass
 import logging
 
 import requests
@@ -12,22 +11,18 @@ logger.setLevel(logging.INFO)
 
 SEQR_URL = "https://seqr.broadinstitute.org"
 
-def pull_project_peds(email: str, projects: set):
+def pull_project_peds(session_id: str, projects: set):
     """
     Uses the seqr API to retrieve a list of projects' pedigrees. Writes a single pedigree,
     'seqr_pedigrees.txt', using the retrieved pedigrees. Failing projects are written
     to 'projects_not_pulled.txt'
-    :param email: email used for seqr login
+    :param session_id: sessionid cookie used for seqr login
     :param projects:  set of seqr project GUIDs
     """
     with requests.Session() as s:
-        s.get(SEQR_URL) # Intialize session
-        resp = s.post(
-            f"{SEQR_URL}/api/login",
-            json={"email": email, "password": getpass.getpass(),},
-            cookies=s.cookies, headers={'x-csrftoken': s.cookies.get('csrf_token'), 'referer': SEQR_URL}
-        )
-        resp.raise_for_status()
+        # Initialize session with authenticated cookie
+        s.cookies.set_cookie(requests.cookies.create_cookie('sessionid', session_id))
+
         with open("seqr_pedigrees.txt", "w") as final_ped, open("projects_not_pulled.txt", "w") as errors:
             final_ped.write(
                 "Project_GUID\tFamily_ID\tIndividual_ID\tPaternal_ID\tMaternal_ID\tSex\n"
@@ -68,7 +63,7 @@ def pull_project_peds(email: str, projects: set):
 
 
 def main(args):
-    email = args.email
+    session_id = args.session_id
     projects = set([])
 
     with open(args.projects, "r") as project_list:
@@ -78,12 +73,12 @@ def main(args):
             logger.info(f"{project_guid}")
             projects.add(project_guid)
 
-    pull_project_peds(email, projects)
+    pull_project_peds(session_id, projects)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e", "--email", help="Email used for seqr login", required=True)
+    parser.add_argument("-s", "--session-id", help="Session ID cookie retrieved from a logged in seqr session", required=True)
     parser.add_argument(
         "-p",
         "--projects",
