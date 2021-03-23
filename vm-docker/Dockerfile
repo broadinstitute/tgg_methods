@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcurl4-openssl-dev \
     liblzma-dev \
     libncurses5-dev \
+    man-db
     pkg-config \
     python3-venv \
     software-properties-common \
