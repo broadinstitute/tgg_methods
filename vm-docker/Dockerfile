@@ -6,7 +6,6 @@ FROM 'google/cloud-sdk:slim'
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-utils \
-    default-jdk \
     g++ \
     less \
     libbz2-dev \
@@ -129,10 +128,10 @@ RUN apt-get install -y \
     r-base=${R_VERSION} \
     r-base-dev=${R_VERSION} 
 
-ENV BED_TOOLS_VERSION="2.29.0"
-RUN wget https://github.com/arq5x/bedtools2/releases/download/v${BED_TOOLS_VERSION}/bedtools-${BED_TOOLS_VERSION}.tar.gz \
-	&& tar xzf bedtools-${BED_TOOLS_VERSION}.tar.gz \
-	&& rm bedtools-${BED_TOOLS_VERSION}.tar.gz \
+ENV BEDTOOLS_VERSION="2.29.0"
+RUN wget https://github.com/arq5x/bedtools2/releases/download/v${BEDTOOLS_VERSION}/bedtools-${BEDTOOLS_VERSION}.tar.gz \
+	&& tar xzf bedtools-${BEDTOOLS_VERSION}.tar.gz \
+	&& rm bedtools-${BEDTOOLS_VERSION}.tar.gz \
 	&& cd bedtools2 \
 	&& make \
 	&& make install \
