@@ -1,4 +1,5 @@
 import base64
+import datetime
 import json
 import pandas as pd
 import requests
@@ -112,3 +113,7 @@ if __name__ == "__main__":
 
     df = get_omim_table()
     print(df)
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d")
+    output_path = f"omim_{timestamp}.tsv"
+    df.to_csv(output_path, sep="\t", index=False, header=True)
+    print(f"Wrote {len(df)} records to {output_path}")
