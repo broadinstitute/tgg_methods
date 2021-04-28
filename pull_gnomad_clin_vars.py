@@ -84,6 +84,7 @@ def consequence_filter(ht: hl.Table, csq_terms: set, genes: set) -> hl.Table:
         ),
     )
     ht = ht.filter(ht.lof == "HC")
+    ht = ht.filter(ht.filters.contains("AC0") | ht.filters.contains("RF"), keep=False)
     return ht
 
 
@@ -116,7 +117,9 @@ def filter_variant_summary_to_genes(ht, genes, assembly):
     :rtype: Table
     """
     gene_names = hl.literal(genes)
-    ht = ht.filter((ht.Chromosome == "17") & (ht.Start == "83920497"), keep=False) # Weird locus in clinvar table
+    ht = ht.filter(
+        (ht.Chromosome == "17") & (ht.Start == "83920497"), keep=False
+    )  # Weird locus in clinvar table
     ht = ht.filter(ht.Assembly == assembly)
     ht = ht.annotate(
         gene_of_interest=gene_names.find(lambda x: ht.GeneSymbol.split(";").contains(x))
@@ -233,7 +236,10 @@ def gnomad_an_dict(ht, all_pops) -> hl.dict:
 
 def gnomad_af_dict(ht, all_pops) -> hl.dict:
     return {
-        gnomad_pop_expr(pop, "AF"): hl.if_else(ht[f'{gnomad_pop_expr(pop,"AN")}']==0, 0, ht[f'{gnomad_pop_expr(pop,"AC")}'] / ht[f'{gnomad_pop_expr(pop,"AN")}']
+        gnomad_pop_expr(pop, "AF"): hl.if_else(
+            ht[f'{gnomad_pop_expr(pop,"AN")}'] == 0,
+            0,
+            ht[f'{gnomad_pop_expr(pop,"AC")}'] / ht[f'{gnomad_pop_expr(pop,"AN")}'],
         )
         for pop in all_pops
     }
@@ -417,7 +423,9 @@ def main(args):
     g_ht = annotate_ht_w_all_data(
         g_ht, clinvar_ht, hgmd_ht, output_path, "genomes", genes
     )
-    print(f"Pre-union exome variants: {e_ht.count()}. Pre-union genome variants: {g_ht.count()}")
+    print(
+        f"Pre-union exome variants: {e_ht.count()}. Pre-union genome variants: {g_ht.count()}"
+    )
 
     ht = e_ht.union(g_ht, unify=True)
     ht = ht.key_by(
@@ -577,7 +585,13 @@ def main(args):
         )
 
     ht = ht.filter(
-        (hl.is_defined(ht.ClinicalSignificance) & (ht.canonical==1)) | (hl.is_defined(ht.hgmd_sig) & (ht.canonical==1)) | hl.is_defined(ht.csq_term)
+        ht.canonical
+        == 1
+        & (
+            hl.is_defined(ht.ClinicalSignificance)
+            | hl.is_defined(ht.hgmd_sig)
+            | hl.is_defined(ht.csq_term)
+        )
     )
     ht = ht.checkpoint(
         f"{output_path}{hl.eval(hl.delimit(genes,delimiter='_'))}_final_export_w_freqs.ht",
