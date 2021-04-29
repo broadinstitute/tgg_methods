@@ -71,11 +71,13 @@ def consequence_filter(ht: hl.Table, csq_terms: set, genes: set) -> hl.Table:
     """
     csq_terms = hl.literal(csq_terms)
     genes = hl.literal(genes)
-    ht = ht.explode(ht.vep.transcript_consequences)
     ht = ht.explode(ht.vep.transcript_consequences.consequence_terms)
     ht = ht.filter(
         (csq_terms.contains(ht.vep.transcript_consequences.consequence_terms))
-        & (genes.contains(ht.vep.transcript_consequences.gene_symbol))
+        & (
+            genes.contains(ht.vep.transcript_consequences.gene_symbol)
+            & (ht.vep.transcript_consequences.canonical == 1)
+        )
     )
     ht = ht.annotate(
         lof=ht.vep.transcript_consequences.lof,
@@ -103,8 +105,8 @@ def filter_export_to_gene_list(ht, genes):
             lambda x: ht.vep.transcript_consequences.gene_symbol == x
         )
     )
-    ht.vep.transcript_consequences.gene_symbol.show()
     ht = ht.filter(hl.is_defined(ht.gene_of_interest))
+    ht.vep.transcript_consequences.gene_symbol.show()
     return ht
 
 
@@ -136,8 +138,7 @@ def filter_clinvar_ht_to_sigs(ht: hl.Table, sig: set) -> hl.Table:
     """
     sig = hl.literal(sig)
     ht = ht.explode(ht.clinvar_clin_sig)
-    ht = ht.transmute(clin_sig=sig.contains(ht.clinvar_clin_sig))
-    ht = ht.filter(ht.clin_sig)
+    ht = ht.filter(sig.contains(ht.clinvar_clin_sig))
     ht = ht.filter(
         hl.if_else(
             hl.is_defined(ht.clinvar_clin_conf),
@@ -248,6 +249,7 @@ def gnomad_an_dict(ht, all_pops) -> hl.dict:
 
 
 def gnomad_af_dict(ht, all_pops) -> hl.dict:
+    print("Building AF dict")
     return {
         gnomad_pop_expr(pop, "AF"): hl.if_else(
             ht[f'{gnomad_pop_expr(pop,"AN")}'] == 0,
@@ -274,10 +276,6 @@ def filter_to_genes_annotate_consq(data_type, genes, consequences) -> hl.Table:
     ht = get_gnomad_public_data(data_type, split=True)
     print(genes)
     ht = hl.filter_intervals(ht, hl.experimental.get_gene_intervals(gene_symbols=genes))
-    consequence_ht = consequence_filter(ht, consequences, genes)
-    ht = ht.annotate(
-        lof=consequence_ht[ht.key].lof, csq_term=consequence_ht[ht.key].csq_term
-    )
     variants = ht.count()
     print(f"pre-explode variants: {variants}")  # TODO: switch to logger
     ht = ht.explode(ht.vep.transcript_consequences)
@@ -286,6 +284,10 @@ def filter_to_genes_annotate_consq(data_type, genes, consequences) -> hl.Table:
     ht = filter_export_to_gene_list(ht, genes)
     variants = ht.count()
     print(f"post filter variants: {variants}")
+    consequence_ht = consequence_filter(ht, consequences, genes)
+    ht = ht.annotate(
+        lof=consequence_ht[ht.key].lof, csq_term=consequence_ht[ht.key].csq_term
+    )
     return ht
 
 
@@ -385,12 +387,12 @@ def annotate_ht_w_all_data(
         ht.csq_term,
         ht.lof,
     )
-    ht_export_flat = ht_export.flatten()
-    ht_export_flat.write(
-        f"{output_path}gnomad_{data_type}_w_clinvar_hgmd_flat_export.ht",
-        overwrite=True,
-    )
-    ht_export_flat.export(output_path + f"gnomad_{data_type}_w_clinvar_hgmd_export.tsv")
+    #    ht_export_flat = ht_export.flatten()
+    #    ht_export_flat.write(
+    #        f"{output_path}gnomad_{data_type}_w_clinvar_hgmd_flat_export.ht",
+    #        overwrite=True,
+    #    )
+    #    ht_export_flat.export(output_path + f"gnomad_{data_type}_w_clinvar_hgmd_export.tsv")
     return ht_export
 
 
@@ -497,7 +499,7 @@ def main(args):
         Final_classification="",
         Reason_for_removal="",
     )
-
+    print("Selecting export fields")
     ht = ht.select(
         ht.gnomAD_ID,
         ht.source,
@@ -598,8 +600,7 @@ def main(args):
         )
 
     ht = ht.filter(
-        ht.canonical
-        == 1
+        (ht.canonical == 1)
         & (
             hl.is_defined(ht.ClinicalSignificance)
             | hl.is_defined(ht.hgmd_sig)
