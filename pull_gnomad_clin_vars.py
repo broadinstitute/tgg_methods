@@ -138,6 +138,7 @@ def filter_clinvar_ht_to_sigs(ht: hl.Table, sig: set) -> hl.Table:
     ht = ht.explode(ht.clinvar_clin_sig)
     ht = ht.transmute(clin_sig=sig.contains(ht.clinvar_clin_sig))
     ht = ht.filter(ht.clin_sig)
+    ht = ht.filter(hl.any(lambda x: x.startswith("Pathogenic") | x.startswith("Likely_pathogenic"), ht.clinvar_clin_conf))
     return ht
 
 
@@ -292,6 +293,7 @@ def prep_clinvar_data(genes, sig, output_path) -> hl.Table:
         clinvar_info=clinvar_ht.info,
         allele_id=hl.str(clinvar_ht.info.ALLELEID),
         clinvar_clin_sig=clinvar_ht.info.CLNSIG,
+        clinvar_clin_conf=clinvar_ht.info.CLNSIGCONF,
     )
     clinvar_ht = filter_clinvar_ht_to_sigs(clinvar_ht, sig)
     clinvar_ht = clinvar_ht.checkpoint(output_path + "clinvar.ht", overwrite=True)
@@ -482,7 +484,7 @@ def main(args):
         Notes="",
         LoF_curation_verdict="",
         Final_classification="",
-        Remove_from_math="",
+        Reason_for_removal="",
     )
 
     ht = ht.select(
@@ -519,7 +521,7 @@ def main(args):
         ht.Notes,
         ht.LoF_curation_verdict,
         ht.Final_classification,
-        ht.Remove_from_math,
+        ht.Reason_for_removal,
         ht.gnomad_AF_adj,
         ht.gnomad_AC_adj,
         ht.gnomad_AN_adj,
