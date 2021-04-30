@@ -1,11 +1,20 @@
 import argparse
+import logging
+
 import hail as hl
-from gnomad_qc.v2.resources.variant_qc import release_ht_path, RELEASE_VERSION
-from gnomad_qc.v2.resources.basics import get_gnomad_public_data
 from gnomad.utils import slack
 
+from gnomad_qc.v2.resources.basics import get_gnomad_public_data
+from gnomad_qc.v2.resources.variant_qc import RELEASE_VERSION, release_ht_path
 
 # from gnomad_hail.utils.slack import try_slack
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s: %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S %p",
+)
+logger = logging.getLogger("gnomAD_clin_hgmd_lof_AF")
+logger.setLevel(logging.INFO)
 
 CONSEQUENCES = {
     "stop_gained",
@@ -86,7 +95,6 @@ def consequence_filter(ht: hl.Table, csq_terms: set, genes: set) -> hl.Table:
         ),
     )
     ht = ht.filter(ht.lof == "HC")
-    ht = ht.filter(ht.filters.contains("AC0") | ht.filters.contains("RF"), keep=False)
     return ht
 
 
@@ -170,7 +178,7 @@ def hgmd_path_filter(ht: hl.Table, sig: set) -> hl.Table:
 def make_ucsc_url(ht: hl.Table, window_size: hl.int) -> hl.Table:
     """Create UCSC url and annotate ht with it"""
     # build = "19" if ht.locus.dtype.reference_genome == "GRCh37" else "38"
-    ucsc_url = f"http://genome.ucsc.edu/cgi-bin/hgTracks?db=hg19&position=chr"
+    ucsc_url = "http://genome.ucsc.edu/cgi-bin/hgTracks?db=hg19&position=chr"
 
     return hl.format(
         "%s%s%s%s%s%s%s%s%s%s%s",
@@ -227,7 +235,7 @@ def gnomad_pop_expr(pop, stat) -> hl.str:
 
 
 def gnomad_ac_dict(ht, all_pops) -> hl.dict:
-    print("Building AC Dict")
+    logger.info("Building AC Dict")
     return {
         f'{gnomad_pop_expr(pop,"AC")}': (
             hl.or_else(get_datatype_pop(ht, "exomes", pop, E_POPS, "AC"), 0)
@@ -238,7 +246,7 @@ def gnomad_ac_dict(ht, all_pops) -> hl.dict:
 
 
 def gnomad_an_dict(ht, all_pops) -> hl.dict:
-    print("Building AN dict")
+    logger.info("Building AN dict")
     return {
         f'{gnomad_pop_expr(pop,"AN")}': (
             hl.or_else(get_datatype_pop(ht, "exomes", pop, E_POPS, "AN"), 0)
@@ -249,7 +257,7 @@ def gnomad_an_dict(ht, all_pops) -> hl.dict:
 
 
 def gnomad_af_dict(ht, all_pops) -> hl.dict:
-    print("Building AF dict")
+    logger.info("Building AF dict")
     return {
         gnomad_pop_expr(pop, "AF"): hl.if_else(
             ht[f'{gnomad_pop_expr(pop,"AN")}'] == 0,
@@ -274,16 +282,16 @@ def calc_gnomad_allele_stats(ht: hl.Table, all_pops) -> hl.Table:
 
 def filter_to_genes_annotate_consq(data_type, genes, consequences) -> hl.Table:
     ht = get_gnomad_public_data(data_type, split=True)
-    print(genes)
+    logger.info(genes)
     ht = hl.filter_intervals(ht, hl.experimental.get_gene_intervals(gene_symbols=genes))
     variants = ht.count()
-    print(f"pre-explode variants: {variants}")  # TODO: switch to logger
+    logger.info(f"pre-explode variants: {variants}")
     ht = ht.explode(ht.vep.transcript_consequences)
     variants = ht.count()
-    print(f"post-explode variants: {variants}")
+    logger.info(f"post-explode variants: {variants}")
     ht = filter_export_to_gene_list(ht, genes)
     variants = ht.count()
-    print(f"post filter variants: {variants}")
+    logger.info(f"post filter variants: {variants}")
     consequence_ht = consequence_filter(ht, consequences, genes)
     ht = ht.annotate(
         lof=consequence_ht[ht.key].lof, csq_term=consequence_ht[ht.key].csq_term
@@ -351,9 +359,7 @@ def prep_hgmd_data(genes, sig) -> hl.Table:
     return hgmd
 
 
-def annotate_ht_w_all_data(
-    ht, clinvar_ht, hgmd_ht, output_path, data_type, genes
-) -> hl.Table:
+def annotate_ht_w_all_data(ht, clinvar_ht, hgmd_ht, output_path, data_type) -> hl.Table:
     ht = ht.annotate(**clinvar_ht[ht.key])
     ht = ht.annotate(**hgmd_ht[ht.key])
 
@@ -364,6 +370,7 @@ def annotate_ht_w_all_data(
     ht = ht.annotate(Reference_Allele=ht.alleles[0], Alternate_Allele=ht.alleles[1])
     ht = ht.annotate(gnomad_g_pop_max=ht.popmax[0])
     ht_export = ht.select(
+        ht.filters,
         ht.vep.seq_region_name,
         ht.vep.start,
         ht.vep.end,
@@ -423,22 +430,18 @@ def get_ac_an(data_type, pops, genes) -> hl.Table:
 def main(args):
     genes = args.genes
     output_path = args.output_path
-    print(genes)
+    logger.info(genes)
     all_pops = E_POPS.union(G_POPS)
 
     clinvar_ht = prep_clinvar_data(genes, SIG, output_path)
     hgmd_ht = prep_hgmd_data(genes, SIG)
 
     e_ht = filter_to_genes_annotate_consq("exomes", genes, CONSEQUENCES)
-    e_ht = annotate_ht_w_all_data(
-        e_ht, clinvar_ht, hgmd_ht, output_path, "exomes", genes
-    )
+    e_ht = annotate_ht_w_all_data(e_ht, clinvar_ht, hgmd_ht, output_path, "exomes")
 
     g_ht = filter_to_genes_annotate_consq("genomes", genes, CONSEQUENCES)
-    g_ht = annotate_ht_w_all_data(
-        g_ht, clinvar_ht, hgmd_ht, output_path, "genomes", genes
-    )
-    print(
+    g_ht = annotate_ht_w_all_data(g_ht, clinvar_ht, hgmd_ht, output_path, "genomes")
+    logger.info(
         f"Pre-union exome variants: {e_ht.count()}. Pre-union genome variants: {g_ht.count()}"
     )
 
@@ -447,7 +450,7 @@ def main(args):
         "locus", "alleles", "hgvsc"
     ).distinct()  # TODO upstream combine any variants where multiple sigs
     ht = ht.key_by("locus", "alleles")
-    print(f"Post-union variants: {ht.count()}")
+    logger.info(f"Post-union variants: {ht.count()}")
 
     ht = ht.annotate(**get_ac_an("exomes", E_POPS, genes)[ht.key])
     ht = ht.annotate(**get_ac_an("genomes", G_POPS, genes)[ht.key])
@@ -499,7 +502,15 @@ def main(args):
         Final_classification="",
         Reason_for_removal="",
     )
-    print("Selecting export fields")
+
+    ht = ht.filter(
+        hl.is_defined(ht.ClinicalSignificance)
+        | hl.is_defined(ht.hgmd_sig)
+        | hl.is_defined(ht.csq_term)
+    )
+    ht = ht.filter(ht.filters.contains("AC0") | ht.filters.contains("RF"), keep=False)
+
+    logger.info("Selecting export fields")
     ht = ht.select(
         ht.gnomAD_ID,
         ht.source,
@@ -590,7 +601,7 @@ def main(args):
         ht.gnomad_AC_adj_sas,
         ht.gnomad_AN_adj_sas,
     )
-    if args.all_variants:
+    if args.all_transcripts:
         ht = ht.checkpoint(
             f"{output_path}{hl.eval(hl.delimit(genes,delimiter='_'))}_final_export_w_freqs_all.ht",
             overwrite=True,
@@ -599,14 +610,7 @@ def main(args):
             f"{output_path}{hl.eval(hl.delimit(genes,delimiter='_'))}_all_variants_final_export_w_freqs.tsv"
         )
 
-    ht = ht.filter(
-        (ht.canonical == 1)
-        & (
-            hl.is_defined(ht.ClinicalSignificance)
-            | hl.is_defined(ht.hgmd_sig)
-            | hl.is_defined(ht.csq_term)
-        )
-    )
+    ht = ht.filter(ht.canonical == 1)
     ht = ht.checkpoint(
         f"{output_path}{hl.eval(hl.delimit(genes,delimiter='_'))}_final_export_w_freqs.ht",
         overwrite=True,
@@ -633,7 +637,7 @@ if __name__ == "__main__":
         required=True,
     )
     parser.add_argument(
-        "--all-variants",
+        "--all-transcripts",
         help="Export all variants, regardless of clinvar, hgmd, and LOF status.",
         action="store_true",
     )
