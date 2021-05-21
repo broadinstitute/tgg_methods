@@ -52,7 +52,6 @@ def main(args):
 
     Used when CMG/MGRC collaborators request VCFs of their data.
     """
-
     hl.init(log="/subset.log", default_reference="GRCh38")
 
     if args.vcf_path:
