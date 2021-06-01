@@ -121,7 +121,8 @@ RUN python3 -m pip install \
     matplotlib \
     seaborn \
     ipython \
-    pybedtools
+    pybedtools \
+    dill
 
 # Install R
 ENV R_VERSION="3.5.2-1"
