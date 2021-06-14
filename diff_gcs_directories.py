@@ -41,7 +41,7 @@ def diff_gcs_directories(
     if target.scheme != "gs":
         raise ValueError("target_directory_url must be a gs:// URL")
 
-    client = Client()
+    client = Client(project=None)
 
     base_blobs = client.list_blobs(base.hostname, prefix=base.path.strip("/") + "/")
     base_blobs = {
