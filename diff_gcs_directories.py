@@ -71,9 +71,24 @@ def diff_gcs_directories(
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("base_directory")
-    parser.add_argument("target_directory")
+    parser = argparse.ArgumentParser(
+        description="Compare objects in two directories in GCS.\n\n"
+        "Outputs paths of objects that differ preceded by:\n"
+        "- if the object is in the base directory and not in the target directory\n"
+        "+ if the object is in the target directory and not in the base directory\n"
+        "* if the object has different content in the base and target directories\n"
+        "\n"
+        "Expects to find GCP credentials automatically. To use outside of GCP, set\n"
+        "the GOOGLE_APPLICATION_CREDENTIALS environment variable to point to a\n"
+        "credentials file.\n"
+        "See https://cloud.google.com/docs/authentication/production#automatically\n"
+        "for more information.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("base_directory", help="URL of directory to compare against")
+    parser.add_argument(
+        "target_directory", help="URL of directory to compare to base directory"
+    )
     args = parser.parse_args()
 
     diff = diff_gcs_directories(args.base_directory, args.target_directory)
