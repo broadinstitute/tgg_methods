@@ -5,19 +5,13 @@ import pickle
 import hail as hl
 import hail.expr.aggregators as agg
 
-from gnomad_hail.utils.sample_qc import (
-    compute_callrate_mt,
-    run_platform_pca,
-    assign_platform_from_pcs,
-    compute_stratified_metrics_filter,
-    filter_rows_for_qc,
-)
-from gnomad_hail.utils.generic import (
-    pc_project,
-    assign_population_pcs,
-    filter_to_autosomes,
-)
-from gnomad_hail.utils.slack import try_slack
+from gnomad.sample_qc.platform import compute_callrate_mt, run_platform_pca, assign_platform_from_pcs
+    
+from gnomad.sample_qc.filtering import compute_stratified_metrics_filter
+from gnomad.utils.filtering import filter_to_autosomes
+from gnomad.sample_qc.pipeline import filter_rows_for_qc 
+from gnomad.sample_qc.ancestry import pc_project, assign_population_pcs
+from gnomad.utils import slack
 from gnomad_qc.v2.resources import evaluation_intervals_path
 from resources.resources_seqr_qc import *
 
@@ -252,12 +246,13 @@ def main(args):
     data_source = args.data_source
     version = args.callset_version
     is_test = args.is_test
+    sharded = args.sharded
     overwrite = args.overwrite
 
     logger.info("Importing callset...")
     if not args.skip_write_mt:
         logger.info("Converting vcf to MatrixTable...")
-        vcf = callset_vcf_path(build, data_type, data_source, version, is_test)
+        vcf = callset_vcf_path(build, data_type, data_source, version, is_test, sharded)
         hl.import_vcf(vcf, force_bgz=True, reference_genome=f'GRCh{build}',
                       min_partitions=4).write(mt_path(build, data_type, data_source, version, is_test), overwrite=True)
     mt = hl.read_matrix_table(mt_path(build, data_type, data_source, version, is_test))
@@ -321,6 +316,8 @@ if __name__ == '__main__':
     parser.add_argument('--data-source', help="Data source (Internal or External)", choices=["Internal", "External"], required=True)
     parser.add_argument('--is-test', help='To run a test of the pipeline using test files and directories',
                         action='store_true')
+    parser.add_argument('--sharded', help='To run on sharded vcf',
+                        action='store_true')  
     parser.add_argument('--callrate-low-threshold', help="Lower threshold at which to flag samples for low callrate", default=0.85)
     parser.add_argument('--contam-up-threshold', help="Upper threshold at which to flag samples for elevated contamination", default=5)
     parser.add_argument('--chimera-up-threshold', help="Upper threshold at which to flag samples for elevated chimera", default=5)
@@ -341,6 +338,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.slack_channel:
-        try_slack(args.slack_channel, main, args)
+        from slack_creds import slack_token
+
+        with slack.slack_notifications(slack_token, args.slack_channel):
+            main(args)
     else:
         main(args)

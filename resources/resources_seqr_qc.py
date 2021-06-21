@@ -19,11 +19,12 @@ def sample_qc_folder(build: int, data_type: str, data_source: str, version: int,
         return f'gs://seqr-datasets/v02/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc'
 
 
-def callset_vcf_path(build: int, data_type: str, data_source: str, version: int, is_test: bool) -> str:
+def callset_vcf_path(build: int, data_type: str, data_source: str, version: int, is_test: bool, sharded:bool) -> str:
     """
     Returns callset vcf path. Can be internal or external, exomes or genomes.
     """
-    return f'gs://seqr-datasets/v02/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/RDG_{data_type}_Broad_{data_source}.vcf.bgz'
+    filename= f"sharded_vcf/RDG_Broad_{data_type}_{data_source}.filtered.*.vcf.gz" if sharded else "RDG_Broad_{data_type}_{data_source}.vcf.bgz"
+    return f'gs://seqr-datasets/v02/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/{filename}'
 
 
 def mt_path(build: int, data_type: str, data_source: str, version: int, is_test: bool) -> str:
