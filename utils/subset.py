@@ -70,7 +70,7 @@ def main(args):
 
     if args.mapping:
         logger.info("Mapping VCF IDs to seqr IDs...")
-        logger.warning("Assuming mapping file has header!")
+        logger.warning("Assuming mapping file the field names s and seqr_id!")
         mt = remap_sample_ids(mt, args.mapping)
 
     logger.info("Subsetting to specified samples and their variants...")
