@@ -296,6 +296,7 @@ def filter_to_genes_annotate_consq(data_type, genes, consequences) -> hl.Table:
     ht = ht.annotate(
         lof=consequence_ht[ht.key].lof, csq_term=consequence_ht[ht.key].csq_term
     )
+    ht = ht.filter(ht.filters.contains("AC0") | ht.filters.contains("RF"), keep=False)
     return ht
 
 
