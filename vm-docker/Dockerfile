@@ -7,6 +7,7 @@ FROM 'google/cloud-sdk:slim'
 RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-utils \
     g++ \
+    gawk \
     less \
     libbz2-dev \
     libcurl4-openssl-dev \
