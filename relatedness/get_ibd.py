@@ -7,9 +7,12 @@ import logging
 
 from collections import defaultdict
 from os.path import dirname
+from gnomad.sample_qc.pipeline import 
+from gnomad.utils.file_utils import file_exists
 from gnomad.utils.filtering import filter_to_autosomes
 from gnomad.utils.reference_genome import get_reference_genome
 from gnomad_qc.v2.resources.sample_qc import qc_mt_path
+from gnomad_qc.v3.resources.sample_qc import qc
 from typing import Dict, List, Tuple
 
 logging.basicConfig(
@@ -19,17 +22,17 @@ logging.basicConfig(
 logger = logging.getLogger("check pedigree")
 logger.setLevel(logging.INFO)
 
-logger.info("Setting hail flag to avoid array index out of bounds error error...")
+logger.info("Setting hail flag to avoid array index out of bounds error...")
 # Setting this flag isn't generally recommended, but is needed (since at least Hail version 0.2.75) to avoid an array index out of bounds error until changes are made in future versions of Hail
 # TODO: reassess if this flag is still needed for future versions of Hail
 hl._set_flags(no_whole_stage_codegen="1")
 
 
-def check_subset(
+def subset_mt(
     input_mt: hl.MatrixTable, pedigree: hl.Pedigree, output_dir: str, output_name: str
 ) -> Tuple[hl.MatrixTable, list, list]:
     """
-    Filter the MatrixTable to biallelics SNVs on the autosomes.
+    Filter the MatrixTable to only samples in the pedigree.
 
     :param input_mt: MatrixTable
     :param pedigree: Pedigree file
@@ -42,7 +45,7 @@ def check_subset(
     # Filter to variants that have at least one alt call after the subsetting
     mt_subset = mt_subset.filter_rows(hl.agg.any(mt_subset.GT.is_non_ref()))
 
-    # Check that the samples in the pedigree are present in the VCF subset
+    # Check that the samples in the pedigree are present in the VCF subset and output samples that are missing
     out_missing_samples = hl.hadoop_open(
         f"{output_dir}/{output_name}_missing_samples_in_subset.txt", "w"
     )
@@ -61,18 +64,16 @@ def remap_samples(
     original_mt_path: str,
     input_mt: hl.MatrixTable,
     pedigree: hl.Pedigree,
-    kin_ht: hl.Table,
     sample_sexes: dict,
 ) -> Tuple[hl.MatrixTable, hl.Table]:
     """
-    Rename `s` col in the MatrixTable and `i` and `j` cols in the kinship ht based on seqr remap files.
+    Rename `s` col in the MatrixTable and sex dictionary based on seqr remap files.
 
     :param original_mt_path: Path to original MatrixTable location
     :param input_mt: MatrixTable 
     :param pedigree: Pedigree file
-    :param kin_ht: Kinship table
     :param sample_sexes: Dictionary of sample sexes
-    :return: mt, kinship ht, and sex dictionary with sample names remapped
+    :return: mt and sex dictionary with sample names remapped
     """
     base_path = "/".join(dirname(original_mt_path).split("/")[:-1]) + ("/base/projects")
     project_list = list(set(pedigree.Project_GUID.collect()))
@@ -100,15 +101,6 @@ def remap_samples(
         input_mt = input_mt.key_cols_by(
             s=hl.if_else(hl.is_missing(input_mt.seqr_id), input_mt.s, input_mt.seqr_id)
         )
-        kin_ht = kin_ht.annotate(seqr_id_i=ht[kin_ht.i].seqr_id)
-        kin_ht = kin_ht.annotate(
-            i=hl.if_else(hl.is_missing(kin_ht.seqr_id_i), kin_ht.i, kin_ht.seqr_id_i)
-        )
-        kin_ht = kin_ht.annotate(seqr_id_j=ht[kin_ht.j].seqr_id)
-        kin_ht = kin_ht.annotate(
-            j=hl.if_else(hl.is_missing(kin_ht.seqr_id_j), kin_ht.j, kin_ht.seqr_id_j)
-        )
-        kin_ht = kin_ht.drop("seqr_id_j", "seqr_id_i")
 
         # Remap samples in the sex dictionary
         sexes_renamed = {}
@@ -119,38 +111,7 @@ def remap_samples(
             else:
                 sexes_renamed[sample] = sex
 
-    return (input_mt, kin_ht, sexes_renamed)
-
-
-def filter_to_biallelic_auto_snvs(input_mt: hl.MatrixTable) -> hl.MatrixTable:
-    """
-    Filter the MatrixTable to biallelics SNVs on the autosomes.
-
-    :param input_mt: MatrixTable
-    :return: mt containing only SNV, biallelic variants, high callrate variants, and no rare variants
-    """
-    # Filter to biallelic SNVs
-    input_mt = input_mt.filter_rows(
-        (hl.len(input_mt.alleles) == 2)
-        & hl.is_snp(input_mt.alleles[0], input_mt.alleles[1])
-    )
-    input_mt = hl.variant_qc(input_mt)
-    # Only take variants with a high callrate
-    input_mt = input_mt.filter_rows(input_mt.variant_qc.call_rate > 0.99)
-
-    # Recalculate AF since samples were removed
-    input_mt = input_mt.annotate_rows(
-        AC=hl.agg.sum(input_mt.GT.n_alt_alleles()),
-        AN=2 * hl.agg.count_where(hl.is_defined(input_mt.GT)),
-    )
-    input_mt = input_mt.annotate_rows(AF=input_mt.AC / input_mt.AN)
-
-    # Remove variants with low AF
-    input_mt = input_mt.filter_rows(input_mt.AF > 0.001)
-
-    input_mt = filter_to_autosomes(input_mt)
-
-    return input_mt
+    return (input_mt, sexes_renamed)
 
 
 def ld_prune(input_mt: hl.MatrixTable, build: str, gnomad_ld: bool) -> hl.MatrixTable:
@@ -167,12 +128,11 @@ def ld_prune(input_mt: hl.MatrixTable, build: str, gnomad_ld: bool) -> hl.Matrix
         input_mt = input_mt.filter_rows(hl.is_defined(mm_pruned[input_mt.row_key]))
     else:
         # Borrow from gnomAD ld pruning
-        pruned_mt = hl.read_matrix_table(qc_mt_path("joint", ld_pruned=True))
+        if build == "GRCh37":
+            pruned_mt = hl.read_matrix_table(qc_mt_path("joint", ld_pruned=True))
 
-        if build == "GRCh38":
-            pruned_mt_path = (
-                "gs://seqr-kml/pedigree_inference_resources/pruned_mt_lift.mt"
-            )
+        elif build == "GRCh38":
+            pruned_mt_path = qc.path
             pruned_mt = hl.read_matrix_table(pruned_mt_path)
 
         input_mt = input_mt.filter_rows(
@@ -259,13 +219,11 @@ def write_functional_pedigree(
             if Maternal_ID not in vcf_samples:
                 Maternal_ID = "."
 
-            # Remove line from pedigree if the proband is missing
+            # Only output line from pedigree if the proband is not missing
             if Individual_ID != ".":
                 seqr_projects[Individual_ID] = Project_GUID
                 out_new_ped.write(
-                    "{Family_ID}\t{Individual_ID}\t{Paternal_ID}\t{Maternal_ID}\t{Sex}\n".format(
-                        **locals()
-                    )
+                    f"{Family_ID}\t{Individual_ID}\t{Paternal_ID}\t{Maternal_ID}\t{Sex}\n"
                 )
 
     out_new_ped.close()
@@ -274,11 +232,10 @@ def write_functional_pedigree(
 
 
 def main(args):
-
     output_dir = args.output_dir
     output_name = args.output_name
     sex_check = args.sex_check
-    input_mt = args.input_mt
+    mt_path = args.mt_path
     input_pedigree = args.input_pedigree
 
     gnomad_ld = args.gnomad_ld
@@ -289,48 +246,21 @@ def main(args):
     grandparent_ibd2 = args.grandparent_ibd2
 
     logger.info("Reading in inputs...")
-    mt = hl.read_matrix_table(input_mt)
+    mt = hl.read_matrix_table(mt_path)
     pedigree = hl.import_table(input_pedigree, impute=True)
 
-    # Infer build of the mt
+    # Infer build of the MatrixTable
     build = get_reference_genome(mt.locus).name
 
     logger.info("Filtering to biallelic SNVs on autosomes and performing LD pruning...")
-    mt = filter_to_biallelic_auto_snvs(mt)
+    mt = filter_rows_for_qc(mt, min_af=0.001, min_callrate=0.99, apply_hard_filters=False)
     mt = ld_prune(mt, build, gnomad_ld)
-    out_mt = "{output_dir}/{output_name}_processed_mt.mt".format(**locals())
-
-    if run_ibd:
-        logger.info("Running identity by descent...")
-        ibd_results_ht = hl.identity_by_descent(mt, maf=mt.AF, min=0.10, max=1.0)
-        ibd_results_ht = ibd_results_ht.annotate(
-            ibd0=ibd_results_ht.ibd.Z0,
-            ibd1=ibd_results_ht.ibd.Z1,
-            ibd2=ibd_results_ht.ibd.Z2,
-            pi_hat=ibd_results_ht.ibd.PI_HAT,
-        ).drop("ibs0", "ibs1", "ibs2", "ibd")
-        out_ht = f"{output_dir}/{output_name}_ibd_kinship.tsv"
-        ibd_results_ht.export(out_ht)
-
-        mt.write(out_mt, overwrite=True)
-
-    else:
-        logger.warn("Skipping IBD - using previous calculations...")
-
-    logger.info("Reading in mt...")
-    mt = hl.read_matrix_table(
-        "{output_dir}/{output_name}_processed_mt.mt".format(**locals())
-    )
-    mt_path = input_mt
-
-    logger.info("Reading in kinship ht...")
-    kin_ht = hl.import_table(
-        "{output_dir}/{output_name}_ibd_kinship.tsv".format(**locals()), impute=True
-    )
+    out_mt = f'{output_dir}/{output_name}_processed_mt.mt'
 
     logger.info(
         "Reading sex check into dictionary..."
-    )  # code here is based on old sex check, need new sex check that works on dense data
+    )  
+    # Code here is based on old sex check, need new sex check that works on dense data
     sample_sexes = {}
     with hl.hadoop_open(sex_check, "r") as infile:
         next(infile)
@@ -345,25 +275,50 @@ def main(args):
                 sample_sexes[sample] = False
 
     logger.info("Remapping sample names...")
-    mt, kin_ht, sample_sexes = remap_samples(
-        mt_path, mt, pedigree, kin_ht, sample_sexes
+    mt, sample_sexes = remap_samples(
+        mt_path, mt, pedigree, sample_sexes
     )
 
-    # Subset mt to the samples in the pedigree
-    mt_subset, expected_samples, vcf_samples = check_subset(
+    mt = mt.checkpoint(out_mt, overwrite=True)
+
+    if run_ibd:
+        logger.info("Running identity by descent...")
+        ibd_results_ht = hl.identity_by_descent(mt, maf=mt.AF, min=0.10, max=1.0)
+        ibd_results_ht = ibd_results_ht.annotate(
+            ibd0=ibd_results_ht.ibd.Z0,
+            ibd1=ibd_results_ht.ibd.Z1,
+            ibd2=ibd_results_ht.ibd.Z2,
+            pi_hat=ibd_results_ht.ibd.PI_HAT,
+        ).drop("ibs0", "ibs1", "ibs2", "ibd")
+        out_ht = f"{output_dir}/{output_name}_ibd_kinship.tsv"
+        ibd_results_ht.export(out_ht)
+
+    else:
+        logger.warn("Skipping IBD - using previous calculations...")
+        if not file_exists(f'{output_dir}/{output_name}_ibd_kinship.tsv'):
+            logger.warning(
+                "IBD caculation was skipped but no file with previous calculations was found...",
+                sample,
+                )
+
+    logger.info("Reading in kinship ht...")
+    kin_ht = hl.import_table(
+        f'{output_dir}/{output_name}_ibd_kinship.tsv', impute=True
+    )
+
+    # Subset MatrixTable to the samples in the pedigree
+    mt_subset, expected_samples, vcf_samples = subset_mt(
         mt, pedigree, output_dir, output_name
     )
     num_ped = len(expected_samples)
     num_vcf = len(vcf_samples)
 
-    # Subset ht to the samples in the pedigree
+    # Subset Table to the samples in the pedigree
     subset = hl.literal(expected_samples)
     kin_ht = kin_ht.filter(subset.contains(kin_ht.i) | subset.contains(kin_ht.j))
 
-    # Key the ht
+    # Key the Table
     kin_ht = kin_ht.key_by("i", "j")
-    # Save the original kin_ht as it will be filtered downstream
-    original_kin_ht = kin_ht
 
     # Setup output file
     out_summary = hl.hadoop_open(
@@ -389,25 +344,21 @@ def main(args):
         input_pedigree, vcf_samples, output_dir, output_name
     )
 
-    # count how many of each discrepancy or confirmed
+    # Add annotation for seqr projects of sample i and sample j
     hl_seqr_projects = hl.literal(seqr_projects)
-
-    # add annotation for seqr projects of sample i and sample j
-    original_kin_ht = original_kin_ht.annotate(
-        seqr_proj_i=hl_seqr_projects.get(original_kin_ht.i),
-        seqr_proj_j=hl_seqr_projects.get(original_kin_ht.j),
+    kin_ht = kin_ht.annotate(
+        seqr_proj_i=hl_seqr_projects.get(kin_ht.i),
+        seqr_proj_j=hl_seqr_projects.get(kin_ht.j),
     )
     logger.info("Writing kinship ht per project...")
     # Output original ht per project
     for project in set(seqr_projects.values()):
-        project_ht = original_kin_ht.filter(
-            (original_kin_ht.seqr_proj_i == project)
-            | (original_kin_ht.seqr_proj_j == project)
+        full_ht = kin_ht.filter(
+            (kin_ht.seqr_proj_i == project)
+            | (kin_ht.seqr_proj_j == project)
         )
-        project_ht.export(
-            "{output_dir}/{project}/{output_name}_{project}_annotated_kin_TEST.txt".format(
-                **locals()
-            )
+        full_ht.export(
+            f"{output_dir}/{project}/{output_name}_{project}_annotated_kin_TEST.txt"
         )
 
 
@@ -420,7 +371,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("-n", "--output-name", help="Output prefix to use for results")
     parser.add_argument("-s", "--sex-check", help="Path to sex check output")
-    parser.add_argument("-i", "--input-mt", help="Path to input MatrixTable")
+    parser.add_argument("-m", "--mt-path", help="Path to input MatrixTable")
     parser.add_argument("-p", "--input-pedigree", help="Path to input pedigree")
     parser.add_argument(
         "--gnomad-ld", help="Use variants from gnomAD for ld prune", action="store_true"
