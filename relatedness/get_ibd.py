@@ -297,7 +297,7 @@ def main(args):
         logger.warn("Skipping IBD - using previous calculations...")
         if not file_exists(f'{output_dir}/{output_name}_ibd_kinship.tsv'):
             logger.warning(
-                "IBD caculation was skipped but no file with previous calculations was found...",
+                "IBD calculation was skipped but no file with previous calculations was found...",
                 sample,
                 )
 
