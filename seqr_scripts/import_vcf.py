@@ -41,7 +41,7 @@ def main(args):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
-        "This script subsets a MatrixTable and exports a VCF"
+        "This script imports/merges callset filter and genotype information into one MatrixTable and exports to VCF. Currently required only for internal exomes callsets."
     )
     parser.add_argument("--part_two_path", help="Path to part one outputs from callset (contain filter information)")
     parser.add_argument("--part_one_path", help="Path to input VCFs")
