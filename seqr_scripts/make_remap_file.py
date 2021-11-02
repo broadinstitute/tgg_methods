@@ -9,38 +9,46 @@ logger.setLevel(logging.INFO)
 
 
 def read_file(file_path: str):
-    '''
+    """
     Read and parse a two line text file containing:
         - vcf ids separated by a commma and a space (", ") on the first line
         - corresponding seqr ids separated by a comma and a space (", ") on the second line
-    Returns:
-        python zip (generator) object, with tuples of (vcf id, corresponding seqr id)
 
+    This format for the text file was considered given how vcf ids and seqr ids are provided in airtable; it's easiest to copy each group into a single line, instead of a column for each group. Makes formatting seqr remap files much easier.
     :param file_path: string path of the text file to read.
-    '''
+    :return: zip (generator) object, with tuples of (vcf id, corresponding seqr id)
+    """
     with open(file_path, newline="") as infile:
         reader = csv.reader((line.replace(", ", ",") for line in infile), delimiter=",")
         vcf_ids = next(reader)
         seqr_ids = next(reader)
-        if len(vcf_ids)!= len(seqr_ids):
+        if len(vcf_ids) != len(seqr_ids):
             raise ValueError("Number of vcf ids does not match number of seqr ids.")
     return zip(vcf_ids, seqr_ids)
 
+
 def main(args):
     with open(args.out, "w", newline="") as outfile:
-        writer = csv.writer(outfile, delimiter="\t", lineterminator="\n", quoting = csv.QUOTE_NONE, quotechar="")
+        writer = csv.writer(
+            outfile,
+            delimiter="\t",
+            lineterminator="\n",
+            quoting=csv.QUOTE_NONE,
+            quotechar="",
+        )
+        # write the header
         writer.writerow(["s", "seqr_id"])
+        # get rows from generator, and write each row as a line
         writer.writerows(read_file(args.input))
     logger.info(f"File written to {args.out}.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Make project remap tsv from a given text file."
+        description="Make seqr project remap tsv from a given text file."
     )
     parser.add_argument(
-        "-i"
-        "-f",
+        "-i" "-f",
         "--input",
         required=True,
         help="Input file path.",
