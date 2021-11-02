@@ -19,6 +19,7 @@ def read_file(file_path: str):
     :return: zip (generator) object, with tuples of (vcf id, corresponding seqr id)
     """
     with open(file_path, newline="") as infile:
+        #csv doesn't parse multi-character separators
         reader = csv.reader((line.replace(", ", ",") for line in infile), delimiter=",")
         vcf_ids = next(reader)
         seqr_ids = next(reader)
