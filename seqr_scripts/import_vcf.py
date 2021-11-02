@@ -47,17 +47,23 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         "This script imports/merges callset filter and genotype information into one MatrixTable and exports to VCF. Currently required only for internal exomes callsets."
     )
-    parser.add_argument("--part_one_path", help="Path to part one outputs from callset VCFs. This bucket has a nested structure and contains one bucket per chromosome. E.g., gs://fc-2b089793-51e4-46f9-9ed0-c317f8d547eb/RDG_Broad_WES_Internal_v3/part_one_outputs/chr*/RDG_Broad_WES_Internal_chr*.*.hard_filtered_with_genotypes.vcf.gz.")
+    parser.add_argument(
+        "--part_one_path",
+        help="Path to part one outputs from callset VCFs. This bucket has a nested structure and contains one bucket per chromosome. E.g., gs://fc-2b089793-51e4-46f9-9ed0-c317f8d547eb/RDG_Broad_WES_Internal_v3/part_one_outputs/chr*/RDG_Broad_WES_Internal_chr*.*.hard_filtered_with_genotypes.vcf.gz.",
+    )
     parser.add_argument(
         "--part_two_path",
-        help="Path to part two outputs from callset (VCF shards containing filter information). E.g., gs://fc-2b089793-51e4-46f9-9ed0-c317f8d547eb/RDG_Broad_WES_Internal_v3/part_two_outputs/RDG_Broad_WES_Internal.filtered.*.vcf.gz."
+        help="Path to part two outputs from callset (VCF shards containing filter information). E.g., gs://fc-2b089793-51e4-46f9-9ed0-c317f8d547eb/RDG_Broad_WES_Internal_v3/part_two_outputs/RDG_Broad_WES_Internal.filtered.*.vcf.gz.",
     )
     parser.add_argument(
         "--import_build",
         help="Reference build to use when importing VCF",
         default="GRCh38",
     )
-    parser.add_argument("--vcf_out", help="Output path for VCF. E.g., gs://seqr-datasets/v02/GRCh38/RDG_WES_Broad_Internal/v12/RDG_WES_Broad_Internal.vcf.bgz")
+    parser.add_argument(
+        "--vcf_out",
+        help="Output path for VCF. E.g., gs://seqr-datasets/v02/GRCh38/RDG_WES_Broad_Internal/v12/RDG_WES_Broad_Internal.vcf.bgz",
+    )
     args = parser.parse_args()
 
     main(args)
