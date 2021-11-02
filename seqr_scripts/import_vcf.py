@@ -16,26 +16,30 @@ logger.setLevel(logging.INFO)
 
 def main(args):
 
-    hl.init(default_reference="GRCh38", log="/import_vcf.log", tmp_dir='hdfs:///import_vcf.tmp/')
+    hl.init(
+        default_reference="GRCh38",
+        log="/import_vcf.log",
+        tmp_dir="hdfs:///import_vcf.tmp/",
+    )
 
     logger.info("Importing filters info...")
     filters_ht = hl.import_vcf(
         args.part_two_path,
-        reference_genome='GRCh38', 
-        force_bgz=True, 
-        find_replace=('nul','.')
+        reference_genome="GRCh38",
+        force_bgz=True,
+        find_replace=("nul", "."),
     ).rows()
     logger.info("Importing VCF...")
     # Note: always assumes file is bgzipped
     mt = hl.import_vcf(
-        args.part_one_path, 
-        force_bgz=True, 
+        args.part_one_path,
+        force_bgz=True,
         reference_genome=args.import_build,
-        find_replace=('nul','.'),
+        find_replace=("nul", "."),
     )
     mt = mt.annotate_rows(filters=filters_ht[mt.row_key].filters)
-    logger.info(f'MT count: {mt.count()}')
-    hl.export_vcf(mt, args.vcf_out, parallel='header_per_shard')
+    logger.info(f"MT count: {mt.count()}")
+    hl.export_vcf(mt, args.vcf_out, parallel="header_per_shard")
 
 
 if __name__ == "__main__":
@@ -43,7 +47,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         "This script imports/merges callset filter and genotype information into one MatrixTable and exports to VCF. Currently required only for internal exomes callsets."
     )
-    parser.add_argument("--part_two_path", help="Path to part one outputs from callset (contain filter information)")
+    parser.add_argument(
+        "--part_two_path",
+        help="Path to part one outputs from callset (contain filter information)",
+    )
     parser.add_argument("--part_one_path", help="Path to input VCFs")
     parser.add_argument(
         "--import_build",
