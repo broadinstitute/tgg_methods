@@ -30,7 +30,7 @@ def main(args):
         find_replace=("nul", "."),
     ).rows()
     logger.info("Importing VCF...")
-    # Note: always assumes file is bgzipped
+    # NOTE: always assumes file is bgzipped
     mt = hl.import_vcf(
         args.part_one_path,
         force_bgz=True,
