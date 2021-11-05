@@ -7,10 +7,10 @@ import logging
 
 from collections import defaultdict
 from os.path import dirname
-from gnomad.sample_qc.pipeline import 
 from gnomad.utils.file_utils import file_exists
 from gnomad.utils.filtering import filter_to_autosomes
 from gnomad.utils.reference_genome import get_reference_genome
+from gnomad.sample_qc.pipeline import filter_rows_for_qc
 from gnomad_qc.v2.resources.sample_qc import qc_mt_path
 from gnomad_qc.v3.resources.sample_qc import qc
 from typing import Dict, List, Tuple
@@ -39,7 +39,7 @@ def subset_mt(
     :return: MatrixTable subsetted to the samples given in the pedigree, list of samples in the pedigree, list of samples in the VCF
     """
     # Get sample names to subset from the pedigree
-    samples_to_subset = hl.literal(pedigree.Individual_ID.collect())
+    samples_to_subset = hl.set(pedigree.Individual_ID.collect())
     mt_subset = input_mt.filter_cols(samples_to_subset.contains(input_mt["s"]))
 
     # Filter to variants that have at least one alt call after the subsetting
@@ -65,7 +65,7 @@ def remap_samples(
     input_mt: hl.MatrixTable,
     pedigree: hl.Pedigree,
     sample_sexes: dict,
-) -> Tuple[hl.MatrixTable, hl.Table]:
+) -> Tuple[hl.MatrixTable, dict]:
     """
     Rename `s` col in the MatrixTable and sex dictionary based on seqr remap files.
 
@@ -132,8 +132,7 @@ def ld_prune(input_mt: hl.MatrixTable, build: str, gnomad_ld: bool) -> hl.Matrix
             pruned_mt = hl.read_matrix_table(qc_mt_path("joint", ld_pruned=True))
 
         elif build == "GRCh38":
-            pruned_mt_path = qc.path
-            pruned_mt = hl.read_matrix_table(pruned_mt_path)
+            pruned_mt = hl.read_matrix_table(qc.path)
 
         input_mt = input_mt.filter_rows(
             hl.is_defined(pruned_mt.index_rows(input_mt.row_key))
@@ -253,13 +252,13 @@ def main(args):
     build = get_reference_genome(mt.locus).name
 
     logger.info("Filtering to biallelic SNVs on autosomes and performing LD pruning...")
-    mt = filter_rows_for_qc(mt, min_af=0.001, min_callrate=0.99, apply_hard_filters=False)
+    mt = filter_rows_for_qc(
+        mt, min_af=0.001, min_callrate=0.99, apply_hard_filters=False
+    )
     mt = ld_prune(mt, build, gnomad_ld)
-    out_mt = f'{output_dir}/{output_name}_processed_mt.mt'
+    out_mt = f"{output_dir}/{output_name}_processed_mt.mt"
 
-    logger.info(
-        "Reading sex check into dictionary..."
-    )  
+    logger.info("Reading sex check into dictionary...")
     # Code here is based on old sex check, need new sex check that works on dense data
     sample_sexes = {}
     with hl.hadoop_open(sex_check, "r") as infile:
@@ -275,9 +274,7 @@ def main(args):
                 sample_sexes[sample] = False
 
     logger.info("Remapping sample names...")
-    mt, sample_sexes = remap_samples(
-        mt_path, mt, pedigree, sample_sexes
-    )
+    mt, sample_sexes = remap_samples(mt_path, mt, pedigree, sample_sexes)
 
     mt = mt.checkpoint(out_mt, overwrite=True)
 
@@ -295,26 +292,22 @@ def main(args):
 
     else:
         logger.warn("Skipping IBD - using previous calculations...")
-        if not file_exists(f'{output_dir}/{output_name}_ibd_kinship.tsv'):
+        if not file_exists(f"{output_dir}/{output_name}_ibd_kinship.tsv"):
             logger.warning(
                 "IBD calculation was skipped but no file with previous calculations was found...",
                 sample,
-                )
+            )
 
     logger.info("Reading in kinship ht...")
-    kin_ht = hl.import_table(
-        f'{output_dir}/{output_name}_ibd_kinship.tsv', impute=True
-    )
+    kin_ht = hl.import_table(f"{output_dir}/{output_name}_ibd_kinship.tsv", impute=True)
 
     # Subset MatrixTable to the samples in the pedigree
     mt_subset, expected_samples, vcf_samples = subset_mt(
         mt, pedigree, output_dir, output_name
     )
-    num_ped = len(expected_samples)
-    num_vcf = len(vcf_samples)
 
     # Subset Table to the samples in the pedigree
-    subset = hl.literal(expected_samples)
+    subset = hl.set(expected_samples)
     kin_ht = kin_ht.filter(subset.contains(kin_ht.i) | subset.contains(kin_ht.j))
 
     # Key the Table
@@ -331,9 +324,11 @@ def main(args):
     kin_ht = filter_kin_ht(kin_ht, out_summary)
 
     # Output basic stats
-    out_summary.write("Number individuals in pedigree: " + str(num_ped) + "\n")
     out_summary.write(
-        "Number individuals in subset from the VCF: " + str(num_vcf) + "\n"
+        "Number individuals in pedigree: " + str(len(expected_samples)) + "\n"
+    )
+    out_summary.write(
+        "Number individuals in subset from the VCF: " + str(len(vcf_samples)) + "\n"
     )
     out_summary.write(
         "Number of relationships in the kinship table: " + str(kin_ht.count()) + "\n\n"
@@ -354,8 +349,7 @@ def main(args):
     # Output original ht per project
     for project in set(seqr_projects.values()):
         full_ht = kin_ht.filter(
-            (kin_ht.seqr_proj_i == project)
-            | (kin_ht.seqr_proj_j == project)
+            (kin_ht.seqr_proj_i == project) | (kin_ht.seqr_proj_j == project)
         )
         full_ht.export(
             f"{output_dir}/{project}/{output_name}_{project}_annotated_kin_TEST.txt"
