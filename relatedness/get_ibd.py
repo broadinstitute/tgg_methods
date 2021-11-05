@@ -7,10 +7,9 @@ import logging
 
 from collections import defaultdict
 from os.path import dirname
-from gnomad.utils.file_utils import file_exists
-from gnomad.utils.filtering import filter_to_autosomes
-from gnomad.utils.reference_genome import get_reference_genome
 from gnomad.sample_qc.pipeline import filter_rows_for_qc
+from gnomad.utils.file_utils import file_exists
+from gnomad.utils.reference_genome import get_reference_genome
 from gnomad_qc.v2.resources.sample_qc import qc_mt_path
 from gnomad_qc.v3.resources.sample_qc import qc
 from typing import Dict, List, Tuple
