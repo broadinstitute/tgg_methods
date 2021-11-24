@@ -27,19 +27,28 @@ logger.info("Setting hail flag to avoid array index out of bounds error...")
 hl._set_flags(no_whole_stage_codegen="1")
 
 
-def subset_mt(
-    input_mt: hl.MatrixTable, pedigree: hl.Pedigree, output_dir: str, output_name: str
-) -> Tuple[hl.MatrixTable, list, list]:
+def subset_samples(
+    input_mt: hl.MatrixTable,
+    pedigree: hl.Table,
+    sex_ht: hl.Table,
+    output_dir: str,
+    output_name: str,
+) -> Tuple[hl.MatrixTable, hl.Table, list, list]:
     """
-    Filter the MatrixTable to only samples in the pedigree.
+    Filter the MatrixTable and sex Table to only samples in the pedigree.
 
     :param input_mt: MatrixTable
-    :param pedigree: Pedigree file
-    :return: MatrixTable subsetted to the samples given in the pedigree, list of samples in the pedigree, list of samples in the VCF
+    :param pedigree: Pedigree file from seqr loaded as a Hail Table
+    :param sex_ht: Table of inferred sexes for each sample
+    :param output_dir: Path to directory to output results
+    :param output_name: Output prefix to use for results
+    :return: MatrixTable and sex ht subsetted to the samples given in the pedigree, list of samples in the pedigree, list of samples in the VCF
     """
     # Get sample names to subset from the pedigree
     samples_to_subset = hl.set(pedigree.Individual_ID.collect())
+    # Subset mt and ht to samples in the pedigree
     mt_subset = input_mt.filter_cols(samples_to_subset.contains(input_mt["s"]))
+    sex_ht = sex_ht.filter(samples_to_subset.contains(sex_ht["s"]))
 
     # Filter to variants that have at least one alt call after the subsetting
     mt_subset = mt_subset.filter_rows(hl.agg.any(mt_subset.GT.is_non_ref()))
@@ -56,23 +65,23 @@ def subset_mt(
         out_missing_samples.write(i + "\n")
     out_missing_samples.close()
 
-    return (mt_subset, expected_samples, vcf_samples)
+    return (mt_subset, sex_ht, expected_samples, vcf_samples)
 
 
 def remap_samples(
     original_mt_path: str,
     input_mt: hl.MatrixTable,
-    pedigree: hl.Pedigree,
-    sample_sexes: dict,
-) -> Tuple[hl.MatrixTable, dict]:
+    pedigree: hl.Table,
+    inferred_sex: str,
+) -> Tuple[hl.MatrixTable, hl.Table]:
     """
-    Rename `s` col in the MatrixTable and sex dictionary based on seqr remap files.
+    Rename `s` col in the MatrixTable and inferred sex ht.
 
     :param original_mt_path: Path to original MatrixTable location
     :param input_mt: MatrixTable 
-    :param pedigree: Pedigree file
-    :param sample_sexes: Dictionary of sample sexes
-    :return: mt and sex dictionary with sample names remapped
+    :param pedigree: Pedigree file from seqr loaded as a Hail Table
+    :param inferred_sex: Path to text file of inferred sexes
+    :return: mt and sex ht with sample names remapped
     """
     base_path = "/".join(dirname(original_mt_path).split("/")[:-1]) + ("/base/projects")
     project_list = list(set(pedigree.Project_GUID.collect()))
@@ -91,26 +100,20 @@ def remap_samples(
         for next_ht in remap_hts[1:]:
             ht = ht.join(next_ht, how="outer")
 
-        # Create dictionary for sample name and it's remapped sample name
-        rename_dict = dict(hl.tuple([ht.s, ht.seqr_id]).collect())
-
-        # If a sample has a non-missing value for seqr_id, rename it to the sample name
+        # If a sample has a non-missing value for seqr_id, rename it to the sample name for the mt and sex ht
         ht = ht.key_by("s")
-        input_mt = input_mt.annotate_cols(seqr_id=ht[input_mt.col_key].seqr_id)
+        input_mt = input_mt.annotate_cols(seqr_id=ht[input_mt.s].seqr_id)
         input_mt = input_mt.key_cols_by(
             s=hl.if_else(hl.is_missing(input_mt.seqr_id), input_mt.s, input_mt.seqr_id)
         )
 
-        # Remap samples in the sex dictionary
-        sexes_renamed = {}
-        for sample, sex in sample_sexes.items():
-            if sample in rename_dict:
-                new_sample_id = rename_dict[sample]
-                sexes_renamed[new_sample_id] = sex
-            else:
-                sexes_renamed[sample] = sex
+        sex_ht = hl.import_table(inferred_sex)
+        sex_ht = sex_ht.annotate(seqr_id=ht[sex_ht.s].seqr_id).key_by("s")
+        sex_ht = sex_ht.key_by(
+            s=hl.if_else(hl.is_missing(sex_ht.seqr_id), sex_ht.s, sex_ht.seqr_id)
+        )
 
-    return (input_mt, sexes_renamed)
+    return input_mt, sex_ht
 
 
 def ld_prune(input_mt: hl.MatrixTable, build: str, gnomad_ld: bool) -> hl.MatrixTable:
@@ -138,6 +141,33 @@ def ld_prune(input_mt: hl.MatrixTable, build: str, gnomad_ld: bool) -> hl.Matrix
         )
 
     return input_mt
+
+
+def add_project_and_family_annotations(
+    ht: hl.Table, seqr_projects: dict, family_ids: dict
+) -> hl.Table:
+
+    """
+    Add seqr project and family ID annotations to the kinship table.
+
+    :param ht: Hail Table of kinship values
+    :param seqr_projects: Dictionary of seqr projects for each sample
+    :param family_ids: Dictionary of family ids for each sample
+    :return: Table with seqr project and family id annotations added
+    """
+    # Add annotation for seqr projects of sample i and sample j
+    hl_seqr_projects = hl.literal(seqr_projects)
+    ht = ht.annotate(
+        seqr_proj_i=hl_seqr_projects.get(ht.i), seqr_proj_j=hl_seqr_projects.get(ht.j),
+    )
+
+    # Add annotation for family ids of sample i and sample j
+    hl_family_ids = hl.literal(family_ids)
+    ht = ht.annotate(
+        fam_id_i=hl_family_ids.get(ht.i), fam_id_j=hl_family_ids.get(ht.j),
+    )
+
+    return ht
 
 
 def filter_kin_ht(
@@ -179,22 +209,53 @@ def filter_kin_ht(
     return ht
 
 
-def write_functional_pedigree(
-    input_pedigree: str, vcf_samples: list, output_dir: str, output_name: str
-) -> dict:
+def check_sex(sex_ht: hl.Table, output_dir: str, output_name: str,) -> None:
 
     """
-    Write a functional pedigree (pedigree with samples not in the VCF removed) and create dictionary of sample as key and seqr project as value.
+    Compare inferred to given sex and output file with column added for discrepancies.
+
+    Output directory and name here are used to locate the functioning pedigree with given sexes.
+
+    :param sex_ht: Table of inferred sexes for each sample
+    :param output_dir: Path to directory to output results
+    :param output_name: Output prefix to use for results
+    :return: None
+    """
+    # Read in functioning pedigree with given sexes
+    ped_ht = hl.import_table(f"{output_dir}/{output_name}_functioning_pedigree.ped")
+    ped_ht = ped_ht.key_by(s=ped_ht.Individual_ID).select("Sex")
+
+    ped_ht = ped_ht.annotate(
+        given_sex=hl.case()
+        .when(ped_ht.Sex == "M", "male")
+        .when(ped_ht.Sex == "F", "female")
+        .default(ped_ht.Sex)
+    ).drop("Sex")
+
+    sex_ht = sex_ht.join(ped_ht, how="outer")
+    sex_ht = sex_ht.annotate(discrepant_sex=sex_ht.sex != sex_ht.given_sex)
+    sex_ht.export(f"{output_dir}/{output_name}_sex_check.txt")
+
+
+def write_functional_pedigree(
+    input_pedigree: str, vcf_samples: list, output_dir: str, output_name: str
+) -> Tuple[dict, dict, dict]:
+
+    """
+    Write a functional pedigree (pedigree with samples not in the VCF removed) and create dictionary of seqr projects, family IDs, and given sex.
 
     :param input_pedigree: Pedigree
     :param vcf_samples: Dictionary of samples found in the VCF
     :return: Dictionary of project IDs for each sample
     """
     seqr_projects = defaultdict(str)
+    family_ids = defaultdict(str)
+    given_sex = defaultdict(str)
 
     out_new_ped = hl.hadoop_open(
         f"{output_dir}/{output_name}_functioning_pedigree.ped", "w"
     )
+    out_new_ped.write("Family_ID\tIndividual_ID\tPaternal_ID\tMaternal_ID\tSex\n")
 
     with hl.hadoop_open(input_pedigree, "r") as infile:
         next(infile)
@@ -220,19 +281,22 @@ def write_functional_pedigree(
             # Only output line from pedigree if the proband is not missing
             if Individual_ID != ".":
                 seqr_projects[Individual_ID] = Project_GUID
+                family_ids[Individual_ID] = Family_ID
+                given_sex[Individual_ID] = Sex
+
                 out_new_ped.write(
                     f"{Family_ID}\t{Individual_ID}\t{Paternal_ID}\t{Maternal_ID}\t{Sex}\n"
                 )
 
     out_new_ped.close()
 
-    return seqr_projects
+    return seqr_projects, family_ids, given_sex
 
 
 def main(args):
     output_dir = args.output_dir
     output_name = args.output_name
-    sex_check = args.sex_check
+    inferred_sex = args.inferred_sex
     mt_path = args.mt_path
     input_pedigree = args.input_pedigree
 
@@ -242,6 +306,7 @@ def main(args):
     grandparent_pi_hat = args.grandparent_pi_hat
     grandparent_ibd1 = args.grandparent_ibd1
     grandparent_ibd2 = args.grandparent_ibd2
+    filter_kinship_ht = args.filter_kinship_ht
 
     logger.info("Reading in inputs...")
     mt = hl.read_matrix_table(mt_path)
@@ -257,23 +322,8 @@ def main(args):
     mt = ld_prune(mt, build, gnomad_ld)
     out_mt = f"{output_dir}/{output_name}_processed_mt.mt"
 
-    logger.info("Reading sex check into dictionary...")
-    # Code here is based on old sex check, need new sex check that works on dense data
-    sample_sexes = {}
-    with hl.hadoop_open(sex_check, "r") as infile:
-        next(infile)
-        for line in infile:
-            line = line.rstrip()
-            items = line.split("\t")
-            sample = items[0]
-            sex = items[6]
-            if sex == "female":
-                sample_sexes[sample] = True
-            elif sex == "male":
-                sample_sexes[sample] = False
-
     logger.info("Remapping sample names...")
-    mt, sample_sexes = remap_samples(mt_path, mt, pedigree, sample_sexes)
+    mt, sex_ht = remap_samples(mt_path, mt, pedigree, inferred_sex)
 
     mt = mt.checkpoint(out_mt, overwrite=True)
 
@@ -300,9 +350,9 @@ def main(args):
     logger.info("Reading in kinship ht...")
     kin_ht = hl.import_table(f"{output_dir}/{output_name}_ibd_kinship.tsv", impute=True)
 
-    # Subset MatrixTable to the samples in the pedigree
-    mt_subset, expected_samples, vcf_samples = subset_mt(
-        mt, pedigree, output_dir, output_name
+    # Subset MatrixTable and sex ht to the samples in the pedigree
+    mt_subset, sex_ht, expected_samples, vcf_samples = subset_samples(
+        mt, pedigree, sex_ht, output_dir, output_name
     )
 
     # Subset Table to the samples in the pedigree
@@ -317,10 +367,11 @@ def main(args):
         f"{output_dir}/{output_name}_ped_check_summary.txt", "w"
     )
 
-    logger.info(
-        "Filtering kinship table to remove unrelated individuals from analysis..."
-    )
-    kin_ht = filter_kin_ht(kin_ht, out_summary)
+    if filter_kinship_ht:
+        logger.info(
+            "Filtering kinship table to remove unrelated individuals from analysis..."
+        )
+        kin_ht = filter_kin_ht(kin_ht, out_summary)
 
     # Output basic stats
     out_summary.write(
@@ -334,23 +385,22 @@ def main(args):
     )
     out_summary.close()
 
-    seqr_projects = write_functional_pedigree(
+    seqr_projects, family_ids, given_sex = write_functional_pedigree(
         input_pedigree, vcf_samples, output_dir, output_name
     )
 
-    # Add annotation for seqr projects of sample i and sample j
-    hl_seqr_projects = hl.literal(seqr_projects)
-    kin_ht = kin_ht.annotate(
-        seqr_proj_i=hl_seqr_projects.get(kin_ht.i),
-        seqr_proj_j=hl_seqr_projects.get(kin_ht.j),
-    )
+    # Compare inferred and given sex
+    check_sex(sex_ht, output_dir, output_name)
+
+    kin_ht = add_project_and_family_annotations(kin_ht, seqr_projects, family_ids)
+
     logger.info("Writing kinship ht per project...")
     # Output original ht per project
     for project in set(seqr_projects.values()):
         full_ht = kin_ht.filter(
             (kin_ht.seqr_proj_i == project) | (kin_ht.seqr_proj_j == project)
         )
-        full_ht.export(
+        full_ht.drop("seqr_proj_i", "seqr_proj_j").export(
             f"{output_dir}/{project}/{output_name}_{project}_annotated_kin_TEST.txt"
         )
 
@@ -363,13 +413,20 @@ if __name__ == "__main__":
         "-d", "--output-dir", help="Path to directory to output results"
     )
     parser.add_argument("-n", "--output-name", help="Output prefix to use for results")
-    parser.add_argument("-s", "--sex-check", help="Path to sex check output")
+    parser.add_argument(
+        "-s", "--inferred-sex", help="Path to text file of sex check output"
+    )
     parser.add_argument("-m", "--mt-path", help="Path to input MatrixTable")
     parser.add_argument("-p", "--input-pedigree", help="Path to input pedigree")
     parser.add_argument(
         "--gnomad-ld", help="Use variants from gnomAD for ld prune", action="store_true"
     )
     parser.add_argument("--run-ibd", help="Run IBD", action="store_true")
+    parser.add_argument(
+        "--filter-kinship-ht",
+        help="Filter the kinship table to relationships of grandparents and above",
+        action="store_true",
+    )
     parser.add_argument(
         "--first-degree_pi_hat",
         help="Minimum pi_hat threshold to use to filter the kinship table to first degree relatives",
