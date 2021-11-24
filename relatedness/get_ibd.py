@@ -414,7 +414,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("-n", "--output-name", help="Output prefix to use for results")
     parser.add_argument(
-        "-s", "--inferred-sex", help="Path to text file of sex check output"
+        "-s", "--inferred-sex", help="Path to text file of inferred sex output"
     )
     parser.add_argument("-m", "--mt-path", help="Path to input MatrixTable")
     parser.add_argument("-p", "--input-pedigree", help="Path to input pedigree")
