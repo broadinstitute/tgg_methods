@@ -28,9 +28,9 @@ def callset_vcf_path(
     Returns callset vcf path. Can be internal or external, exomes or genomes.
     """
     vcf_file_string = (
-        f"sharded_vcf/RDG_{data_type}_Broad_{data_source}.filtered.*.vcf.gz"
+        f"sharded_vcf/*.bgz"
         if sharded
-        else f"RDG_{data_type}_Broad_{data_source}.vcf.bgz"
+        else f"*.vcf.bgz"
     )
     return f"gs://seqr-datasets/v02/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/{vcf_file_string}"
 
@@ -49,7 +49,7 @@ def seq_metrics_path(build: int, data_type: str, data_source: str, version: int)
     """
     Path to metadata file associated with samples in the callset for seqr sample QC.
     """
-    return f"{sample_qc_folder(build, data_type, data_source, version)}/resources/callset_seq_metrics.txt"
+    return f"{sample_qc_folder(build, data_type, data_source, version)}/resources/callset_seq_metrics.tsv"
 
 
 def remap_path(build: int, data_type: str, data_source: str, version: int) -> str:
