@@ -407,7 +407,7 @@ def main(args):
 
     logger.info("Exporting sample QC tables...")
     ht = mt.cols()
-    # ht = ht.checkpoint(sample_qc_ht_path(build, data_type, data_source, version, is_test), overwrite)
+    ht = ht.checkpoint(sample_qc_ht_path(build, data_type, data_source, version, is_test), overwrite)
     ht.flatten().export(
         sample_qc_tsv_path(build, data_type, data_source, version, is_test)
     )
