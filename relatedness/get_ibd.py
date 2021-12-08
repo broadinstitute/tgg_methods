@@ -88,6 +88,10 @@ def remap_samples(
 
     # Get the list of hts containing sample remapping information for each project
     remap_hts = []
+
+    logger.info("Found %d projects that need to be remapped.", len(remap_hts))
+    sex_ht = hl.import_table(inferred_sex)
+
     for i in project_list:
         remap = f"{base_path}/{i}/{i}_remap.tsv"
         if hl.hadoop_is_file(remap):
@@ -107,11 +111,12 @@ def remap_samples(
             s=hl.if_else(hl.is_missing(input_mt.seqr_id), input_mt.s, input_mt.seqr_id)
         )
 
-        sex_ht = hl.import_table(inferred_sex)
         sex_ht = sex_ht.annotate(seqr_id=ht[sex_ht.s].seqr_id).key_by("s")
         sex_ht = sex_ht.key_by(
             s=hl.if_else(hl.is_missing(sex_ht.seqr_id), sex_ht.s, sex_ht.seqr_id)
         )
+    else:
+        sex_ht = sex_ht.key_by("s")
 
     return input_mt, sex_ht
 
