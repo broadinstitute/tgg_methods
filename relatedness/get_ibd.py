@@ -401,7 +401,7 @@ def main(args):
             (kin_ht.seqr_proj_i == project) | (kin_ht.seqr_proj_j == project)
         )
         full_ht.drop("seqr_proj_i", "seqr_proj_j").export(
-            f"{output_dir}/{project}/{output_name}_{project}_annotated_kin_TEST.txt"
+            f"{output_dir}/{project}/{output_name}_{project}_annotated_kin.txt"
         )
 
 
