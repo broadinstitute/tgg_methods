@@ -29,19 +29,24 @@ def pull_project_peds(session_id: str, projects: set):
             )
             for project_guid in projects:
                 project_guid = project_guid.rstrip()
-                r = s.get(
-                    f"{SEQR_URL}/api/project/{project_guid}/details"
+                family_r = s.get(
+                    f"{SEQR_URL}/api/project/{project_guid}/get_families"
                 )
-
-                if r.status_code != requests.codes["ok"]:
+                individual_r = s.get(
+                    f"{SEQR_URL}/api/project/{project_guid}/get_individuals"
+                )
+                if family_r.status_code != requests.codes["ok"]:
+                    logger.info(f"Could not find {project_guid} in seqr")
+                    errors.write(f"{project_guid}\n")
+                elif individual_r.status_code != requests.codes["ok"]:
                     logger.info(f"Could not find {project_guid} in seqr")
                     errors.write(f"{project_guid}\n")
                 else:
-                    fams = r.json()["familiesByGuid"]
+                    fams = family_r.json()["familiesByGuid"]
                     fams_dict = {}
                     for fam in fams.values():
                         fams_dict[fam["familyGuid"]] = fam["familyId"]
-                    inds = r.json()["individualsByGuid"]
+                    inds = individual_r.json()["individualsByGuid"]
                     for ind in inds.values():
                         family_id = fams_dict[ind["familyGuid"]]
                         final_ped.write(
