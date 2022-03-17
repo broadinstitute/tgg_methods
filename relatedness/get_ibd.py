@@ -377,7 +377,7 @@ def main(args):
         logger.info(
             "Filtering kinship table to remove unrelated individuals from analysis..."
         )
-        kin_ht = filter_kin_ht(kin_ht, out_summary)
+        kin_ht = filter_kin_ht(kin_ht, out_summary, first_degree_pi_hat, grandparent_pi_hat, grandparent_ibd1, grandparent_ibd2)
 
     # Output basic stats
     out_summary.write(
