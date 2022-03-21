@@ -7,6 +7,7 @@ FROM 'google/cloud-sdk:slim'
 RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-utils \
     g++ \
+    gawk \
     less \
     libbz2-dev \
     libcurl4-openssl-dev \
@@ -109,7 +110,7 @@ RUN apt-get update \
 RUN python3 -m pip install --upgrade pip
 
 # Install hail and other python libraries
-ENV HAIL_VERSION="0.2.64"
+ENV HAIL_VERSION="0.2.88"
 RUN python3 --version
 RUN python3 -m pip install \
     wheel \
