@@ -79,14 +79,14 @@ def mt_temp_path(
 
 
 def sample_qc_tsv_path(
-    build: int, data_type: str, data_source: str, version: int, is_test: bool
+    build: int, data_type: str, data_source: str, version: int
 ) -> str:
     """
     Returns seqr sample qc Table: can be exomes or genomes, internal or external data.
     Contains vcf sample ID, seqr sample ID, callrate, chimera, contamination, coverage, pedigree information,
     provided gender and affected status, computed gender, platform, ancestry, inbreeding coefficient.
     """
-    return f"{final_sample_qc_folder(build, data_type, data_source, version, is_test)}/final_output/seqr_sample_qc.tsv"
+    return f"{final_sample_qc_folder(build, data_type, data_source, version)}/final_output/seqr_sample_qc.tsv"
 
 
 def sample_qc_ht_path(

@@ -225,11 +225,11 @@ def run_platform_imputation(
         hdbscan_min_cluster_size=plat_min_cluster_size,
         hdbscan_min_samples=plat_min_sample_size,
     )
-    d = {
+    plat_pcs = {
         f"plat_PC{i+1}": scores_ht.scores[i]
         for i in list(range(0, plat_assignment_pcs))
     }
-    scores_ht = scores_ht.annotate(**d).drop("scores")
+    scores_ht = scores_ht.annotate(**plat_pcs).drop("scores")
     plat_ht = plat_ht.annotate(**scores_ht[plat_ht.key])
     return plat_ht
 
@@ -423,9 +423,7 @@ def main(args):
     ht = ht.checkpoint(
         sample_qc_ht_path(build, data_type, data_source, version, is_test), overwrite
     )
-    ht.flatten().export(
-        sample_qc_tsv_path(build, data_type, data_source, version, is_test)
-    )
+    ht.flatten().export(sample_qc_tsv_path(build, data_type, data_source, version))
 
 
 if __name__ == "__main__":
