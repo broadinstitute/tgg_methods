@@ -1,2 +1,2 @@
 # Methods
-Repo for miscellaneous methods developed by the methods group that don't fit anywhere else
+Repo for miscellaneous methods developed by the methods team in the Translational Genomics Group

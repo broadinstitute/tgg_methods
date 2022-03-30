@@ -50,6 +50,7 @@ def seq_metrics_path(build: int, data_type: str, data_source: str, version: int)
     """
     Path to metadata file associated with samples in the callset for seqr sample QC.
     """
+
     return f"{final_sample_qc_folder(build, data_type, data_source, version)}/resources/callset_seq_metrics.tsv"
 
 
@@ -100,17 +101,14 @@ def sample_qc_ht_path(
     return f"{temp_sample_qc_folder(build, data_type, data_source, version, is_test)}/final_output/seqr_sample_qc.ht"
 
 
-def rdg_gnomad_pop_pca_loadings_path(build: int) -> str:
-    """Return the precomputed PCA loadings from joint RDG and gnomAD v2 PCA"""
-    if build == 37:
-        return "gs://seqr-datasets/sample_qc_resources/population_assignment/37_ancestry_pca_loadings.ht"
-    else:
-        return "gs://seqr-datasets/sample_qc_resources/population_assignment/38_ancestry_pca_loadings.ht"
-
-
 def rdg_gnomad_rf_model_path() -> str:
     """Return the precomputed RF Model from joint RDG and gnomAD v2"""
     return "gs://seqr-datasets/sample_qc_resources/population_assignment/gnomad_cmg.RF_fit_90.pkl"
+
+
+def rdg_gnomad_pop_pca_loadings_path(build: int) -> str:
+    """Return the precomputed PCA loadings from joint RDG and gnomAD PCA"""
+    return f"gs://seqr-datasets/sample_qc_resources/population_assignment/{build}_ancestry_pca_loadings.ht"
 
 
 def val_noncoding_ht_path(build):

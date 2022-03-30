@@ -2,6 +2,8 @@ import hail as hl
 import json
 import os
 
+hl.init(log="/dev/null")
+
 #%%
 os.chdir("/Users/weisburd/code/methods/gcnv_viewer")
 print(os.getcwd())
@@ -10,7 +12,7 @@ print(os.getcwd())
 
 #google_storage_dir = "gs://fc-secure-e2c5f2a5-2e76-4c01-a264-419262b2c7c8/dcr_tabs"
 #google_storage_dir = "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v1/beds"
-google_storage_dir = "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v2/beds"
+google_storage_dir = "gs://seqr-datasets-gcnv/GRCh38/RDG_WES_Broad_Internal/v3/beds"
 
 assert hl.hadoop_is_dir(google_storage_dir)
 
@@ -146,6 +148,13 @@ settings_json = """
                     "data": [
                         { "type": "coverage", "url": "gs://tgg-viewer/ref/GRCh38/mappability/GRCh38_no_alt_analysis_set_GCA_000001405.15-k100_m2.bw" }
                     ]
+                },
+                {
+                    "name": "SegDups >1000 bases",
+                    "description": "Duplications of >1000 Bases of Non-RepeatMasked Sequence downloaded from UCSC",
+                    "data": [
+                        { "type": "gtf", "url": "gs://tgg-viewer/ref/GRCh38/segdups/segdups.gtf.gz" }
+                    ]
                 }
             ]
         },
@@ -159,7 +168,7 @@ settings_json = """
 
 
 #%%
-with open("gcnv_settings_v2.json", "wt") as f:
+with open("gcnv_settings_v3.json", "wt") as f:
     json.dump(json.loads(settings_json), f, indent=3)
 
 #%%

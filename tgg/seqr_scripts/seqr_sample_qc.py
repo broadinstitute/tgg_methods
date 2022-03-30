@@ -235,7 +235,7 @@ def run_platform_imputation(
     return plat_ht
 
 
-def run_population_pca(mt: hl.MatrixTable, build: int, num_pcs=6) -> hl.Table:
+  def run_population_pca(mt: hl.MatrixTable, build: int, num_pcs=6) -> hl.Table:
     """
     Projects samples onto pre-computed gnomAD and rare disease sample principal components using PCA loadings.  A
     random forest classifier assigns gnomAD and rare disease sample population labels
@@ -269,7 +269,7 @@ def run_population_pca(mt: hl.MatrixTable, build: int, num_pcs=6) -> hl.Table:
     return pop_pca_ht
 
 
-def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
+  def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
     """
     Runs Hail's built in sample qc function on the MatrixTable. Splits the MatrixTable in order to calculate inbreeding
     coefficient and annotates the result back onto original MatrixTable. Applies flags by population and platform groups.
@@ -423,6 +423,7 @@ def main(args):
     ht.flatten().export(sample_qc_tsv_path(build, data_type, data_source, version))
 
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -525,8 +526,8 @@ if __name__ == "__main__":
 
     if args.slack_channel:
         from slack_creds import slack_token
-
         with slack.slack_notifications(slack_token, args.slack_channel):
+
             main(args)
     else:
         main(args)
