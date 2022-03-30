@@ -21,7 +21,7 @@ def temp_sample_qc_folder(
         return f"gs://seqr-temp/v02/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc"
 
 def final_sample_qc_folder(
-    build: int, data_type: str, data_source: str, version: int, is_test=False
+    build: int, data_type: str, data_source: str, version: int
 ) -> str:
     """
     Returns string with file path to callset version
@@ -33,20 +33,6 @@ def final_sample_qc_folder(
     :return:
     """
     return f"gs://seqr-datasets/v02/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc"
-
-
-def callset_vcf_path(
-    build: int, data_type: str, data_source: str, version: int, sharded: bool
-) -> str:
-    """
-    Returns callset vcf path. Can be internal or external, exomes or genomes.
-    """
-    vcf_file_string = (
-        f"sharded_vcf/*.bgz"
-        if sharded
-        else f"*.vcf.bgz"
-    )
-    return f"gs://seqr-datasets/v02/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/{vcf_file_string}"
 
 
 def mt_path(
@@ -83,7 +69,7 @@ def missing_metrics_path(
 
 
 def mt_temp_path(
-    build: int, data_type: str, data_source: str, version: int, test: bool
+    build: int, data_type: str, data_source: str, version: int, is_test: bool
 ) -> str:
     """
     Temporary MatrixTable path that should be deleted once pipeline is complete
@@ -115,7 +101,10 @@ def sample_qc_ht_path(
 
 def rdg_gnomad_pop_pca_loadings_ht_path(build: int) -> str:
     """Return the precomputed PCA loadings from joint RDG and gnomAD PCA"""
-    return f"gs://seqr-datasets/sample_qc_resources/population_assignment/{build}_ancestry_pca_loadings.ht"
+    if build==37:
+        return "gs://seqr-datasets/sample_qc_resources/population_assignment/37_ancestry_pca_loadings.ht"
+    else:
+        return "gs://gcp-public-data--gnomad/release/3.1/pca/gnomad.v3.1.pca_loadings.ht"
 
 
 def val_noncoding_ht_path(build):

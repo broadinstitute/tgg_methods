@@ -15,7 +15,6 @@ from gnomad.sample_qc.ancestry import pc_project, assign_population_pcs
 from gnomad.utils import slack
 
 from resources.resources_seqr_qc import (
-    callset_vcf_path,
     mt_path,
     missing_metrics_path,
     rdg_gnomad_pop_pca_loadings_ht_path,
@@ -247,7 +246,7 @@ def run_population_pca(
     """
     loadings = hl.read_table(rdg_gnomad_pop_pca_loadings_ht_path(build))
     mt = mt.select_entries("GT")
-    scores = pc_project(mt, loadings)  # TODO run pc_project and compare mt to split mt
+    scores = pc_project(mt, loadings)
     scores = scores.annotate(scores=scores.scores[:pcs], known_pop="Unknown").key_by(
         "s"
     )
@@ -335,10 +334,9 @@ def main(args):
 
     logger.info("Importing callset...")
     if not args.skip_write_mt:
-        logger.info("Converting vcf to MatrixTable...")
-        vcf = callset_vcf_path(build, data_type, data_source, version, sharded)
+        logger.info("Converting vcf to MatrixTable...") 
         mt=hl.import_vcf(
-            vcf, force_bgz=True, reference_genome=f"GRCh{build}", min_partitions=4
+            args.vcf_path, force_bgz=True, reference_genome=f"GRCh{build}", min_partitions=4
         )
         hl.split_multi_hts(mt).write(
             mt_path(build, data_type, data_source, version, is_test), overwrite=True
@@ -427,6 +425,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
+        "--vcf-path",
+        help="Path to VCF",
+        required=True,
+    )
+    parser.add_argument(
         "--data-type",
         help="Sequencing data type (WES or WGS)",
         choices=["WES", "WGS"],
@@ -439,6 +442,7 @@ if __name__ == "__main__":
         type=int,
         choices=[37, 38],
         required=True,
+        default=38,
     )
     parser.add_argument(
         "-v",
@@ -452,6 +456,7 @@ if __name__ == "__main__":
         help="Data source (Internal or External)",
         choices=["Internal", "External"],
         required=True,
+        default = "Internal",
     )
     parser.add_argument(
         "--is-test",
