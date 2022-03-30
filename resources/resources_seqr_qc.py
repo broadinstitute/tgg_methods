@@ -20,6 +20,7 @@ def temp_sample_qc_folder(
     else:
         return f"gs://seqr-temp/v02/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc"
 
+
 def final_sample_qc_folder(
     build: int, data_type: str, data_source: str, version: int
 ) -> str:
@@ -101,10 +102,12 @@ def sample_qc_ht_path(
 
 def rdg_gnomad_pop_pca_loadings_ht_path(build: int) -> str:
     """Return the precomputed PCA loadings from joint RDG and gnomAD PCA"""
-    if build==37:
+    if build == 37:
         return "gs://seqr-datasets/sample_qc_resources/population_assignment/37_ancestry_pca_loadings.ht"
     else:
-        return "gs://gcp-public-data--gnomad/release/3.1/pca/gnomad.v3.1.pca_loadings.ht"
+        return (
+            "gs://gcp-public-data--gnomad/release/3.1/pca/gnomad.v3.1.pca_loadings.ht"
+        )
 
 
 def val_noncoding_ht_path(build):

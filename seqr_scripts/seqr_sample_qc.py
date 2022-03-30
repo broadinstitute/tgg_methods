@@ -77,7 +77,10 @@ def validate_mt(mt: hl.MatrixTable, build: int, data_type: str, threshold=0.3):
 
     for name, stat in data_type_stats.items():
         logger.info(
-            "Table contains %i out of %i common %s variants.", stat["matched_count"], stat["total_count"], name
+            "Table contains %i out of %i common %s variants.",
+            stat["matched_count"],
+            stat["total_count"],
+            name,
         )
 
     has_coding = data_type_stats["coding"]["match"]
@@ -306,13 +309,13 @@ def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
         hl.agg.count_where(hl.len(metric_ht.qc_metrics_filters) == 0)
     )
     logger.info(
-        f"{checkpoint_pass} samples found passing pop/platform-specific filtering"
+        "%i samples found passing pop/platform-specific filtering", checkpoint_pass
     )
     checkpoint_fail = metric_ht.aggregate(
         hl.agg.count_where(hl.len(metric_ht.qc_metrics_filters) != 0)
     )
     logger.info(
-        f"{checkpoint_fail} samples found failing pop/platform-specific filtering"
+        "%i samples found failing pop/platform-specific filtering", checkpoint_fail
     )
     metric_ht = metric_ht.annotate(sample_qc=mt.cols()[metric_ht.key].sample_qc)
     return metric_ht
@@ -333,9 +336,12 @@ def main(args):
 
     logger.info("Importing callset...")
     if not args.skip_write_mt:
-        logger.info("Converting vcf to MatrixTable...") 
-        mt=hl.import_vcf(
-            args.vcf_path, force_bgz=True, reference_genome=f"GRCh{build}", min_partitions=4
+        logger.info("Converting vcf to MatrixTable...")
+        mt = hl.import_vcf(
+            args.vcf_path,
+            force_bgz=True,
+            reference_genome=f"GRCh{build}",
+            min_partitions=4,
         )
         hl.split_multi_hts(mt).write(
             mt_path(build, data_type, data_source, version, is_test), overwrite=True
@@ -414,7 +420,9 @@ def main(args):
 
     logger.info("Exporting sample QC tables...")
     ht = mt.cols()
-    ht = ht.checkpoint(sample_qc_ht_path(build, data_type, data_source, version, is_test), overwrite)
+    ht = ht.checkpoint(
+        sample_qc_ht_path(build, data_type, data_source, version, is_test), overwrite
+    )
     ht.flatten().export(
         sample_qc_tsv_path(build, data_type, data_source, version, is_test)
     )
@@ -424,9 +432,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--vcf-path",
-        help="Path to VCF",
-        required=True,
+        "--vcf-path", help="Path to VCF", required=True,
     )
     parser.add_argument(
         "--data-type",
@@ -455,7 +461,7 @@ if __name__ == "__main__":
         help="Data source (Internal or External)",
         choices=["Internal", "External"],
         required=True,
-        default = "Internal",
+        default="Internal",
     )
     parser.add_argument(
         "--is-test",
