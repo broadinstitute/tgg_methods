@@ -18,7 +18,7 @@ def temp_sample_qc_folder(
     if is_test:
         return f"gs://seqr-temp/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc/test"
     else:
-        return f"gs://seqr-temp/v02/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc"  # TODO:remove v02 from bucket path
+        return f"gs://seqr-temp/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc"
 
 
 def final_sample_qc_folder(
