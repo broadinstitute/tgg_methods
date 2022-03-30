@@ -263,7 +263,7 @@ def run_population_pca(mt: hl.MatrixTable, build: int, num_pcs=6) -> hl.Table:
         scores, pc_cols=scores.scores, output_col="qc_pop", fit=fit
     )
     pop_pca_ht = pop_pca_ht.key_by("s")
-    pop_pcs = {f"pop_PC{i+1}": scores.scores[i] for i in range(pcs)}
+    pop_pcs = {f"pop_PC{i+1}": scores.scores[i] for i in range(num_pcs)}
     scores = scores.annotate(**pop_pcs).drop("scores", "known_pop")
     pop_pca_ht = pop_pca_ht.annotate(**scores[pop_pca_ht.key])
     return pop_pca_ht
@@ -342,8 +342,7 @@ def main(args):
             force_bgz=True,
             reference_genome=f"GRCh{build}",
             min_partitions=4,
-        )
-        hl.split_multi_hts(mt).write(
+        ).write(
             mt_path(build, data_type, data_source, version, is_test), overwrite=True
         )
     mt = hl.read_matrix_table(mt_path(build, data_type, data_source, version, is_test))
