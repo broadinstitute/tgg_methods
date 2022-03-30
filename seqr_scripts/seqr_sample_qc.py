@@ -329,7 +329,6 @@ def main(args):
     data_source = args.data_source
     version = args.callset_version
     is_test = args.is_test
-    sharded = args.sharded
     overwrite = args.overwrite
 
     logger.info("Importing callset...")
@@ -463,7 +462,6 @@ if __name__ == "__main__":
         help="To run a test of the pipeline using test files and directories",
         action="store_true",
     )
-    parser.add_argument("--sharded", help="To run on sharded vcf", action="store_true")
     parser.add_argument(
         "--callrate-low-threshold",
         help="Lower threshold at which to flag samples for low callrate",
