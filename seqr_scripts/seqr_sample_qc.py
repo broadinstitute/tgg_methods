@@ -3,23 +3,17 @@ import argparse
 import pickle
 
 import hail as hl
-<<<<<<< Updated upstream:seqr_scripts/seqr_sample_qc.py
-import hail.expr.aggregators as agg
-
-=======
-from gnomad.sample_qc.pipeline import get_qc_mt
->>>>>>> Stashed changes:tgg/seqr_scripts/seqr_sample_qc.py
 from gnomad.sample_qc.platform import (
     compute_callrate_mt,
     run_platform_pca,
     assign_platform_from_pcs,
 )
-
 from gnomad.sample_qc.filtering import compute_stratified_metrics_filter
 from gnomad.utils.filtering import filter_to_autosomes
 from gnomad.sample_qc.pipeline import filter_rows_for_qc
 from gnomad.sample_qc.ancestry import pc_project, assign_population_pcs
 from gnomad.utils import slack
+
 from resources.resources_seqr_qc import *
 
 logging.basicConfig(
@@ -199,7 +193,7 @@ def run_platform_imputation(
     plat_assignment_pcs: int,
 ) -> hl.Table:
     """
-    Run PCA using sample callrate across gnomAD's evaluation interval and create Hail Table
+    Run PCA using sample callrate across Broad's evaluation intervals and create Hail Table
     with platform PCs and assigned platform.
     :param MatrixTable mt: QC MatrixTable
     :param plat_min_cluster_size: min cluster size for HBDscan clustering
@@ -209,7 +203,7 @@ def run_platform_imputation(
     :rtype: Table
     """
     intervals = hl.import_locus_intervals(
-        "gs://gnomad-public/intervals/exome_evaluation_regions.v1.noheader.interval_list"
+        "gs://gcp-public-data--broad-references/hg38/v0/exome_evaluation_regions.v1.interval_list"
     )
     callrate_mt = compute_callrate_mt(mt, intervals)
     eigenvalues, scores_ht, ignore = run_platform_pca(callrate_mt)
