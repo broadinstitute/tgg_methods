@@ -17,7 +17,8 @@ from gnomad.utils import slack
 from resources.resources_seqr_qc import (
     mt_path,
     missing_metrics_path,
-    rdg_gnomad_pop_pca_loadings_ht_path,
+    rdg_gnomad_pop_pca_loadings_path,
+    rdg_gnomad_rf_model_path,
     remap_path,
     sample_qc_ht_path,
     sample_qc_tsv_path,
@@ -235,19 +236,20 @@ def run_platform_imputation(
 
 
 def run_population_pca(
-    mt: hl.MatrixTable, build: int, pcs: int, pop_fit_path: str
+    mt: hl.MatrixTable, build: int
 ) -> hl.Table:
     """
     Projects samples onto pre-computed gnomAD and rare disease sample principal components using PCA loadings.  A
     random forest classifier assigns gnomAD and rare disease sample population labels
     :param MatrixTable mt: QC MatrixTable
     :param int build: 37 or 38 for write path
-    :param int pcs: Number of principal components to use when assigning population
     :param RandomForestClassifier pop_fit_path: fit from a previously trained random forest model (i.e., the output from a previous RandomForestClassifier() call)
     :return: Table annotated with assigned RDG and gnomAD population and PCs
     :rtype: Table
     """
-    loadings = hl.read_table(rdg_gnomad_pop_pca_loadings_ht_path(build))
+    loadings = hl.read_table(rdg_gnomad_pop_pca_loadings_path(build))
+    model_path = rdg_gnomad_rf_model_path(build)
+    pcs = 12 if build==38 else 6
     mt = mt.select_entries("GT")
     scores = pc_project(mt, loadings)
     scores = scores.annotate(scores=scores.scores[:pcs], known_pop="Unknown").key_by(
@@ -256,7 +258,7 @@ def run_population_pca(
 
     logger.info("Unpacking RF model")
     fit = None
-    with hl.hadoop_open(pop_fit_path, "rb") as f:
+    with hl.hadoop_open(model_path, "rb") as f:
         fit = pickle.load(f)
 
     pop_pca_ht, ignore = assign_population_pcs(
@@ -351,7 +353,7 @@ def main(args):
         GT=hl.case()
         .when(mt.GT.is_diploid(), hl.call(mt.GT[0], mt.GT[1], phased=False))
         .when(mt.GT.is_haploid(), hl.call(mt.GT[0], phased=False))
-        .default(hl.null(hl.tcall))
+        .default(hl.missing(hl.tcall))
     )
     if not args.skip_validate_mt:
         logger.info("Validating data type...")
@@ -410,7 +412,7 @@ def main(args):
 
     logger.info("Projecting gnomAD population PCs...")
     pop_ht = run_population_pca(
-        mt, build, args.pop_assignment_pcs, args.pop_rf_classifier
+        mt, build
     )
     mt = mt.annotate_cols(**pop_ht[mt.col_key])
 
@@ -502,19 +504,9 @@ if __name__ == "__main__":
         default=40,
     )
     parser.add_argument(
-        "--pop-assignment-pcs",
-        help="Number of principal components to use in population assignment RF",
-        default=6,
-    )
-    parser.add_argument(
         "--plat-assignment-pcs",
         help="Number of principal components to use in platform assignment clustering",
         default=6,
-    )
-    parser.add_argument(
-        "--pop-rf-classifier",
-        help="fit from a previously trained random forest model",
-        default="gs://seqr-datasets/sample_qc_resources/population_assignment/gnomad_cmg.RF_fit_90.pkl",
     )
     parser.add_argument(
         "--skip-write-mt", help="Skip writing out qc mt", action="store_true"
