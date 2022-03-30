@@ -3,8 +3,12 @@ import argparse
 import pickle
 
 import hail as hl
+<<<<<<< Updated upstream:seqr_scripts/seqr_sample_qc.py
 import hail.expr.aggregators as agg
 
+=======
+from gnomad.sample_qc.pipeline import get_qc_mt
+>>>>>>> Stashed changes:tgg/seqr_scripts/seqr_sample_qc.py
 from gnomad.sample_qc.platform import (
     compute_callrate_mt,
     run_platform_pca,
