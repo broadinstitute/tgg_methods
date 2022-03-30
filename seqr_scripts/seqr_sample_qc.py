@@ -235,26 +235,24 @@ def run_platform_imputation(
     return plat_ht
 
 
-def run_population_pca(
-    mt: hl.MatrixTable, build: int
-) -> hl.Table:
+def run_population_pca(mt: hl.MatrixTable, build: int, num_pcs=6) -> hl.Table:
     """
     Projects samples onto pre-computed gnomAD and rare disease sample principal components using PCA loadings.  A
     random forest classifier assigns gnomAD and rare disease sample population labels
-    :param MatrixTable mt: QC MatrixTable
-    :param int build: 37 or 38 for write path
-    :param RandomForestClassifier pop_fit_path: fit from a previously trained random forest model (i.e., the output from a previous RandomForestClassifier() call)
+    :param mt: QC MatrixTable
+    :param build: 37 or 38 for write path
+    :param pop_fit_path: fit from a previously trained random forest model (i.e., the output from a previous RandomForestClassifier() call)
+    :param num_pcs: Number of PCs to use in model
     :return: Table annotated with assigned RDG and gnomAD population and PCs
     :rtype: Table
     """
     loadings = hl.read_table(rdg_gnomad_pop_pca_loadings_path(build))
-    model_path = rdg_gnomad_rf_model_path(build)
-    pcs = 12 if build==38 else 6
+    model_path = rdg_gnomad_rf_model_path()
     mt = mt.select_entries("GT")
     scores = pc_project(mt, loadings)
-    scores = scores.annotate(scores=scores.scores[:pcs], known_pop="Unknown").key_by(
-        "s"
-    )
+    scores = scores.annotate(
+        scores=scores.scores[:num_pcs], known_pop="Unknown"
+    ).key_by("s")
 
     logger.info("Unpacking RF model")
     fit = None
@@ -326,7 +324,7 @@ def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
 def main(args):
 
     hl.init(log="/seqr_sample_qc.log")
-
+    hl._set_flags(no_whole_stage_codegen="1")
     logger.info("Beginning seqr sample QC pipeline...")
 
     data_type = args.data_type
@@ -411,9 +409,7 @@ def main(args):
         mt = mt.annotate_cols(qc_platform="Unknown")
 
     logger.info("Projecting gnomAD population PCs...")
-    pop_ht = run_population_pca(
-        mt, build
-    )
+    pop_ht = run_population_pca(mt, build)
     mt = mt.annotate_cols(**pop_ht[mt.col_key])
 
     logger.info("Running Hail's sample qc...")

@@ -16,9 +16,9 @@ def temp_sample_qc_folder(
     :return:
     """
     if is_test:
-        return f"gs://seqr-temp/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc/test"  
+        return f"gs://seqr-temp/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc/test"
     else:
-        return f"gs://seqr-temp/v02/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc" # TODO:remove v02 from bucket path
+        return f"gs://seqr-temp/v02/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc"  # TODO:remove v02 from bucket path
 
 
 def final_sample_qc_folder(
@@ -101,23 +101,16 @@ def sample_qc_ht_path(
 
 
 def rdg_gnomad_pop_pca_loadings_path(build: int) -> str:
-    """Return the precomputed PCA loadings from joint RDG and gnomAD v2 PCA or gnomad v3.1 PCA"""
+    """Return the precomputed PCA loadings from joint RDG and gnomAD v2 PCA"""
     if build == 37:
         return "gs://seqr-datasets/sample_qc_resources/population_assignment/37_ancestry_pca_loadings.ht"
     else:
-        return (
-            "gs://gcp-public-data--gnomad/release/3.1/pca/gnomad.v3.1.pca_loadings.ht"
-        )
+        return "gs://seqr-datasets/sample_qc_resources/population_assignment/38_ancestry_pca_loadings.ht"
 
 
-def rdg_gnomad_rf_model_path(build: int) -> str:
-    """Return the precomputed RF Model from joint RDG and gnomAD v2(37) or gnomad v3.1 PCA(38)"""
-    if build == 37:
-        return "gs://seqr-datasets/sample_qc_resources/population_assignment/gnomad_cmg.RF_fit_90.pkl"
-    else:
-        return (
-            "gs://gcp-public-data--gnomad/release/3.1/pca/gnomad.v3.1.RF_fit.pkl"
-        )
+def rdg_gnomad_rf_model_path() -> str:
+    """Return the precomputed RF Model from joint RDG and gnomAD v2"""
+    return "gs://seqr-datasets/sample_qc_resources/population_assignment/gnomad_cmg.RF_fit_90.pkl"
 
 
 def val_noncoding_ht_path(build):
