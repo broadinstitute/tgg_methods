@@ -14,7 +14,19 @@ from gnomad.sample_qc.pipeline import filter_rows_for_qc
 from gnomad.sample_qc.ancestry import pc_project, assign_population_pcs
 from gnomad.utils import slack
 
-from resources.resources_seqr_qc import *
+from resources.resources_seqr_qc import (
+    callset_vcf_path,
+    mt_path,
+    missing_metrics_path,
+    rdg_gnomad_pop_pca_loadings_ht_path,
+    remap_path,
+    sample_qc_ht_path,
+    sample_qc_tsv_path,
+    seq_metrics_path,
+    val_coding_ht_path,
+    val_noncoding_ht_path,
+    VCFDataTypeError,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -66,8 +78,7 @@ def validate_mt(mt: hl.MatrixTable, build: int, data_type: str, threshold=0.3):
 
     for name, stat in data_type_stats.items():
         logger.info(
-            "Table contains %i out of %i common %s variants."
-            % (stat["matched_count"], stat["total_count"], name)
+            "Table contains %i out of %i common %s variants.", stat["matched_count"], stat["total_count"], name
         )
 
     has_coding = data_type_stats["coding"]["match"]
@@ -326,9 +337,10 @@ def main(args):
     if not args.skip_write_mt:
         logger.info("Converting vcf to MatrixTable...")
         vcf = callset_vcf_path(build, data_type, data_source, version, sharded)
-        hl.import_vcf(
+        mt=hl.import_vcf(
             vcf, force_bgz=True, reference_genome=f"GRCh{build}", min_partitions=4
-        ).write(
+        )
+        hl.split_multi_hts(mt).write(
             mt_path(build, data_type, data_source, version, is_test), overwrite=True
         )
     mt = hl.read_matrix_table(mt_path(build, data_type, data_source, version, is_test))
