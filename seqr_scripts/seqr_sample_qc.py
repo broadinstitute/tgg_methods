@@ -263,8 +263,8 @@ def run_population_pca(
         scores, pc_cols=scores.scores, output_col="qc_pop", fit=fit
     )
     pop_pca_ht = pop_pca_ht.key_by("s")
-    d = {f"pop_PC{i+1}": scores.scores[i] for i in range(pcs)}
-    scores = scores.annotate(**d).drop("scores", "known_pop")
+    pop_pcs = {f"pop_PC{i+1}": scores.scores[i] for i in range(pcs)}
+    scores = scores.annotate(**pop_pcs).drop("scores", "known_pop")
     pop_pca_ht = pop_pca_ht.annotate(**scores[pop_pca_ht.key])
     return pop_pca_ht
 
