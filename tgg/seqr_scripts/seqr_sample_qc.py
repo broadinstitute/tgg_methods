@@ -324,7 +324,7 @@ def run_platform_imputation(
 def main(args):
 
     hl.init(log="/seqr_sample_qc.log")
-    hl._set_flags(no_whole_stage_codegen="1")
+    hl._set_flags(no_whole_stage_codegen="1") #Flag needed for hail 0.2.93, may be able to remove in future release.
     logger.info("Beginning seqr sample QC pipeline...")
 
     data_type = args.data_type
