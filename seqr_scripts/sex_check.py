@@ -5,12 +5,11 @@ import hail.expr.aggregators as agg
 import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
-from os.path import basename, splitext, isfile, dirname
+from os.path import dirname
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(asctime)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 
-from gnomad.utils.filtering import filter_to_autosomes
-from gnomad.utils.reference_genome import add_reference_sequence, get_reference_genome
+from gnomad.utils.reference_genome import get_reference_genome
 
 def get_y_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25) -> hl.Table:
     """
@@ -21,7 +20,7 @@ def get_y_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25) -
     :return: Table with coverage annotations
     :rtype: Table
     """
-    
+    #could utilize hail's reference genome chr names
     if build == "GRCh38":
         chr20 = "chr20"
         chrY = "chrY"
@@ -35,16 +34,17 @@ def get_y_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25) -
 
 
     # filter to common snvs above defined callrate (because only biallelic, should now only have one index in the array)
-    #sex_mt = sex_mt.filter_rows(sex_mt.info.AF[0] > 0.01)
     sex_mt = sex_mt.filter_rows(sex_mt.AF > 0.01)
 
-    #sex_mt = sex_mt.filter_rows(sex_mt.info.AF[0] > 0.05)
+    #optional for gnomad methods
     sex_mt = hl.variant_qc(sex_mt) 
     sex_mt = sex_mt.filter_rows(sex_mt.variant_qc.call_rate > call_rate_threshold)
 
     logging.info("Calculating mean coverage on chromosome 20 and Y...")
     sex_mt = sex_mt.annotate_cols(chrY_mean_cov=hl.agg.filter(sex_mt.locus.contig == chrY, hl.agg.mean(sex_mt.DP)),
                                   chr20_mean_cov=hl.agg.filter(sex_mt.locus.contig == chr20, hl.agg.mean(sex_mt.DP)))
+    
+    #hail.cond is outdated
     sex_mt = sex_mt.annotate_cols(normalized_y_coverage=hl.cond(sex_mt.chr20_mean_cov > 0, sex_mt.chrY_mean_cov/sex_mt.chr20_mean_cov, -99))
     sex_ht = sex_mt.cols()
 
@@ -116,8 +116,9 @@ def call_sex(callset: str,
     :return: Table with sex annotations
     :rtype: Table
     """
-    
+
     # read in matrix table and define output directory
+    # will need to generalize more for gnomad methods
     outdir = dirname(callset)
     mt_name = callset.split("/")[-1].strip("\.mt")
     logging.info("Reading matrix table for callset: {callset}".format(**locals()))
@@ -126,9 +127,11 @@ def call_sex(callset: str,
     mt = hl.read_matrix_table(callset)
     
     # filter to SNVs and biallelics
+    # filter to biallelics might be a function
     mt = mt.filter_rows((hl.len(mt.alleles) == 2) & hl.is_snp(mt.alleles[0], mt.alleles[1]))
     
     # filter to pass variants only (empty set)
+    # gnomad methods - will need to make this an optional argument
     mt = mt.filter_rows(mt.filters.length() == 0, keep=True)
     
     #infer build:
@@ -136,6 +139,7 @@ def call_sex(callset: str,
     logging.info("Build inferred as {build}".format(**locals()))
     
     logging.info("Inferring sex...")
+    #for production change female and male to XX and XY
     if use_y_cov:
         cov_ht = get_y_cov(mt, build, call_rate_threshold)
         mt = mt.annotate_cols(**cov_ht[mt.col_key])
@@ -160,24 +164,22 @@ def call_sex(callset: str,
         sex_ht = sex_ht.annotate(sex=sex_expr)
         sex_ht = sex_ht.select(sex_ht.is_female, sex_ht.f_stat, sex_ht.n_called, sex_ht.expected_homs, sex_ht.observed_homs, sex_ht.sex)
 
-    
-    outfile = outdir + "/sex_{mt_name}.txt".format(**locals())
+    outfile = outdir + f"/sex_{mt_name}.txt"
     sex_ht.export(outfile)
     return(sex_ht)
 
 def main(args):
-    call_sex(args)
+    call_sex(**vars(args))
 
 if __name__ == '__main__': 
     parser = argparse.ArgumentParser(description='This script infers the sex of samples')
-    #p.add_argument('subset', help='subset name')
-    parser.add_argument('-i', '--input', required=True, help='Path to Callset MatrixTable')
-    parser.add_argument('-u', '--use_y_cov', help='bool for whether or not to use chrY coverage', default=False)
-    parser.add_argument('-y', '--y_cov_threshold', help='chrY coverage threshold', default=0.1)
-    parser.add_argument('-m', '--male_fstat_threshold', help='male_fstat_threshold for hails impute_sex', default=0.75)
-    parser.add_argument('-f', '--female_fstat_threshold', help='female_fstat_threshold for hails impute_sex', default=0.50)
-    parser.add_argument('-a', '--aaf_threshold', help='aaf_threshold for hails impute_sex', default=0.05)
-    parser.add_argument('-c', '--call_rate_threshold', help='call_rate_threshold required to use chrY variant', default=0.25)
+    parser.add_argument('-i', '--callset', required=True, help='Path to Callset MatrixTable')
+    parser.add_argument('-u', '--use-y-cov', help='bool for whether or not to use chrY coverage', action='store_true')
+    parser.add_argument('-y', '--y-cov-threshold', help='chrY coverage threshold', default=0.1)
+    parser.add_argument('-m', '--male-fstat-threshold', help='male_fstat_threshold for hails impute_sex', default=0.75)
+    parser.add_argument('-f', '--female-fstat-threshold', help='female_fstat_threshold for hails impute_sex', default=0.50)
+    parser.add_argument('-a', '--aaf-threshold', help='aaf_threshold for hails impute_sex', default=0.05)
+    parser.add_argument('-c', '--call-rate-threshold', help='call_rate_threshold required to use chrY variant', default=0.25)
     
     args = parser.parse_args()
     main(args)
