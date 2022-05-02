@@ -50,6 +50,44 @@ def get_y_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25) -
 
     return(sex_ht)
 
+def get_x_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25) -> hl.Table:
+    """
+    Calculates mean chromosome X coverage,and normalized chromosome X coverage for each sample
+    :param MatrixTable mt: MatrixTable containing samples with chrY variants
+    :param str build: Reference used, either GRCh37 or GRCh38
+    :param float call_rate_threshold: Minimum required call rate
+    :return: Table with coverage annotations
+    :rtype: Table
+    """
+    if build == "GRCh38":
+        chr20 = "chr20"
+        chrX = "chrX"
+    else:
+        chr20 = "20"
+        chrX = "X"
+
+    logging.info("Filtering to chromosome 20 and non-par regions on chromosome X to calculate normalized Y coverage...")
+    sex_mt = hl.filter_intervals(mt, [hl.parse_locus_interval(chr20, reference_genome=build), hl.parse_locus_interval(chrX, reference_genome=build)])
+    sex_mt = sex_mt.filter_rows((sex_mt.locus.contig == chr20) | (sex_mt.locus.in_x_nonpar()), keep = True)
+
+
+    # filter to common snvs above defined callrate (because only biallelic, should now only have one index in the array)
+    sex_mt = sex_mt.filter_rows(sex_mt.AF > 0.01)
+
+    #optional for gnomad methods
+    sex_mt = hl.variant_qc(sex_mt) 
+    sex_mt = sex_mt.filter_rows(sex_mt.variant_qc.call_rate > call_rate_threshold)
+
+    logging.info("Calculating mean coverage on chromosome 20 and X...")
+    sex_mt = sex_mt.annotate_cols(chrX_mean_cov=hl.agg.filter(sex_mt.locus.contig == chrX, hl.agg.mean(sex_mt.DP)),
+                                  chr20_mean_cov=hl.agg.filter(sex_mt.locus.contig == chr20, hl.agg.mean(sex_mt.DP)))
+    
+    #hail.cond is outdated
+    sex_mt = sex_mt.annotate_cols(normalized_x_coverage=hl.cond(sex_mt.chr20_mean_cov > 0, sex_mt.chrX_mean_cov/sex_mt.chr20_mean_cov, -99))
+    sex_ht = sex_mt.cols()
+
+    return(sex_ht)
+    
 
 def run_hails_impute_sex(mt: hl.MatrixTable, 
     build: str ,
@@ -156,7 +194,7 @@ def call_sex(callset: str,
 
         sex_ht = sex_ht.annotate(sex=sex_expr)
         sex_ht = sex_ht.select(sex_ht.is_female, sex_ht.f_stat, sex_ht.n_called, sex_ht.expected_homs, sex_ht.observed_homs, sex_ht.sex, sex_ht.chrY_mean_cov, sex_ht.chr20_mean_cov, sex_ht.normalized_y_coverage)
-
+        
     else:
         sex_ht = run_hails_impute_sex(mt, build, outdir, mt_name, male_fstat_threshold, female_fstat_threshold, aaf_threshold)
         sex_ht = sex_ht.annotate(ambiguous_sex=hl.is_missing(sex_ht.is_female))
