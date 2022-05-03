@@ -4,12 +4,14 @@ import logging
 import requests
 
 logging.basicConfig(
-    format="%(asctime)s): %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p",
+    format="%(asctime)s): %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S %p",
 )
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 SEQR_URL = "https://seqr.broadinstitute.org"
+
 
 def pull_project_peds(session_id: str, projects: set):
     """
@@ -21,17 +23,17 @@ def pull_project_peds(session_id: str, projects: set):
     """
     with requests.Session() as s:
         # Initialize session with authenticated cookie
-        s.cookies.set_cookie(requests.cookies.create_cookie('sessionid', session_id))
+        s.cookies.set_cookie(requests.cookies.create_cookie("sessionid", session_id))
 
-        with open("seqr_pedigrees.txt", "w") as final_ped, open("projects_not_pulled.txt", "w") as errors:
+        with open("seqr_pedigrees.txt", "w") as final_ped, open(
+            "projects_not_pulled.txt", "w"
+        ) as errors:
             final_ped.write(
                 "Project_GUID\tFamily_ID\tIndividual_ID\tPaternal_ID\tMaternal_ID\tSex\n"
             )
             for project_guid in projects:
                 project_guid = project_guid.rstrip()
-                family_r = s.get(
-                    f"{SEQR_URL}/api/project/{project_guid}/get_families"
-                )
+                family_r = s.get(f"{SEQR_URL}/api/project/{project_guid}/get_families")
                 individual_r = s.get(
                     f"{SEQR_URL}/api/project/{project_guid}/get_individuals"
                 )
@@ -39,17 +41,19 @@ def pull_project_peds(session_id: str, projects: set):
                     logger.info(f"Could not get family IDs for {project_guid} in seqr.")
                     errors.write(f"{project_guid}\n")
                 elif individual_r.status_code != requests.codes["ok"]:
-                    logger.info(f"Could not get individual IDs for {project_guid} in seqr.")
+                    logger.info(
+                        f"Could not get individual IDs for {project_guid} in seqr."
+                    )
                     errors.write(f"{project_guid}\n")
                 else:
-                    #family_r is stuctured with a high level field familiesByGuid, which contains fields for individual families, which themselves contain various fields, like analysisStatus, analyzedBy, etc.
-                    #importantly, familiesByGuid has fields familyGuid, which is a more keyword type family name, and familyId, which is the family name used in seqr
+                    # family_r is stuctured with a high level field familiesByGuid, which contains fields for individual families, which themselves contain various fields, like analysisStatus, analyzedBy, etc.
+                    # importantly, familiesByGuid has fields familyGuid, which is a more keyword type family name, and familyId, which is the family name used in seqr
                     fams = family_r.json()["familiesByGuid"]
                     fams_dict = {}
                     for fam in fams.values():
                         fams_dict[fam["familyGuid"]] = fam["familyId"]
-                    #individual_r is structured with high level field individualsByGuid which contain fields for individuals, such as paternalId, maternalId, and familyGuid. Critically it does not contain
-                    #familyId, which is why we need to build a mapping from familyGuid to familyId.
+                    # individual_r is structured with high level field individualsByGuid which contain fields for individuals, such as paternalId, maternalId, and familyGuid. Critically it does not contain
+                    # familyId, which is why we need to build a mapping from familyGuid to familyId.
                     inds = individual_r.json()["individualsByGuid"]
                     for ind in inds.values():
                         family_id = fams_dict[ind["familyGuid"]]
@@ -87,7 +91,12 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-s", "--session-id", help="Session ID cookie retrieved from a logged in seqr session", required=True)
+    parser.add_argument(
+        "-s",
+        "--session-id",
+        help="Session ID cookie retrieved from a logged in seqr session",
+        required=True,
+    )
     parser.add_argument(
         "-p",
         "--projects",
