@@ -36,16 +36,20 @@ def pull_project_peds(session_id: str, projects: set):
                     f"{SEQR_URL}/api/project/{project_guid}/get_individuals"
                 )
                 if family_r.status_code != requests.codes["ok"]:
-                    logger.info(f"Could not find {project_guid} in seqr")
+                    logger.info(f"Could not get family IDs for {project_guid} in seqr.")
                     errors.write(f"{project_guid}\n")
                 elif individual_r.status_code != requests.codes["ok"]:
-                    logger.info(f"Could not find {project_guid} in seqr")
+                    logger.info(f"Could not get individual IDs for {project_guid} in seqr.")
                     errors.write(f"{project_guid}\n")
                 else:
+                    #family_r is stuctured with a high level field familiesByGuid, which contains fields for individual families, which themselves contain various fields, like analysisStatus, analyzedBy, etc.
+                    #importantly, familiesByGuid has fields familyGuid, which is a more keyword type family name, and familyId, which is the family name used in seqr
                     fams = family_r.json()["familiesByGuid"]
                     fams_dict = {}
                     for fam in fams.values():
                         fams_dict[fam["familyGuid"]] = fam["familyId"]
+                    #individual_r is structured with high level field individualsByGuid which contain fields for individuals, such as paternalId, maternalId, and familyGuid. Critically it does not contain
+                    #familyId, which is why we need to build a mapping from familyGuid to familyId.
                     inds = individual_r.json()["individualsByGuid"]
                     for ind in inds.values():
                         family_id = fams_dict[ind["familyGuid"]]
