@@ -11,6 +11,8 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 SEQR_URL = "https://seqr.broadinstitute.org"
+GET_FAMILIES_URL = "get_families"
+GET_INDIVIDUALS_URL = "get_individuals"
 
 
 def pull_project_peds(session_id: str, projects: set):
@@ -24,8 +26,6 @@ def pull_project_peds(session_id: str, projects: set):
     with requests.Session() as s:
         # Initialize session with authenticated cookie
         s.cookies.set_cookie(requests.cookies.create_cookie("sessionid", session_id))
-        get_families_url = "get_families"
-        get_individuals_url = "get_individuals"
         with open("seqr_pedigrees.txt", "w") as final_ped, open(
             "projects_not_pulled.txt", "w"
         ) as errors:
@@ -35,10 +35,10 @@ def pull_project_peds(session_id: str, projects: set):
             for project_guid in projects:
                 project_guid = project_guid.rstrip()
                 family_r = s.get(
-                    f"{SEQR_URL}/api/project/{project_guid}/{get_families_url}"
+                    f"{SEQR_URL}/api/project/{project_guid}/{GET_FAMILIES_URL}"
                 )
                 individual_r = s.get(
-                    f"{SEQR_URL}/api/project/{project_guid}/{get_individuals_url}"
+                    f"{SEQR_URL}/api/project/{project_guid}/{GET_INDIVIDUALS_URL}"
                 )
                 if (family_r.status_code != requests.codes["ok"]) or (
                     individual_r.status_code != requests.codes["ok"]
