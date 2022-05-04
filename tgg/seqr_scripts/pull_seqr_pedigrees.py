@@ -24,7 +24,8 @@ def pull_project_peds(session_id: str, projects: set):
     with requests.Session() as s:
         # Initialize session with authenticated cookie
         s.cookies.set_cookie(requests.cookies.create_cookie("sessionid", session_id))
-
+        get_families_url = "get_families"
+        get_individuals_url = "get_individuals"
         with open("seqr_pedigrees.txt", "w") as final_ped, open(
             "projects_not_pulled.txt", "w"
         ) as errors:
@@ -33,17 +34,23 @@ def pull_project_peds(session_id: str, projects: set):
             )
             for project_guid in projects:
                 project_guid = project_guid.rstrip()
-                family_r = s.get(f"{SEQR_URL}/api/project/{project_guid}/get_families")
-                individual_r = s.get(
-                    f"{SEQR_URL}/api/project/{project_guid}/get_individuals"
+                family_r = s.get(
+                    f"{SEQR_URL}/api/project/{project_guid}/{get_families_url}"
                 )
-                if family_r.status_code != requests.codes["ok"]:
-                    logger.info(f"Could not get family IDs for {project_guid} in seqr.")
-                    errors.write(f"{project_guid}\n")
-                elif individual_r.status_code != requests.codes["ok"]:
-                    logger.info(
-                        f"Could not get individual IDs for {project_guid} in seqr."
-                    )
+                individual_r = s.get(
+                    f"{SEQR_URL}/api/project/{project_guid}/{get_individuals_url}"
+                )
+                if (family_r.status_code != requests.codes["ok"]) or (
+                    individual_r.status_code != requests.codes["ok"]
+                ):
+                    if family_r.status_code != requests.codes["ok"]:
+                        logger.info(
+                            f"Could not get family IDs for {project_guid} in seqr."
+                        )
+                    if individual_r.status_code != requests.codes["ok"]:
+                        logger.info(
+                            f"Could not get individual IDs for {project_guid} in seqr."
+                        )
                     errors.write(f"{project_guid}\n")
                 else:
                     # family_r is stuctured with a high level field familiesByGuid, which contains fields for individual families, which themselves contain various fields, like analysisStatus, analyzedBy, etc.
