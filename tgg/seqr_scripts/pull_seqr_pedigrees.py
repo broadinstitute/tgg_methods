@@ -53,8 +53,11 @@ def pull_project_peds(session_id: str, projects: set):
                         )
                     errors.write(f"{project_guid}\n")
                 else:
-                    # family_r is stuctured with a high level field familiesByGuid, which contains fields for individual families, which themselves contain various fields, like analysisStatus, analyzedBy, etc.
-                    # importantly, familiesByGuid has fields familyGuid, which is a more keyword type family name, and familyId, which is the family name used in seqr
+                    # `family_r` contains a high level field `familiesByGuid`,
+                    # which contains fields for individual families.
+                    # The fields within `familiesByGuid` also contain various fields (e.g., analysisStatus, analyzedBy, etc).
+                    # Importantly, familiesByGuid has the fields `familyGuid` (keyword type family name) 
+                    # and `familyId`, which is the family name used in seqr
                     fams = family_r.json()["familiesByGuid"]
                     fams_dict = {}
                     for fam in fams.values():
