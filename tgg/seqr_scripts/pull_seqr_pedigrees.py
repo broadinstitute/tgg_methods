@@ -18,9 +18,9 @@ GET_INDIVIDUALS_URL = "get_individuals"
 
 def pull_project_peds(session_id: str, projects: Set[str]):
     """
-    Use the seqr API to retrieve a list of projects' pedigrees. 
+    Use the seqr API to retrieve a list of projects' pedigrees.
 
-    Writes a single pedigree for all projects ('seqr_pedigrees.txt'), using the retrieved pedigrees. 
+    Writes a single pedigree for all projects ('seqr_pedigrees.txt'), using the retrieved pedigrees.
     Failing projects are written to 'projects_not_pulled.txt'.
 
     :param session_id: sessionid cookie used for seqr login
@@ -59,15 +59,15 @@ def pull_project_peds(session_id: str, projects: Set[str]):
                     # `family_r` contains a high level field `familiesByGuid`,
                     # which contains fields for individual families.
                     # The fields within `familiesByGuid` also contain various fields (e.g., analysisStatus, analyzedBy, etc).
-                    # Importantly, familiesByGuid has the fields `familyGuid` (keyword type family name) 
+                    # Importantly, familiesByGuid has the fields `familyGuid` (keyword type family name)
                     # and `familyId`, which is the family name used in seqr
                     fams = family_r.json()["familiesByGuid"]
                     fams_dict = {}
                     for fam in fams.values():
                         fams_dict[fam["familyGuid"]] = fam["familyId"]
                     # `individual_r` contains the high level field `individualsByGuid`, which contains fields for individuals
-                    # such as `paternalId`, `maternalId`, and `familyGuid`. 
-                    # Critically, it does not contain `familyId`, 
+                    # such as `paternalId`, `maternalId`, and `familyGuid`.
+                    # Critically, it does not contain `familyId`,
                     # which is why we need to build a mapping from `familyGuid` to `familyId`.
                     inds = individual_r.json()["individualsByGuid"]
                     for ind in inds.values():
