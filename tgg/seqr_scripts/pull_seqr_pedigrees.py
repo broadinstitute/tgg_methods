@@ -2,6 +2,7 @@ import argparse
 import logging
 
 import requests
+from typing import Set
 
 logging.basicConfig(
     format="%(asctime)s): %(message)s",
@@ -15,13 +16,15 @@ GET_FAMILIES_URL = "get_families"
 GET_INDIVIDUALS_URL = "get_individuals"
 
 
-def pull_project_peds(session_id: str, projects: set):
+def pull_project_peds(session_id: str, projects: Set[str]):
     """
-    Uses the seqr API to retrieve a list of projects' pedigrees. Writes a single pedigree,
-    'seqr_pedigrees.txt', using the retrieved pedigrees. Failing projects are written
-    to 'projects_not_pulled.txt'
+    Use the seqr API to retrieve a list of projects' pedigrees. 
+
+    Writes a single pedigree for all projects ('seqr_pedigrees.txt'), using the retrieved pedigrees. 
+    Failing projects are written to 'projects_not_pulled.txt'.
+
     :param session_id: sessionid cookie used for seqr login
-    :param projects:  set of seqr project GUIDs
+    :param projects:  Set of seqr project GUIDs
     """
     with requests.Session() as s:
         # Initialize session with authenticated cookie
