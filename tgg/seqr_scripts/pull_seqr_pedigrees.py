@@ -59,8 +59,10 @@ def pull_project_peds(session_id: str, projects: set):
                     fams_dict = {}
                     for fam in fams.values():
                         fams_dict[fam["familyGuid"]] = fam["familyId"]
-                    # individual_r is structured with high level field individualsByGuid which contain fields for individuals, such as paternalId, maternalId, and familyGuid. Critically it does not contain
-                    # familyId, which is why we need to build a mapping from familyGuid to familyId.
+                    # `individual_r` contains the high level field `individualsByGuid`, which contains fields for individuals
+                    # such as `paternalId`, `maternalId`, and `familyGuid`. 
+                    # Critically, it does not contain `familyId`, 
+                    # which is why we need to build a mapping from `familyGuid` to `familyId`.
                     inds = individual_r.json()["individualsByGuid"]
                     for ind in inds.values():
                         family_id = fams_dict[ind["familyGuid"]]
