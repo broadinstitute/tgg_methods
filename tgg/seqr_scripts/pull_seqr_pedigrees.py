@@ -46,14 +46,7 @@ def pull_project_peds(session_id: str, projects: Set[str]):
                 if (family_r.status_code != requests.codes["ok"]) or (
                     individual_r.status_code != requests.codes["ok"]
                 ):
-                    if family_r.status_code != requests.codes["ok"]:
-                        logger.info(
-                            f"Could not get family IDs for {project_guid} in seqr."
-                        )
-                    if individual_r.status_code != requests.codes["ok"]:
-                        logger.info(
-                            f"Could not get individual IDs for {project_guid} in seqr."
-                        )
+                    logger.info(f"Could not get {project_guid} info from seqr. get_families status: {family_r.status_code}, get_individuals status: {individual_r.status_code}")
                     errors.write(f"{project_guid}\n")
                 else:
                     # `family_r` contains a high level field `familiesByGuid`,
