@@ -50,6 +50,9 @@ TRANCHE_DATA = ("broad", CURRENT_FREEZE)
 UKB tranche data (data source and data freeze number)
 """
 
+# Remove END from SPARSE_ENTRIES (not present in VDS variant data entries)
+SPARSE_ENTRIES.remove("END")
+
 
 def get_doubleton_sites(
     vds_path: str = VDS_PATH,
