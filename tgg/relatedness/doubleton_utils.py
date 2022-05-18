@@ -108,7 +108,7 @@ def get_doubleton_sites(
 def get_doubleton_samples(
     vds_path: str = VDS_PATH,
     temp_path: str = TEMP_PATH,
-    control_samples: Set[str, str] = {NA12878, SYNDIP},
+    control_samples: Set[str] = {NA12878, SYNDIP},
 ):
     """
     Get IDs of sample that share a rare doubleton in the 455k VDS.
