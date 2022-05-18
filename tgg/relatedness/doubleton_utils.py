@@ -189,6 +189,7 @@ def compare_doubletons_to_related(
                 pair_in_relatedness_ht=hl.agg.count_where(ht.rel_def),
                 kin_stats=hl.agg.stats(ht.kin),
                 rel_counter=hl.agg.counter(ht.relationship),
+                total_pairs=hl.agg.count(),
             )
         )
 
