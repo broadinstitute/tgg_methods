@@ -179,9 +179,11 @@ def compare_doubletons_to_related(
         :return: StructExpression describing doubleton pairs.
         """
         return ht.aggregate(
-            pair_in_relatedness_ht=hl.agg.count_where(ht.rel_def),
-            kin_stats=hl.agg.stats(ht.kin),
-            rel_counter=hl.agg.counter(ht.relationship),
+            hl.struct(
+                pair_in_relatedness_ht=hl.agg.count_where(ht.rel_def),
+                kin_stats=hl.agg.stats(ht.kin),
+                rel_counter=hl.agg.counter(ht.relationship),
+            )
         )
 
     logger.info(
