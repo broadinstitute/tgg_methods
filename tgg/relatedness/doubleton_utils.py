@@ -94,7 +94,7 @@ def get_doubleton_sites(
     mt = filter_to_adj(mt)
     mt = mt.annotate_rows(call_stats=hl.agg.call_stats(mt.GT, mt.alleles))
     # Get AC at allele index 1 (call_stats includes a count for each allele, including reference)
-    mt = mt.transmute_rows(ac=mt.call_stats.AC[1], n_hom=mt.call_stats.homozygote_count)
+    mt = mt.transmute_rows(ac=mt.call_stats.AC[1], n_hom=mt.call_stats.homozygote_count[1])
 
     logger.info("Filtering to an allele count of two and returning...")
     ht = mt.rows()
