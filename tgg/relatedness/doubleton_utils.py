@@ -144,6 +144,7 @@ def compare_doubletons_to_related(
     """
     ht = get_doubleton_samples()
     rel_ht = hl.read_table(relatedness_ht_path(*tranche_data))
+    rel_ht = rel_ht.key_by(i=rel_ht.i.s, j=rel_ht.j.s)
 
     logger.info("Annotating the doubleton sample pairs with relatedness information...")
     ht = ht.annotate(
