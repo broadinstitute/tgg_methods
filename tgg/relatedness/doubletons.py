@@ -13,7 +13,7 @@ import hail as hl
 from gnomad.resources.resource_utils import DataException
 from gnomad.utils.slack import slack_notifications
 
-from tgg_methods.utils.doubleton_utils import compare_doubletons_to_related
+from tgg.relatedness.doubleton_utils import compare_doubletons_to_related
 
 
 logging.basicConfig(
