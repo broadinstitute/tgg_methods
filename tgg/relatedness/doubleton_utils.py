@@ -10,7 +10,7 @@ from gnomad.utils.vcf import SPARSE_ENTRIES
 
 from ukbb_qc.resources.resource_utils import CURRENT_FREEZE
 from ukbb_qc.resources.sample_qc import interval_qc_path, relatedness_ht_path
-from ukbb_qc.resources.variant_qc import info_ht_path
+from ukbb_qc.resources.variant_qc import info_ht_path, NA12878, SYNDIP
 
 logging.basicConfig(
     format="%(asctime)s (%(name)s %(lineno)s): %(message)s",
@@ -105,7 +105,11 @@ def get_doubleton_sites(
     return ht
 
 
-def get_doubleton_samples(vds_path: str = VDS_PATH, temp_path: str = TEMP_PATH):
+def get_doubleton_samples(
+    vds_path: str = VDS_PATH,
+    temp_path: str = TEMP_PATH,
+    control_samples: Tuple[str, str] = (NA12878, SYNDIP),
+):
     """
     Get IDs of sample that share a rare doubleton in the 455k VDS.
 
@@ -114,11 +118,13 @@ def get_doubleton_samples(vds_path: str = VDS_PATH, temp_path: str = TEMP_PATH):
 
     :param str vds_path: Path to UKB 455k VDS. Default is VDS_PATH.
     :param str temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
+    :param Tuple[str, str] control_samples: Tuple of control sample IDs to remove. Default is (NA12878, SYNDIP).
     :return: Table keyed by sample IDs that share a rare doubleton.
     """
     logger.info("Getting IDs of samples that share a rare doubleton...")
     mt = hl.vds.read_vds(vds_path).variant_data
     mt = hl.experimental.sparse_split_multi(mt)
+    mt = mt.filter_cols(~hl.literal(control_samples).contains(mt.s))
     ht = get_doubleton_sites(vds_path)
     mt = mt.filter_rows(hl.is_defined(ht[mt.row_key]))
     mt = mt.annotate_rows(pair=hl.agg.filter(mt.GT.is_het(), hl.agg.collect(mt.s)))
