@@ -40,7 +40,8 @@ vds = hl.vds.filter_samples(vds, meta_ht, remove_dead_alleles=True)
 call_stats_ht = hl.read_table(ukb.var_annotations_ht_path('ukb_freq', *TRANCHE_DATA[CURRENT_TRANCHE]))
 freq_index = get_cohort_index(call_stats_ht)
 var = vds.variant_data.annotate_rows(call_stats=call_stats_ht[vds.variant_data.row_key].freq[freq_index])
-vds = hl.vds.variant_dataset.VariantDataset(vds.reference_data, var)
+# NOTE: If need to rerun, could use `from_merged_representation` method here
+vds = hl.vds.VariantDataset(vds.reference_data, var)
 vds.write(ukb_exomes_path, overwrite=args.overwrite)
 
 Full VDS size: 8.69 TiB
