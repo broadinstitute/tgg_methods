@@ -66,10 +66,10 @@ def get_doubleton_sites(
     """
     Filter UKB VDS to bi-allelic, autosomal sites in interval QC pass regions with an adj allele count of two and no homozygotes.
 
-    :param str vds_path: Path to UKB 455k VDS. Default is VDS_PATH.
-    :param str temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
-    :param Tuple[str, int] tranche_data: UKB tranche data (data source and data freeze number). Default is TRANCHE_DATA.
-    :param List[str] sparse_entries: List of fields to select from VDS. Default is SPARSE_ENTRIES.
+    :param vds_path: Path to UKB 455k VDS. Default is VDS_PATH.
+    :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
+    :param tranche_data: UKB tranche data (data source and data freeze number). Default is TRANCHE_DATA.
+    :param sparse_entries: List of fields to select from VDS. Default is SPARSE_ENTRIES.
     :return: Table of high quality sites with doubletons.
     """
     logger.info("Reading in VDS and filtering to bi-allelic SNPs...")
@@ -118,9 +118,9 @@ def get_doubleton_samples(
     Filter VDS variant data to sites present in specified input Table, collect sample IDs, annotate IDs onto rows, and write
     HT to temporary path.
 
-    :param str vds_path: Path to UKB 455k VDS. Default is VDS_PATH.
-    :param str temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
-    :param Tuple[str, str] control_samples: Tuple of control sample IDs to remove. Default is (NA12878, SYNDIP).
+    :param vds_path: Path to UKB 455k VDS. Default is VDS_PATH.
+    :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
+    :param control_samples: Tuple of control sample IDs to remove. Default is (NA12878, SYNDIP).
     :return: Table keyed by sample IDs that share a rare doubleton.
     """
     logger.info("Getting IDs of samples that share a rare doubleton...")
@@ -146,8 +146,8 @@ def compare_doubletons_to_related(
     """
     Get sample pairs that share doubletons and compare these pairs to samples in 455k relatedness Table.
 
-    :param Tuple[str, int] tranche_data: UKB tranche data (data source and data freeze number). Default is TRANCHE_DATA.
-    :param str temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
+    :param tranche_data: UKB tranche data (data source and data freeze number). Default is TRANCHE_DATA.
+    :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
     :return: None; function prints information to stdout.
     """
     ht = get_doubleton_samples()
