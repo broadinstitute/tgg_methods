@@ -64,10 +64,7 @@ def get_doubleton_sites(
     sparse_entries: List[str] = SPARSE_ENTRIES,
 ) -> hl.Table:
     """
-    Filter UKB VDS to bi-allelic, autosomal sites in interval QC pass regions with an allele count of two.
-
-    Produce Table of bi-allelic, autosomal SNPs in interval QC pass regions that have an allele count of two
-    with no homozygotes (calculated on adj genotypes).
+    Filter UKB VDS to bi-allelic, autosomal sites in interval QC pass regions with an adj allele count of two and no homozygotes.
 
     :param str vds_path: Path to UKB 455k VDS. Default is VDS_PATH.
     :param str temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
