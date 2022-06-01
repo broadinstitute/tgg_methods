@@ -80,6 +80,8 @@ def get_doubleton_sites(
 
     logger.info("Filter to autosomes and splitting multiallelics...")
     mt = mt.filter_rows(mt.locus.in_autosome())
+    # NOTE: UKB dataset does not have errors with changed loci
+    # (`filter_changed_loci = False` will not throw errors here)
     mt = hl.experimental.sparse_split_multi(mt)
 
     logger.info("Removing AS_lowqual sites...")
