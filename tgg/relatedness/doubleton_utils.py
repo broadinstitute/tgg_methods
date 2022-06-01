@@ -113,7 +113,7 @@ def get_doubleton_samples(
     control_samples: Set[str] = {NA12878, SYNDIP},
 ):
     """
-    Get IDs of sample that share a rare doubleton in the 455k VDS.
+    Get IDs of samples that share a rare doubleton in the 455k VDS.
 
     Filter VDS variant data to sites present in specified input Table, collect sample IDs, annotate IDs onto rows, and write
     HT to temporary path.
