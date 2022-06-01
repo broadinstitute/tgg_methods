@@ -20,7 +20,7 @@ logger = logging.getLogger("doubleton_utils")
 logger.setLevel(logging.INFO)
 
 
-TEMP_PATH = "gs://gnomad-tmp/kc"
+TEMP_PATH = "gs://gnomad-tmp/doubleton_analysis"
 """
 Path to bucket for temporary data.
 """
