@@ -10,7 +10,6 @@ import logging
 
 import hail as hl
 
-from gnomad.resources.resource_utils import DataException
 from gnomad.utils.slack import slack_notifications
 
 from tgg.relatedness.doubleton_utils import compare_doubletons_to_related
@@ -57,9 +56,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.slack_channel:
-        if not args.slack_token:
-            raise DataException("Must specify slack_token if --slack-channel is set.")
-        with slack_notifications(args.slack_token, args.slack_channel):
+        from slack_creds import slack_token
+        with slack_notifications(slack_token, args.slack_channel):
             main(args)
     else:
         main(args)
