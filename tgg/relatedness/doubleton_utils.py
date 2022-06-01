@@ -200,8 +200,8 @@ def compare_doubletons_to_related(
         _get_agg_struct(ht),
     )
 
-    ht = ht.filter((hl.is_missing(ht.relationship)) | (ht.relationship != "unrelated"))
+    ht = ht.filter(ht.relationship != "unrelated")
     logger.info(
-        "Results from HT aggregate after removing 'unrelated' relationships: %s",
+        "Results from HT aggregate after removing 'unrelated' and undefined relationships: %s",
         _get_agg_struct(ht),
     )
