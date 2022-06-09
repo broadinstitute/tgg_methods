@@ -31,7 +31,7 @@ Path to Variant Dataset (VDS) that contains high quality samples from the final 
 
 Generated using the following commands:
 
-# NOTE: If ever need to rerun, should read v4 vds using `get_gnomad_v4_vds`
+# NOTE: If ever need to rerun, should read v4 VDS using `get_gnomad_v4_vds`
 # (in gnomad_qc/v4/resoures/basics.py)
 vds = hl.vds.read_vds("gs://gnomad/raw/exomes/4.0/gnomad_v4.0.vds")
 meta_ht = hl.read_table("gs://broad-ukbb/broad.freeze_7/sample_qc/meta.ht")
