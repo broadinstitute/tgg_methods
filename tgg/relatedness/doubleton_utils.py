@@ -40,7 +40,6 @@ vds = hl.vds.filter_samples(vds, meta_ht, remove_dead_alleles=True)
 call_stats_ht = hl.read_table(ukb.var_annotations_ht_path('ukb_freq', *TRANCHE_DATA[CURRENT_TRANCHE]))
 freq_index = get_cohort_index(call_stats_ht)
 var = vds.variant_data.annotate_rows(call_stats=call_stats_ht[vds.variant_data.row_key].freq[freq_index])
-# NOTE: If need to rerun, could use `from_merged_representation` method here
 vds = hl.vds.VariantDataset(vds.reference_data, var)
 vds.write(ukb_exomes_path, overwrite=args.overwrite)
 
@@ -120,7 +119,7 @@ def get_doubleton_samples(
 
     :param vds_path: Path to UKB 455k VDS. Default is VDS_PATH.
     :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
-    :param control_samples: Tuple of control sample IDs to remove. Default is (NA12878, SYNDIP).
+    :param control_samples: Set of control sample IDs to remove. Default is {NA12878, SYNDIP}.
     :return: Table keyed by sample IDs that share a rare doubleton.
     """
     logger.info("Getting IDs of samples that share a rare doubleton...")
