@@ -89,7 +89,6 @@ def remap_samples(
     # Get the list of hts containing sample remapping information for each project
     remap_hts = []
 
-    logger.info("Found %d projects that need to be remapped.", len(remap_hts))
     sex_ht = hl.import_table(inferred_sex)
 
     for i in project_list:
@@ -99,6 +98,8 @@ def remap_samples(
             remap_ht = remap_ht.key_by("s", "seqr_id")
             remap_hts.append(remap_ht)
 
+    logger.info("Found %d projects that need to be remapped.", len(remap_hts))
+    
     if len(remap_hts) > 0:
         ht = remap_hts[0]
         for next_ht in remap_hts[1:]:
@@ -376,7 +377,7 @@ def main(args):
         logger.info(
             "Filtering kinship table to remove unrelated individuals from analysis..."
         )
-        kin_ht = filter_kin_ht(kin_ht, out_summary)
+        kin_ht = filter_kin_ht(kin_ht, out_summary, first_degree_pi_hat, grandparent_pi_hat, grandparent_ibd1, grandparent_ibd2)
 
     # Output basic stats
     out_summary.write(
