@@ -1,7 +1,7 @@
 """Utility functions to calculate singletons per sample."""
 import argparse
 import logging
-from typing import List, Set, Tuple
+from typing import Set, Tuple
 
 import hail as hl
 
@@ -11,7 +11,7 @@ from gnomad.utils.vcf import SPARSE_ENTRIES
 from gnomad.utils.slack import slack_notifications
 
 from ukbb_qc.resources.resource_utils import CURRENT_FREEZE
-from ukbb_qc.resources.sample_qc import interval_qc_path, relatedness_ht_path
+from ukbb_qc.resources.sample_qc import interval_qc_path
 from ukbb_qc.resources.variant_qc import info_ht_path, NA12878, SYNDIP
 
 logging.basicConfig(
@@ -70,7 +70,7 @@ def get_singleton_sites(
     :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
     :param tranche_data: UKB tranche data (data source and data freeze number). Default is TRANCHE_DATA.
     :param sparse_entries: List of fields to select from VDS. Default is SPARSE_ENTRIES.
-    :return: Table of high quality sites with doubletons.
+    :return: Table of high quality sites with singletons.
     """
     logger.info("Reading in VDS and filtering to bi-allelic SNPs...")
     mt = hl.vds.read_vds(vds_path).variant_data
@@ -110,8 +110,7 @@ def get_samples_n_singletons(
     """
     Get number of singletons per samples in the 455k VDS.
 
-    Filter VDS variant data to sites present in specified input Table, collect sample IDs, annotate IDs onto rows, and write
-    HT to temporary path.
+    Filter VDS variant data to singleton sites in the specified input Table.
 
     :param vds_path: Path to UKB 455k VDS. Default is VDS_PATH.
     :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
