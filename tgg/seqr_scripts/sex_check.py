@@ -45,7 +45,7 @@ def get_y_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25) -
                                   chr20_mean_cov=hl.agg.filter(sex_mt.locus.contig == chr20, hl.agg.mean(sex_mt.DP)))
     
     #hail.cond is outdated
-    sex_mt = sex_mt.annotate_cols(normalized_y_coverage=hl.cond(sex_mt.chr20_mean_cov > 0, sex_mt.chrY_mean_cov/sex_mt.chr20_mean_cov, -99))
+    sex_mt = sex_mt.annotate_cols(normalized_y_coverage=hl.if_else(sex_mt.chr20_mean_cov > 0, sex_mt.chrY_mean_cov/sex_mt.chr20_mean_cov, -99))
     sex_ht = sex_mt.cols()
 
     return(sex_ht)
