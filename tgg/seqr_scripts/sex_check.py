@@ -11,25 +11,25 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(asctime)s: %(me
 
 from gnomad.utils.reference_genome import get_reference_genome
 
-def get_y_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25) -> hl.Table:
+def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25) -> hl.Table:
     """
     Calculates mean chromosome Y coverage, mean chromosome 20 coverage, and normalized chromosome Y coverage for each sample
-    :param MatrixTable mt: MatrixTable containing samples with chrY variants
-    :param str build: Reference used, either GRCh37 or GRCh38
-    :param float call_rate_threshold: Minimum required call rate
+    :param mt: MatrixTable containing samples with chrY variants
+    :param build: Reference used, either GRCh37 or GRCh38
+    :param call_rate_threshold: Minimum required call rate
+    :param chr_name: chosen chromosome, either X or Y
     :return: Table with coverage annotations
-    :rtype: Table
     """
     #could utilize hail's reference genome chr names
     if build == "GRCh38":
         chr20 = "chr20"
-        chrY = "chrY"
+        chr_name = "chr" + chr_name
     else:
         chr20 = "20"
-        chrY = "Y"
+        chr_name = chr_name
 
-    logging.info("Filtering to chromosome 20 and non-par regions on chromosome Y to calculate normalized Y coverage...")
-    sex_mt = hl.filter_intervals(mt, [hl.parse_locus_interval(chr20, reference_genome=build), hl.parse_locus_interval(chrY, reference_genome=build)])
+    logging.info("Filtering to chromosome 20 and non-par regions on chr_name to calculate normalized Y coverage...")
+    sex_mt = hl.filter_intervals(mt, [hl.parse_locus_interval(chr20, reference_genome=build), hl.parse_locus_interval(chr_name, reference_genome=build)])
     sex_mt = sex_mt.filter_rows((sex_mt.locus.contig == chr20) | (sex_mt.locus.in_y_nonpar()), keep = True)
 
 
@@ -41,10 +41,10 @@ def get_y_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25) -
     sex_mt = sex_mt.filter_rows(sex_mt.variant_qc.call_rate > call_rate_threshold)
 
     logging.info("Calculating mean coverage on chromosome 20 and Y...")
-    sex_mt = sex_mt.annotate_cols(chrY_mean_cov=hl.agg.filter(sex_mt.locus.contig == chrY, hl.agg.mean(sex_mt.DP)),
+    sex_mt = sex_mt.annotate_cols(chr_name_mean_cov=hl.agg.filter(sex_mt.locus.contig == chr_name, hl.agg.mean(sex_mt.DP)),
                                   chr20_mean_cov=hl.agg.filter(sex_mt.locus.contig == chr20, hl.agg.mean(sex_mt.DP)))
     
-    sex_mt = sex_mt.annotate_cols(normalized_y_coverage=hl.if_else(sex_mt.chr20_mean_cov > 0, sex_mt.chrY_mean_cov/sex_mt.chr20_mean_cov, -99))
+    sex_mt = sex_mt.annotate_cols(normalized_y_coverage=hl.if_else(sex_mt.chr20_mean_cov > 0, sex_mt.chr_name_mean_cov/sex_mt.chr20_mean_cov, -99))
     sex_ht = sex_mt.cols()
 
     return(sex_ht)
@@ -52,11 +52,10 @@ def get_y_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25) -
 def get_x_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25) -> hl.Table:
     """
     Calculates mean chromosome X coverage,and normalized chromosome X coverage for each sample
-    :param MatrixTable mt: MatrixTable containing samples with chrY variants
-    :param str build: Reference used, either GRCh37 or GRCh38
-    :param float call_rate_threshold: Minimum required call rate
+    :param mt: MatrixTable containing samples with chrY variants
+    :param build: Reference used, either GRCh37 or GRCh38
+    :param call_rate_threshold: Minimum required call rate
     :return: Table with coverage annotations
-    :rtype: Table
     """
     if build == "GRCh38":
         chr20 = "chr20"
@@ -96,15 +95,14 @@ def run_hails_impute_sex(mt: hl.MatrixTable,
     aaf_threshold: float=0.05) -> hl.Table:
     """
     Imputes sex and annotates MatrixTable with results, outputs a histogram of fstat values
-    :param MatrixTable mt: MatrixTable containing samples to be ascertained for sex
-    :param str build: Reference used, either GRCh37 or GRCh38
-    :param str callset_name: Basename for callset and output results
-    :param str outdir: Directory to output results
-    :param str male_fstat_threshold: Fstat threshold above which a sample will be called male
-    :param str female_fstat_threshold: Fstat threshold below which a sample will be called female
-    :param str aaf_threshold: Minimum alternate allele frequency required 
+    :param mt: MatrixTable containing samples to be ascertained for sex
+    :param build: Reference used, either GRCh37 or GRCh38
+    :param callset_name: Basename for callset and output results
+    :param outdir: Directory to output results
+    :param male_fstat_threshold: Fstat threshold above which a sample will be called male
+    :param female_fstat_threshold: Fstat threshold below which a sample will be called female
+    :param aaf_threshold: Minimum alternate allele frequency required 
     :return: Table with imputed sex annotations
-    :rtype: Table
     """
     
     logging.warn("User needs to decide on fstat thresholds for male/female by looking at fstat plots")
@@ -142,15 +140,14 @@ def call_sex(callset: str,
     
     """
     Calls sex for the samples in a given callset and exports results file to the callset directory
-    :param str callset: String of full matrix table path for the callset
-    :param bool use_y_cov: Set to True to calculate and use chrY coverage for sex inference
-    :param float y_cov_threshold: Coverage on chrY above which supports male call
-    :param str male_fstat_threshold: Fstat threshold above which a sample will be called male
-    :param str female_fstat_threshold: Fstat threshold below which a sample will be called female
-    :param str aaf_threshold: Minimum alternate allele frequency required 
-    :param float call_rate_threshold: Minimum required call rate
+    :param callset: String of full matrix table path for the callset
+    :param use_y_cov: Set to True to calculate and use chrY coverage for sex inference
+    :param y_cov_threshold: Coverage on chrY above which supports male call
+    :param male_fstat_threshold: Fstat threshold above which a sample will be called male
+    :param female_fstat_threshold: Fstat threshold below which a sample will be called female
+    :param aaf_threshold: Minimum alternate allele frequency required 
+    :param call_rate_threshold: Minimum required call rate
     :return: Table with sex annotations
-    :rtype: Table
     """
 
     # read in matrix table and define output directory
