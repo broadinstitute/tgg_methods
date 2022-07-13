@@ -44,8 +44,7 @@ def get_y_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25) -
     sex_mt = sex_mt.annotate_cols(chrY_mean_cov=hl.agg.filter(sex_mt.locus.contig == chrY, hl.agg.mean(sex_mt.DP)),
                                   chr20_mean_cov=hl.agg.filter(sex_mt.locus.contig == chr20, hl.agg.mean(sex_mt.DP)))
     
-    #hail.cond is outdated
-    sex_mt = sex_mt.annotate_cols(normalized_y_coverage=hl.cond(sex_mt.chr20_mean_cov > 0, sex_mt.chrY_mean_cov/sex_mt.chr20_mean_cov, -99))
+    sex_mt = sex_mt.annotate_cols(normalized_y_coverage=hl.if_else(sex_mt.chr20_mean_cov > 0, sex_mt.chrY_mean_cov/sex_mt.chr20_mean_cov, -99))
     sex_ht = sex_mt.cols()
 
     return(sex_ht)
@@ -82,8 +81,7 @@ def get_x_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25) -
     sex_mt = sex_mt.annotate_cols(chrX_mean_cov=hl.agg.filter(sex_mt.locus.contig == chrX, hl.agg.mean(sex_mt.DP)),
                                   chr20_mean_cov=hl.agg.filter(sex_mt.locus.contig == chr20, hl.agg.mean(sex_mt.DP)))
     
-    #hail.cond is outdated
-    sex_mt = sex_mt.annotate_cols(normalized_x_coverage=hl.cond(sex_mt.chr20_mean_cov > 0, sex_mt.chrX_mean_cov/sex_mt.chr20_mean_cov, -99))
+    sex_mt = sex_mt.annotate_cols(normalized_x_coverage=hl.if_else(sex_mt.chr20_mean_cov > 0, sex_mt.chrX_mean_cov/sex_mt.chr20_mean_cov, -99))
     sex_ht = sex_mt.cols()
 
     return(sex_ht)
@@ -127,7 +125,7 @@ def run_hails_impute_sex(mt: hl.MatrixTable,
     plt.axvline(male_fstat_threshold, color='blue', linestyle='dashed', linewidth=1)
     plt.axvline(female_fstat_threshold, color='red', linestyle='dashed', linewidth=1)
 
-    outplot = outdir + "/fstat_{callset_name}.png".format(**locals())
+    outplot = f"{outdir}/fstat_{callset_name}.png"
     with hl.hadoop_open(outplot, 'wb') as out:
         plt.savefig(out)   
         
@@ -159,8 +157,8 @@ def call_sex(callset: str,
     # will need to generalize more for gnomad methods
     outdir = dirname(callset)
     mt_name = callset.split("/")[-1].strip("\.mt")
-    logging.info("Reading matrix table for callset: {callset}".format(**locals()))
-    logging.info("Using chromosome Y coverage? {use_y_cov}".format(**locals()))
+    logging.info(f"Reading matrix table for callset: {callset}")
+    logging.info(f"Using chromosome Y coverage? {use_y_cov}")
 
     mt = hl.read_matrix_table(callset)
     
@@ -174,7 +172,7 @@ def call_sex(callset: str,
     
     #infer build:
     build = get_reference_genome(mt.locus).name
-    logging.info("Build inferred as {build}".format(**locals()))
+    logging.info(f"Build inferred as {build}")
     
     logging.info("Inferring sex...")
     #for production change female and male to XX and XY
@@ -198,11 +196,11 @@ def call_sex(callset: str,
     else:
         sex_ht = run_hails_impute_sex(mt, build, outdir, mt_name, male_fstat_threshold, female_fstat_threshold, aaf_threshold)
         sex_ht = sex_ht.annotate(ambiguous_sex=hl.is_missing(sex_ht.is_female))
-        sex_expr = hl.cond(sex_ht.ambiguous_sex, "ambiguous_sex", hl.cond(sex_ht.is_female, "female", "male"))
+        sex_expr = hl.if_else(sex_ht.ambiguous_sex, "ambiguous_sex", hl.if_else(sex_ht.is_female, "female", "male"))
         sex_ht = sex_ht.annotate(sex=sex_expr)
         sex_ht = sex_ht.select(sex_ht.is_female, sex_ht.f_stat, sex_ht.n_called, sex_ht.expected_homs, sex_ht.observed_homs, sex_ht.sex)
 
-    outfile = outdir + f"/sex_{mt_name}.txt"
+    outfile = f"{outdir}/sex_{mt_name}.txt"
     sex_ht.export(outfile)
     return(sex_ht)
 
