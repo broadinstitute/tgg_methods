@@ -7,6 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from os.path import dirname
 
+<<<<<<< HEAD
 logging.basicConfig(
     format="%(asctime)s (%(name)s %(lineno)s): %(message)s", 
     datefmt="%m/%d/%Y %I:%M:%S %p")
@@ -18,10 +19,26 @@ from gnomad.utils.reference_genome import get_reference_genome
 def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25, chr_name: str, af_field: str="AF", af_threshold: float=0.01) -> hl.Table:
     """
     Calculates mean chromosome coverage 
+=======
+from gnomad.utils.reference_genome import get_reference_genome
+
+
+logging.basicConfig(
+    format="%(asctime)s (%(name)s %(lineno)s): %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S %p",
+)
+logger = logging.getLogger("sex_check")
+logger.setLevel(logging.INFO) 
+def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25, chr_name: str) -> hl.Table:
+    """
+    Calculates mean chromosome coverage.
+    
+>>>>>>> dccc29a2b1d6cd0bfc39ba171e631a1326f317f8
     :param mt: MatrixTable containing samples with chrY variants
     :param build: Reference used, either GRCh37 or GRCh38
     :param call_rate_threshold: Minimum required call rate
     :param chr_name: chosen chromosome, either 1, 2, 3, ..., X, or Y
+<<<<<<< HEAD
     :param af_field: allele frequency field of matrix table 
     :param af_threshold: allele frequency threshold 
     :return: Table with coverage annotations
@@ -50,13 +67,51 @@ def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25,
 
     # filter to common snvs above defined callrate (because only biallelic, should now only have one index in the array)
     sex_mt = sex_mt.filter_rows(sex_mt[af_field] > af_threshold)
+=======
+    :return: Table with coverage annotations
+    """
+
+    logger.warning("This function expects the chrY to be at index 23 and chrX to be at index 22")
+    
+    if chr_name == "Y"
+        filter_nonpar_expr = sex_mt.locus.in_y_nonpar()
+        chr_place = 23
+    elif chr_name = "X"
+        filter_nonpar_expr = sex_mt.locus.in_x_nonpar()
+        chr_place = 22
+    else:
+        try:
+            chr_place = int(chr_name) - 1
+        except:
+            logger.warning("chr_name cannot be converted to an integer")
+
+    #could utilize hail's reference genome chr names
+    chr_name= hl.get_reference(build).contigs[chr_place]
+
+    logging.info(f"Filtering to non-par regions on {chr_name} to calculate normalized {chr_name} coverage...")
+    sex_mt = hl.filter_intervals(mt, [hl.parse_locus_interval(chr_name, reference_genome=build)])
+    if chr_place == 22 or chr_place == 23 :
+        sex_mt = sex_mt.filter_rows((filter_nonpar_expr), keep = True)
+
+
+    #filter to common snvs above defined callrate (because only biallelic, should now only have one index in the array)
+    sex_mt = sex_mt.filter_rows(sex_mt.AF > 0.01)
+>>>>>>> dccc29a2b1d6cd0bfc39ba171e631a1326f317f8
 
     # NOTE: this line is optional for gnomad_methods
     sex_mt = hl.variant_qc(sex_mt) 
     sex_mt = sex_mt.filter_rows(sex_mt.variant_qc.call_rate > call_rate_threshold)
 
+<<<<<<< HEAD
     logger.info(f"Returning mean coverage on chromosome {chr_name}...")
     return sex_mt.aggregate(hl.agg.mean(sex_mt.DP))
+=======
+    logging.info(f"Calculating mean coverage on {chr_name}...")
+    sex_mt = sex_mt.annotate_cols(**{f"{chr_name}_mean_dp": mt.aggregate(hl.agg.mean(mt.DP))})
+    sex_ht = sex_mt.cols()
+
+    return(sex_ht)
+>>>>>>> dccc29a2b1d6cd0bfc39ba171e631a1326f317f8
 
 def run_hails_impute_sex(mt: hl.MatrixTable, 
     build: str ,
@@ -105,7 +160,11 @@ def run_hails_impute_sex(mt: hl.MatrixTable,
 def call_sex(callset: str, 
              use_y_cov: bool=False,
              y_cov_threshold: float=0.1,
+<<<<<<< HEAD
              normalization_contig: str="20", 
+=======
+             normalization_contig: str = "chr20",
+>>>>>>> dccc29a2b1d6cd0bfc39ba171e631a1326f317f8
              male_fstat_threshold: float=0.75, 
              female_fstat_threshold: float=0.5, 
              aaf_threshold: float=0.05,
@@ -116,7 +175,10 @@ def call_sex(callset: str,
     :param callset: String of full matrix table path for the callset
     :param use_y_cov: Set to True to calculate and use chrY coverage for sex inference
     :param y_cov_threshold: Coverage on chrY above which supports male call
+<<<<<<< HEAD
     :param normalization_contig: chosen chromosome for calculating normalized coverage
+=======
+>>>>>>> dccc29a2b1d6cd0bfc39ba171e631a1326f317f8
     :param male_fstat_threshold: Fstat threshold above which a sample will be called male
     :param female_fstat_threshold: Fstat threshold below which a sample will be called female
     :param aaf_threshold: Minimum alternate allele frequency required 
@@ -148,9 +210,16 @@ def call_sex(callset: str,
     logger.info("Inferring sex...")
     # for production change female and male to XX and XY
     if use_y_cov:
+<<<<<<< HEAD
         mt = mt.annotate_cols(**{f"chr{normalization_contig}_mean_dp": get_chr_cov(mt, build, call_rate_threshold, normalization_contig) 
         "chry_mean_dp": get_chr_cov(mt, build, call_rate_threshold, "Y")})
         mt = mt.annotate_cols(normalized_y_coverage=hl.or_missing(mt[f"chr{normalization_contig}_mean_dp"] > 0, mt.chry_mean_dp / mt[f"chr{normalization_contig}_mean_dp"]))
+=======
+        mt = mt.annotate_cols(**{f"{normalization_contig}_mean_dp": get_chr_cov(mt, build, call_rate_threshold, normalization_contig)
+        "chrY_mean_dp": get_chr_cov(mt, build, call_rate_threshold, chrY_name)})
+        mt = mt.annotate_cols(chry_normalized_cov=hl.or_missing(mt[f"{normalization_contig}_mean_dp"] > 0, chry_mean_dp, mt[f"{normalization_contig}_mean_dp"]/chrY_mean_dp,))
+        mt = mt.annotate_cols(**mt[mt.col_key])
+>>>>>>> dccc29a2b1d6cd0bfc39ba171e631a1326f317f8
         sex_ht = run_hails_impute_sex(mt, build, outdir, mt_name, male_fstat_threshold, female_fstat_threshold, aaf_threshold)  
         sex_ht = sex_ht.annotate(ambiguous_sex=hl.is_missing(sex_ht.is_female),
                                  sex_aneuploidy=(sex_ht.is_female) & hl.is_defined(sex_ht.normalized_y_coverage) & (sex_ht.normalized_y_coverage > y_cov_threshold) |
@@ -188,8 +257,13 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--female-fstat-threshold', help='female_fstat_threshold for hails impute_sex', default=0.50)
     parser.add_argument('-a', '--aaf-threshold', help='aaf_threshold for hails impute_sex', default=0.05)
     parser.add_argument('-c', '--call-rate-threshold', help='call_rate_threshold required to use chrY variant', default=0.25)
+<<<<<<< HEAD
     # NOTE: this is an integer here because get_chr_cov expects chromosomes to be specified using their numbers
     parser.add_argument('-n', '--normalization-contig', help='contig to calculate normalized_y_coverage', default="20")
     
+=======
+    parser.add_argument('-n', '--chromosome-name', requried=True, help='input chromosome name for get_chr_cov')
+
+>>>>>>> dccc29a2b1d6cd0bfc39ba171e631a1326f317f8
     args = parser.parse_args()
     main(args)
