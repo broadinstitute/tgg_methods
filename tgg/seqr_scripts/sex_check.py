@@ -7,10 +7,15 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from os.path import dirname
 
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(asctime)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
-
 from gnomad.utils.reference_genome import get_reference_genome
 
+
+logging.basicConfig(
+    format="%(asctime)s (%(name)s %(lineno)s): %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S %p",
+)
+logger = logging.getLogger("sex_check")
+logger.setLevel(logging.INFO) 
 def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25, chr_name: str) -> hl.Table:
     """
     Calculates mean chromosome coverage
