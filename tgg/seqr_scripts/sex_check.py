@@ -97,7 +97,7 @@ def run_hails_impute_sex(mt: hl.MatrixTable,
     mt = mt.annotate_cols(**sex_ht[mt.col_key])
     sex_ht = mt.cols()
     
-    # plot histogram of fstat values
+    # Plot histogram of fstat values
     df = sex_ht.to_pandas()
     plt.clf()
     plt.hist(df["f_stat"])
