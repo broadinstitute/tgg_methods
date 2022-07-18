@@ -136,8 +136,8 @@ def call_sex(
     :return: Table with sex annotations
     """
 
-    # read in matrix table and define output directory
-    # will need to generalize more for gnomad methods
+    # Read in matrix table and define output directory
+    # TODO: Generalize before moving into gnomad_methods
     outdir = dirname(callset)
     mt_name = callset.split("/")[-1].strip("\.mt")
     logging.info(f"Reading matrix table for callset: {callset}")
