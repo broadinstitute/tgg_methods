@@ -55,7 +55,7 @@ def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25,
         sex_mt = sex_mt.filter_rows((filter_nonpar_expr), keep = True)
 
 
-    #filter to common snvs above defined callrate (because only biallelic, should now only have one index in the array)
+    # Filter to common SNVs above defined callrate (should only have one index in the array because the MT only contains biallelic variants)
     sex_mt = sex_mt.filter_rows(sex_mt.AF > 0.01)
 
     #optional for gnomad methods
