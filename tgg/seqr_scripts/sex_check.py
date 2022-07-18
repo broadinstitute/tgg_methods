@@ -1,11 +1,13 @@
+import argparse
 import logging
+import matplotlib.pyplot as plt
+import pandas as pd
+from os.path import dirname
+
 import hail as hl
 import hail.expr.aggregators as agg
 
-import argparse
-import pandas as pd
-import matplotlib.pyplot as plt
-from os.path import dirname
+from gnomad.utils.reference_genome import get_reference_genome
 
 from gnomad.utils.reference_genome import get_reference_genome
 
