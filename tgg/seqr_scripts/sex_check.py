@@ -154,8 +154,12 @@ def call_sex(callset: str,
     logging.info("Inferring sex...")
     #for production change female and male to XX and XY
     if use_y_cov:
-        mt = mt.annotate_cols(**{f"{normalization_contig}_mean_dp": get_chr_cov(mt, build, call_rate_threshold, normalization_contig)
-        "chrY_mean_dp": get_chr_cov(mt, build, call_rate_threshold, chrY_name)})
+        mt = mt.annotate_cols(
+            **{
+                f"{normalization_contig}_mean_dp": get_chr_cov(mt, build, call_rate_threshold, normalization_contig),
+                "chrY_mean_dp": get_chr_cov(mt, build, call_rate_threshold, chrY_name),
+            }
+        )
         mt = mt.annotate_cols(chry_normalized_cov=hl.or_missing(mt[f"{normalization_contig}_mean_dp"] > 0, chry_mean_dp, mt[f"{normalization_contig}_mean_dp"]/chrY_mean_dp,))
         mt = mt.annotate_cols(**mt[mt.col_key])
         sex_ht = run_hails_impute_sex(mt, build, outdir, mt_name, male_fstat_threshold, female_fstat_threshold, aaf_threshold)  
