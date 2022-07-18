@@ -41,6 +41,7 @@ def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25,
         chr_place = 22
     else:
         try:
+            # Chromsome index in `.contigs` list should be one less than the chromsome number
             chr_place = int(chr_name) - 1
         except:
             logger.warning("chr_name cannot be converted to an integer")
