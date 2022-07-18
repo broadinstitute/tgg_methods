@@ -46,7 +46,7 @@ def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25,
         except:
             logger.warning("chr_name cannot be converted to an integer")
 
-    chr_name= hl.get_reference(build).contigs[chr_place]
+    chr_name = hl.get_reference(build).contigs[chr_place]
 
     logging.info(f"Filtering to non-par regions on {chr_name} to calculate normalized {chr_name} coverage...")
     sex_mt = hl.filter_intervals(mt, [hl.parse_locus_interval(chr_name, reference_genome=build)])
