@@ -88,7 +88,6 @@ def run_hails_impute_sex(mt: hl.MatrixTable,
     
     logging.warn("User needs to decide on fstat thresholds for male/female by looking at fstat plots")
 
-    
     # filter to the X chromosome and impute sex
     mt = hl.filter_intervals(mt, [hl.parse_locus_interval(get_reference_genome(mt.locus).x_contigs[0], reference_genome=build)])   
     sex_ht = hl.impute_sex(mt.GT, aaf_threshold=aaf_threshold, male_threshold=male_fstat_threshold, female_threshold=female_fstat_threshold)
