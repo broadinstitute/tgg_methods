@@ -124,8 +124,9 @@ def call_sex(
     call_rate_threshold: float = 0.25
 ) -> hl.Table:
     """
-    Calls sex for the samples in a given callset and exports results file to the callset directory
-    :param callset: String of full matrix table path for the callset
+    Call sex for the samples in a given callset and export results file to the callset directory.
+    
+    :param str callset: String of full MatrixTable path for the callset
     :param use_y_cov: Set to True to calculate and use chrY coverage for sex inference
     :param y_cov_threshold: Coverage on chrY above which supports male call
     :param male_fstat_threshold: Fstat threshold above which a sample will be called male
