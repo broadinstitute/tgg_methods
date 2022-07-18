@@ -199,7 +199,7 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--female-fstat-threshold', help='female_fstat_threshold for hails impute_sex', default=0.50)
     parser.add_argument('-a', '--aaf-threshold', help='aaf_threshold for hails impute_sex', default=0.05)
     parser.add_argument('-c', '--call-rate-threshold', help='call_rate_threshold required to use chrY variant', default=0.25)
-    parser.add_argument('-n', '--chromosome-name', requried=True, help='input chromosome name for get_chr_cov')
+    parser.add_argument('-n', '--chr-name', requried=True, help='Input chromosome name for get_chr_cov')
 
     args = parser.parse_args()
     main(args)
