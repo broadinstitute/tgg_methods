@@ -72,8 +72,8 @@ def run_hails_impute_sex(mt: hl.MatrixTable,
     build: str,
     outdir: str, 
     callset_name: str,
-    male_fstat_threshold: float=0.75, 
-    female_fstat_threshold: float=0.5, 
+    male_fstat_threshold: float = 0.75, 
+    female_fstat_threshold: float = 0.5, 
     aaf_threshold: float=0.05) -> hl.Table:
     """
     Imputes sex and annotates MatrixTable with results, outputs a histogram of fstat values
