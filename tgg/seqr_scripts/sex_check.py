@@ -145,8 +145,7 @@ def call_sex(
 
     mt = hl.read_matrix_table(callset)
     
-    # filter to SNVs and biallelics
-    # filter to biallelics might be a function
+    # Filter to SNVs and biallelics
     mt = mt.filter_rows((hl.len(mt.alleles) == 2) & hl.is_snp(mt.alleles[0], mt.alleles[1]))
     
     # filter to pass variants only (empty set)
