@@ -16,6 +16,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("sex_check")
 logger.setLevel(logging.INFO) 
+
+
 def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25, chr_name: str) -> hl.Table:
     """
     Calculates mean chromosome coverage.
