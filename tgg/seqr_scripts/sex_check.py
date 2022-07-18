@@ -113,15 +113,16 @@ def run_hails_impute_sex(mt: hl.MatrixTable,
     return sex_ht  
 
     
-def call_sex(callset: str, 
-             use_y_cov: bool=False,
-             y_cov_threshold: float=0.1,
-             normalization_contig: str = "chr20",
-             male_fstat_threshold: float=0.75, 
-             female_fstat_threshold: float=0.5, 
-             aaf_threshold: float=0.05,
-             call_rate_threshold: float=0.25) -> hl.Table:
-    
+def call_sex(
+    callset: str, 
+    use_y_cov: bool = False,
+    y_cov_threshold: float = 0.1,
+    normalization_contig: str = "chr20",
+    male_fstat_threshold: float = 0.75, 
+    female_fstat_threshold: float = 0.5, 
+    aaf_threshold: float = 0.05,
+    call_rate_threshold: float = 0.25
+) -> hl.Table:
     """
     Calls sex for the samples in a given callset and exports results file to the callset directory
     :param callset: String of full matrix table path for the callset
