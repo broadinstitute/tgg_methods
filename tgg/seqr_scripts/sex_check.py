@@ -152,7 +152,7 @@ def call_sex(callset: str,
     logging.info(f"Build inferred as {build}")
     
     logging.info("Inferring sex...")
-    #for production change female and male to XX and XY
+    # TODO: Change "female" and "male" to "XX" and "XY"
     if use_y_cov:
         mt = mt.annotate_cols(
             **{
