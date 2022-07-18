@@ -149,7 +149,7 @@ def call_sex(callset: str,
     # gnomad methods - will need to make this an optional argument
     mt = mt.filter_rows(mt.filters.length() == 0, keep=True)
     
-    #infer build:
+    # Infer build:
     build = get_reference_genome(mt.locus).name
     logging.info(f"Build inferred as {build}")
     
