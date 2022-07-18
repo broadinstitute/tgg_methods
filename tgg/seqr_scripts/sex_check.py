@@ -148,8 +148,8 @@ def call_sex(
     # Filter to SNVs and biallelics
     mt = mt.filter_rows((hl.len(mt.alleles) == 2) & hl.is_snp(mt.alleles[0], mt.alleles[1]))
     
-    # filter to pass variants only (empty set)
-    # gnomad methods - will need to make this an optional argument
+    # Filter to pass variants only (empty set)
+    # TODO: Make this an optional argument before moving to gnomad_methods
     mt = mt.filter_rows(mt.filters.length() == 0, keep=True)
     
     # Infer build:
