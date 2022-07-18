@@ -51,6 +51,7 @@ def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25,
     logger.info(f"Filtering to non-par regions on {chr_name} to calculate normalized {chr_name} coverage...")
     sex_mt = hl.filter_intervals(mt, [hl.parse_locus_interval(chr_name, reference_genome=build)])
     if chr_place == 22 or chr_place == 23 :
+        logger.info("Filtering to non-PAR regions")
         sex_mt = sex_mt.filter_rows((filter_nonpar_expr), keep = True)
 
 
