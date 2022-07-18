@@ -46,7 +46,6 @@ def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25,
         except:
             logger.warning("chr_name cannot be converted to an integer")
 
-    #could utilize hail's reference genome chr names
     chr_name= hl.get_reference(build).contigs[chr_place]
 
     logging.info(f"Filtering to non-par regions on {chr_name} to calculate normalized {chr_name} coverage...")
