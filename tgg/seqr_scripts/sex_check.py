@@ -68,7 +68,7 @@ def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25,
     return(sex_ht)
 
 def run_hails_impute_sex(mt: hl.MatrixTable, 
-    build: str ,
+    build: str,
     outdir: str, 
     callset_name: str,
     male_fstat_threshold: float=0.75, 
