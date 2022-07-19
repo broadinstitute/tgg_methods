@@ -20,7 +20,7 @@ logger.setLevel(logging.INFO)
 
 def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25, chr_name: str, af_field: str="AF", af_threshold: float=0.01) -> hl.Table:
     """
-    Calculate mean chromosome coverage 
+    Calculate mean chromosome coverage. 
 
     :param mt: MatrixTable containing samples with chrY variants
     :param build: Reference used, either GRCh37 or GRCh38
@@ -51,6 +51,7 @@ def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25,
     logger.info(f"Filtering to chromosome (and filtering to non-par regions if chromosome is X or Y)...")
     sex_mt = hl.filter_intervals(mt, [hl.parse_locus_interval(chr_name, reference_genome=build)])
     if chr_place in [22, 23]: 
+        logger.info("Filtering to non-PAR regions")
         sex_mt = sex_mt.filter_rows((filter_nonpar_expr), keep = True)
 
     # Filter to common SNVs above defined callrate (should only have one index in the array because the MT only contains biallelic variants)
@@ -70,9 +71,9 @@ def run_hails_impute_sex(mt: hl.MatrixTable,
     male_fstat_threshold: float = 0.75, 
     female_fstat_threshold: float = 0.5, 
     aaf_threshold: float = 0.05
-    ) -> hl.Table:
+) -> hl.Table:
     """
-    Imputes sex and annotates MatrixTable with results, outputs a histogram of fstat values
+    Impute sex, annotate MatrixTable with results, and output a histogram of fstat values
 
     :param MatrixTable mt: MatrixTable containing samples to be ascertained for sex
     :param build: Reference used, either GRCh37 or GRCh38
@@ -120,7 +121,7 @@ def call_sex(
 ) -> hl.Table:
     
     """
-    Calls sex for the samples in a given callset and exports results file to the callset directory
+    Call sex for the samples in a given callset and export results file to the callset directory
 
     :param str callset: String of full MatrixTable path for the callset
     :param use_y_cov: Set to True to calculate and use chrY coverage for sex inference
