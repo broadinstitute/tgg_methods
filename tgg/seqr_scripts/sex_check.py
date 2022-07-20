@@ -24,10 +24,10 @@ def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25,
 
     :param mt: MatrixTable containing samples with chrY variants
     :param build: Reference used, either GRCh37 or GRCh38
-    :param call_rate_threshold: Minimum required call rate
-    :param chr_name: chosen chromosome, either 1, 2, 3, ..., X, or Y
-    :param af_field: allele frequency field of matrix table 
-    :param af_threshold: allele frequency threshold 
+    :param chr_name: Chosen chromosome. Must be either autosome (number only) or sex chromosome (X, Y)
+    :param af_field: Name of field containing allele frequency information. Default is "AF"
+    :param call_rate_threshold: Minimum call rate threshold. Default is 0.25
+    :param af_threshold: Minimum allele frequency threshold. Default is 0.01
     :return: Table with coverage annotations
     """
 
