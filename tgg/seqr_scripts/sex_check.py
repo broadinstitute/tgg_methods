@@ -73,7 +73,7 @@ def run_hails_impute_sex(mt: hl.MatrixTable,
     aaf_threshold: float = 0.05
 ) -> hl.Table:
     """
-    Impute sex, annotate MatrixTable with results, and output a histogram of fstat values
+    Impute sex, annotate MatrixTable with results, and output a histogram of fstat values.
 
     :param MatrixTable mt: MatrixTable containing samples to be ascertained for sex
     :param build: Reference used, either GRCh37 or GRCh38
