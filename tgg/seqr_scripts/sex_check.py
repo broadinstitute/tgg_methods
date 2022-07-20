@@ -64,6 +64,7 @@ def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25,
     logger.info(f"Returning mean coverage on chromosome {chr_name}...")
     return sex_mt.aggregate(hl.agg.mean(sex_mt.DP))
 
+
 def run_hails_impute_sex(mt: hl.MatrixTable, 
     build: str,
     outdir: str, 
