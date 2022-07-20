@@ -44,7 +44,8 @@ def get_chr_cov(mt: hl.MatrixTable, build: str, call_rate_threshold: float=0.25,
             # Chromosome index in '.contigs' list should be one less than the chromosome number 
             chr_place = int(chr_name) - 1 
         except ValueError: 
-            logger.warning("chr_name cannot be converted to an integer")
+            logger.error("chr_name cannot be converted to an integer")
+            return
 
     chr_name = hl.get_reference(build).contigs[chr_place]
 
