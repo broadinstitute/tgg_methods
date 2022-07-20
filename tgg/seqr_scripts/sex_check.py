@@ -129,7 +129,7 @@ def call_sex(
     :param normalization_contig: chosen chromosome for calculating normalized coverage
     :param male_fstat_threshold: Fstat threshold above which a sample will be called male
     :param female_fstat_threshold: Fstat threshold below which a sample will be called female
-    :param aaf_threshold: Minimum alternate allele frequency required 
+    :param aaf_threshold: Alternate allele frequency threshold for `hl.impute_sex`. Default is 0.05 
     :param call_rate_threshold: Minimum required call rate. Default is 0.25
     :return: Table with sex annotations
     """
