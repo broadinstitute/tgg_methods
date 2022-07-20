@@ -83,7 +83,7 @@ def run_hails_impute_sex(mt: hl.MatrixTable,
     :param outdir: Directory to output results
     :param male_fstat_threshold: Fstat threshold above which a sample will be called male. Default is 0.75
     :param female_fstat_threshold: Fstat threshold below which a sample will be called female. Default is 0.5
-    :param aaf_threshold: Minimum alternate allele frequency required 
+    :param aaf_threshold: Alternate allele frequency threshold for `hl.impute_sex`. Default is 0.05 
     :return: Table with imputed sex annotations
     """
     
