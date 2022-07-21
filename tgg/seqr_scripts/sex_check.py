@@ -291,7 +291,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-u",
         "--use-y-cov",
-        help="bool for whether or not to use chrY coverage",
+        help="Whether to use chromosome Y coverage when inferring sex. Note that Y coverage is required to infer sex aneuploidies",
         action="store_true",
     )
     parser.add_argument(
