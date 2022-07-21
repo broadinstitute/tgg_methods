@@ -153,8 +153,8 @@ def call_sex(
     :param use_y_cov: Set to True to calculate and use chrY coverage for sex inference. Default is False
     :param y_cov_threshold: Coverage on chrY above which supports male call. Default is 0.1
     :param normalization_contig: Chosen chromosome for calculating normalized coverage. Default is "20"
-    :param male_fstat_threshold: Fstat threshold above which a sample will be called male. Default is 0.75
-    :param female_fstat_threshold: Fstat threshold below which a sample will be called female. Default is 0.5
+    :param xy_fstat_threshold: F-stat threshold above which a sample will be called XY. Default is 0.75
+    :param xx_fstat_threshold: F-stat threshold below which a sample will be called XX. Default is 0.5
     :param aaf_threshold: Alternate allele frequency threshold for `hl.impute_sex`. Default is 0.05
     :param call_rate_threshold: Minimum required call rate. Default is 0.25
     :return: Table with sex annotations
