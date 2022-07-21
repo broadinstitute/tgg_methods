@@ -299,7 +299,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-m",
-        "--male-fstat-threshold",
+        "--xy-fstat-threshold",
         help="male_fstat_threshold for hails impute_sex",
         default=0.75,
     )
