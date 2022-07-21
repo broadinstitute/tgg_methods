@@ -321,7 +321,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-n",
         "--normalization-contig",
-        help="contig to calculate normalized_y_coverage",
+        help="Autosome to use to normalize sex chromosome coverage. Default is chromosome 20",
         default="20",
     )
 
