@@ -51,7 +51,8 @@ def get_chr_cov(
             # Chromosome index in '.contigs' list should be one less than the chromosome number
             chr_place = int(chr_name) - 1
         except ValueError:
-            return logger.error("chr_name cannot be converted to an integer")
+            logger.error("chr_name cannot be converted to an integer")
+            return -99
 
     chr_name = hl.get_reference(build).contigs[chr_place]
 
