@@ -295,7 +295,7 @@ if __name__ == "__main__":
         action="store_true",
     )
     parser.add_argument(
-        "-y", "--y-cov-threshold", help="chrY coverage threshold", default=0.1
+        "-y", "--y-cov-threshold", help="Y coverage threshold used to infer sex aneuploidies (XY samples below and XX samples above this threshold will be inferred as having aneuploidies)", default=0.1
     )
     parser.add_argument(
         "-m",
