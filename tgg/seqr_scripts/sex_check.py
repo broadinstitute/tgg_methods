@@ -309,7 +309,7 @@ if __name__ == "__main__":
         default=0.50,
     )
     parser.add_argument(
-        "-a", "--aaf-threshold", help="aaf_threshold for hails impute_sex", default=0.05
+        "-a", "--aaf-threshold", help="Alternate allele frequency threshold for `hl.impute_sex`. Default is 0.05", default=0.05
     )
     parser.add_argument(
         "-c",
