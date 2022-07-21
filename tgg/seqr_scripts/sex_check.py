@@ -300,7 +300,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-m",
         "--xy-fstat-threshold",
-        help="male_fstat_threshold for hails impute_sex",
+        help="F-stat threshold above which a sample will be called XY. Default is 0.75",
         default=0.75,
     )
     parser.add_argument(
