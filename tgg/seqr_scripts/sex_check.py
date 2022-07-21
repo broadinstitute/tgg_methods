@@ -275,7 +275,7 @@ def main(args):
     """
     Call `call_sex` to infer sex of samples in input MatrixTable.
 
-    :param args: user's inputs to run code
+    :param args: User's command line inputs
     """
 
     call_sex(**vars(args))
