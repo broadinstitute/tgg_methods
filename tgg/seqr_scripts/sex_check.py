@@ -314,7 +314,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-c",
         "--call-rate-threshold",
-        help="call_rate_threshold required to use chrY variant",
+        help="Minimum variant call rate threshold. Default is 0.25",
         default=0.25,
     )
     # NOTE: this is an integer here because get_chr_cov expects chromosomes to be specified using their numbers
