@@ -305,7 +305,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-f",
-        "--female-fstat-threshold",
+        "--xx-fstat-threshold",
         help="F-stat threshold below which a sample will be called XX. Default is 0.5",
         default=0.50,
     )
