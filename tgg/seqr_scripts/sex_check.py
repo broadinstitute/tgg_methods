@@ -33,7 +33,7 @@ def get_chr_cov(
     :param af_field: Name of field containing allele frequency information. Default is "AF"
     :param call_rate_threshold: Minimum call rate threshold. Default is 0.25
     :param af_threshold: Minimum allele frequency threshold. Default is 0.01
-    :return: Table with coverage annotations
+    :return: Float64Expression of mean coverage of specified chromosome
     """
 
     logger.warning(
