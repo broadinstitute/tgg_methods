@@ -23,7 +23,7 @@ def get_chr_cov(
     af_field: str = "AF",
     call_rate_threshold: float = 0.25,
     af_threshold: float = 0.01,
-) -> hl.Table:
+) -> hl.expr.Float64Expression:
     """
     Calculate mean chromosome coverage.
 
@@ -33,7 +33,7 @@ def get_chr_cov(
     :param af_field: Name of field containing allele frequency information. Default is "AF"
     :param call_rate_threshold: Minimum call rate threshold. Default is 0.25
     :param af_threshold: Minimum allele frequency threshold. Default is 0.01
-    :return: Table with coverage annotations
+    :return: Float64Expression of mean coverage of specified chromosome
     """
 
     logger.warning(
@@ -51,7 +51,8 @@ def get_chr_cov(
             # Chromosome index in '.contigs' list should be one less than the chromosome number
             chr_place = int(chr_name) - 1
         except ValueError:
-            return logger.error("chr_name cannot be converted to an integer")
+            logger.error("chr_name cannot be converted to an integer")
+            return -99
 
     chr_name = hl.get_reference(build).contigs[chr_place]
 
@@ -81,8 +82,8 @@ def run_hails_impute_sex(
     build: str,
     outdir: str,
     callset_name: str,
-    male_fstat_threshold: float = 0.75,
-    female_fstat_threshold: float = 0.5,
+    xy_fstat_threshold: float = 0.75,
+    xx_fstat_threshold: float = 0.5,
     aaf_threshold: float = 0.05,
 ) -> hl.Table:
     """
@@ -92,8 +93,8 @@ def run_hails_impute_sex(
     :param build: Reference used, either GRCh37 or GRCh38
     :param callset_name: Basename for callset and output results
     :param outdir: Directory to output results
-    :param male_fstat_threshold: Fstat threshold above which a sample will be called male. Default is 0.75
-    :param female_fstat_threshold: Fstat threshold below which a sample will be called female. Default is 0.5
+    :param xy_fstat_threshold: F-stat threshold above which a sample will be called XY. Default is 0.75
+    :param xx_fstat_threshold: F-stat threshold below which a sample will be called XX. Default is 0.5
     :param aaf_threshold: Alternate allele frequency threshold for `hl.impute_sex`. Default is 0.05
     :return: Table with imputed sex annotations
     """
@@ -141,8 +142,8 @@ def call_sex(
     use_y_cov: bool = False,
     y_cov_threshold: float = 0.1,
     normalization_contig: str = "20",
-    male_fstat_threshold: float = 0.75,
-    female_fstat_threshold: float = 0.5,
+    xy_fstat_threshold: float = 0.75,
+    xx_fstat_threshold: float = 0.5,
     aaf_threshold: float = 0.05,
     call_rate_threshold: float = 0.25,
 ) -> hl.Table:
@@ -153,8 +154,8 @@ def call_sex(
     :param use_y_cov: Set to True to calculate and use chrY coverage for sex inference. Default is False
     :param y_cov_threshold: Coverage on chrY above which supports male call. Default is 0.1
     :param normalization_contig: Chosen chromosome for calculating normalized coverage. Default is "20"
-    :param male_fstat_threshold: Fstat threshold above which a sample will be called male. Default is 0.75
-    :param female_fstat_threshold: Fstat threshold below which a sample will be called female. Default is 0.5
+    :param xy_fstat_threshold: F-stat threshold above which a sample will be called XY. Default is 0.75
+    :param xx_fstat_threshold: F-stat threshold below which a sample will be called XX. Default is 0.5
     :param aaf_threshold: Alternate allele frequency threshold for `hl.impute_sex`. Default is 0.05
     :param call_rate_threshold: Minimum required call rate. Default is 0.25
     :return: Table with sex annotations
@@ -272,9 +273,9 @@ def call_sex(
 
 def main(args):
     """
-    Calls 'call_sex' function
+    Call `call_sex` to infer sex of samples in input MatrixTable.
 
-    :param args: user's inputs to run code
+    :param args: User's command line inputs
     """
 
     call_sex(**vars(args))
@@ -290,38 +291,38 @@ if __name__ == "__main__":
     parser.add_argument(
         "-u",
         "--use-y-cov",
-        help="bool for whether or not to use chrY coverage",
+        help="Whether to use chromosome Y coverage when inferring sex. Note that Y coverage is required to infer sex aneuploidies",
         action="store_true",
     )
     parser.add_argument(
-        "-y", "--y-cov-threshold", help="chrY coverage threshold", default=0.1
+        "-y", "--y-cov-threshold", help="Y coverage threshold used to infer sex aneuploidies (XY samples below and XX samples above this threshold will be inferred as having aneuploidies)", default=0.1
     )
     parser.add_argument(
         "-m",
-        "--male-fstat-threshold",
-        help="male_fstat_threshold for hails impute_sex",
+        "--xy-fstat-threshold",
+        help="F-stat threshold above which a sample will be called XY. Default is 0.75",
         default=0.75,
     )
     parser.add_argument(
         "-f",
-        "--female-fstat-threshold",
-        help="female_fstat_threshold for hails impute_sex",
+        "--xx-fstat-threshold",
+        help="F-stat threshold below which a sample will be called XX. Default is 0.5",
         default=0.50,
     )
     parser.add_argument(
-        "-a", "--aaf-threshold", help="aaf_threshold for hails impute_sex", default=0.05
+        "-a", "--aaf-threshold", help="Alternate allele frequency threshold for `hl.impute_sex`. Default is 0.05", default=0.05
     )
     parser.add_argument(
         "-c",
         "--call-rate-threshold",
-        help="call_rate_threshold required to use chrY variant",
+        help="Minimum variant call rate threshold. Default is 0.25",
         default=0.25,
     )
     # NOTE: this is an integer here because get_chr_cov expects chromosomes to be specified using their numbers
     parser.add_argument(
         "-n",
         "--normalization-contig",
-        help="contig to calculate normalized_y_coverage",
+        help="Autosome to use to normalize sex chromosome coverage. Default is chromosome 20",
         default="20",
     )
 
