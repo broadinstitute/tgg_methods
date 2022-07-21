@@ -142,8 +142,8 @@ def call_sex(
     use_y_cov: bool = False,
     y_cov_threshold: float = 0.1,
     normalization_contig: str = "20",
-    male_fstat_threshold: float = 0.75,
-    female_fstat_threshold: float = 0.5,
+    xy_fstat_threshold: float = 0.75,
+    xx_fstat_threshold: float = 0.5,
     aaf_threshold: float = 0.05,
     call_rate_threshold: float = 0.25,
 ) -> hl.Table:
