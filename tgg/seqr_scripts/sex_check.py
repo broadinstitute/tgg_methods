@@ -82,8 +82,8 @@ def run_hails_impute_sex(
     build: str,
     outdir: str,
     callset_name: str,
-    male_fstat_threshold: float = 0.75,
-    female_fstat_threshold: float = 0.5,
+    xy_fstat_threshold: float = 0.75,
+    xx_fstat_threshold: float = 0.5,
     aaf_threshold: float = 0.05,
 ) -> hl.Table:
     """
