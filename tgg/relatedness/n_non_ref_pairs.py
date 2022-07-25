@@ -74,6 +74,7 @@ def get_n_non_ref_sites(
     :param autosomes_only: Filter VDS to autosomes. Defaults to True.
     :param snp_only: Filter VDS to bi-allelic SNPs. Defaults to False.
     :param het_only: Filter to only het samples. Defaults to False.
+    :param adj_only: Filter GT to adj. Defaults to True.
     :param interval_qc_regions: Filter to interval QC regions. Defaults to True.
     :param no_AS_lowqual: Remove AS_lowqual sites. Defaults to True.
     :param non_ref_samples: Number of non ref samples found in each variant to filter to, e.g. for tripletons, n_samples=3. Defaults to 3.
@@ -190,6 +191,7 @@ def get_samples_n_non_ref(
     :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
     :param control_samples: Set of control sample IDs to remove. Default is {NA12878, SYNDIP}.
     :param non_ref_samples: Number of non_ref samples per site to filter to. Defaults to 3.
+    :param het_only: Filter the non ref sample sites to those with only het sample calls. Defaults to False.
     :return: Table keyed by sample IDs and their number of singletons.
     """
     logger.info(
