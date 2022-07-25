@@ -68,7 +68,7 @@ def get_n_non_ref_sites(
 ) -> hl.Table:
     """
     Filter VDS to autosomal sites in interval QC pass regions with an adj non reference allele count of n.
-    
+
     :param vds_path: Path to VDS. Default is VDS_PATH.
     :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
     :param tranche_data: UKB tranche data (data source and data freeze number). Default is TRANCHE_DATA.
@@ -142,15 +142,11 @@ def get_n_non_ref_sites(
     return ht
 
 
-def get_and_count_sample_pairs(
-    mt: hl.MatrixTable, temp_path=TEMP_PATH, non_ref_samples=3,
-) -> hl.Table:
+def get_and_count_sample_pairs(mt: hl.MatrixTable) -> hl.Table:
     """
     Return the number of shared n non_ref sites per pair.
 
     :param mt: MatrixTable to compute pairs on.
-    :param temp_path: Path to write pair HT to. Default to TEMP_PATH.
-    :param non_ref_samples: Number of non_ref samples per site. Defaults to 3.
     :return ht: Table with sample pairs and number of variants shared per pair
     """
     logger.info("Collecting samples and counting sample pairs...")
@@ -169,9 +165,6 @@ def get_and_count_sample_pairs(
 
     logger.info("Aggregating shared sites per pair...")
     ht = ht.group_by(ht.sample_pairs).aggregate(n_non_ref_sites_shared=hl.agg.count())
-    ht = ht.checkpoint(
-        f"{temp_path}/pairwise_shared_{non_ref_samples}_sites.ht", overwrite=True
-    )
     return ht
 
 
@@ -181,7 +174,7 @@ def get_samples_n_non_ref(
     control_samples: Set[str] = {NA12878, SYNDIP},
     non_ref_samples: int = 3,
     het_only: bool = False,
-):
+) -> None:
     """
     Get number of shared non ref sites per sample pair in the 455k VDS.
 
@@ -193,7 +186,6 @@ def get_samples_n_non_ref(
     :param control_samples: Set of control sample IDs to remove. Default is {NA12878, SYNDIP}.
     :param non_ref_samples: Number of non_ref samples per site to filter to. Defaults to 3.
     :param het_only: Filter the non ref sample sites to those with only het sample calls. Defaults to False.
-    :return: Table keyed by sample IDs and their number of singletons.
     """
     logger.info(
         "Retrieving pairwise shared %i non ref sample sites...", non_ref_samples
@@ -208,10 +200,8 @@ def get_samples_n_non_ref(
     )
     mt = mt.annotate_rows(**ht[mt.row_key])
     mt = mt.filter_rows(hl.is_defined(mt.ac))
-    ht = get_and_count_sample_pairs(
-        mt, temp_path=temp_path, non_ref_samples=non_ref_samples
-    )
-    return ht
+    ht = get_and_count_sample_pairs(mt)
+    ht.write(f"{temp_path}/pairwise_shared_{non_ref_samples}_sites.ht", overwrite=True)
 
 
 def main(args):
@@ -244,9 +234,7 @@ if __name__ == "__main__":
         help="Token to authenticate slack. Must be specified if --slack-channel is also set.",
     )
     parser.add_argument(
-        "--vds-path",
-        help="Path to 455k UKB VDS.",
-        default=VDS_PATH,
+        "--vds-path", help="Path to 455k UKB VDS.", default=VDS_PATH,
     )
     parser.add_argument(
         "--temp-path",
