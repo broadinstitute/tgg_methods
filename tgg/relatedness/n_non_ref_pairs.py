@@ -178,6 +178,7 @@ def get_samples_n_non_ref(
     temp_path: str = TEMP_PATH,
     control_samples: Set[str] = {NA12878, SYNDIP},
     samples_non_ref: int = 3,
+    het_only: bool = False,
 ):
     """
     Get number of shared non ref sites per sample pair in the 455k VDS.
@@ -196,7 +197,7 @@ def get_samples_n_non_ref(
     )
     mt = hl.vds.read_vds(vds_path).variant_data
     mt = mt.filter_cols(~hl.literal(control_samples).contains(mt.s))
-    ht = get_n_non_ref_sites(vds_path, samples_non_ref)
+    ht = get_n_non_ref_sites(vds_path, samples_non_ref, het_only=het_only)
     mt = mt.annotate_rows(**ht[mt.row_key])
     mt = mt.filter_rows(hl.is_defined(mt.ac))
     ht = get_and_count_sample_pairs(
@@ -206,10 +207,12 @@ def get_samples_n_non_ref(
 
 
 def main(args):
-    """Find number of singletons per sample in high quality sites."""
+    """Find number of requested non ref sites per sample pair in high quality sites."""
     try:
         hl.init(log="/singletons.log", default_reference="GRCh38")
-        get_samples_n_non_ref(args.vds_path, args.temp_path, args.non_ref_samples)
+        get_samples_n_non_ref(
+            args.vds_path, args.temp_path, args.non_ref_samples, args.het_only
+        )
 
     finally:
         logger.info("Copying hail log to logging bucket...")
@@ -243,6 +246,11 @@ if __name__ == "__main__":
         "--non-ref-samples",
         help="Number of samples per site with non-reference alleles to filter to. Defaults to 3.",
         default=3,
+    )
+    parser.add_argument(
+        "--het-only",
+        help="Whether to only count sites where all samples are het",
+        action="store_true",
     )
     args = parser.parse_args()
 
