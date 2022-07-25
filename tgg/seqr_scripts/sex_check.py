@@ -121,8 +121,8 @@ def run_hails_impute_sex(
     sex_ht = hl.impute_sex(
         mt.GT,
         aaf_threshold=aaf_threshold,
-        male_threshold=male_fstat_threshold,
-        female_threshold=female_fstat_threshold,
+        male_threshold=xy_fstat_threshold,
+        female_threshold=xx_fstat_threshold,
     )
     mt = mt.annotate_cols(**sex_ht[mt.col_key])
     sex_ht = mt.cols()
@@ -133,10 +133,10 @@ def run_hails_impute_sex(
     plt.hist(df["f_stat"])
     plt.xlabel("Fstat")
     plt.ylabel("Frequency")
-    plt.axvline(male_fstat_threshold, color="blue", linestyle="dashed", linewidth=1)
-    plt.axvline(female_fstat_threshold, color="red", linestyle="dashed", linewidth=1)
+    plt.axvline(xy_fstat_threshold, color="blue", linestyle="dashed", linewidth=1)
+    plt.axvline(xx_fstat_threshold, color="red", linestyle="dashed", linewidth=1)
 
-    outplot = "%s/fstat_%s.png", outdir, callset_name
+    outplot = f"{outdir}/fstat_{callset_name}.png"
     with hl.hadoop_open(outplot, "wb") as out:
         plt.savefig(out)
 
