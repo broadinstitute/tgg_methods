@@ -201,7 +201,7 @@ def main(args):
     """Find number of singletons per sample in high quality sites."""
     try:
         hl.init(log="/singletons.log", default_reference="GRCh38")
-        get_samples_n_non_ref()
+        get_samples_n_non_ref(args.vds_path, args.temp_path, args.non_ref_samples)
 
     finally:
         logger.info("Copying hail log to logging bucket...")
@@ -223,6 +223,10 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--temp-path", help="Path to temporary bucket to store hail logs.",
+    )
+    parser.add_argument(
+        "--non-ref-samples",
+        help="Number of samples per site with non-reference alleles to filter to.",
     )
     args = parser.parse_args()
 
