@@ -207,7 +207,7 @@ def get_samples_n_non_ref(
 def main(args):
     """Find number of requested non ref sites per sample pair in high quality sites."""
     try:
-        hl.init(log="/singletons.log", default_reference="GRCh38")
+        hl.init(log="/n_non_ref.log", default_reference="GRCh38")
         get_samples_n_non_ref(
             vds_path=args.vds_path,
             temp_path=args.temp_path,
