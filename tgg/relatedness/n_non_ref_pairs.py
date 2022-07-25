@@ -148,6 +148,7 @@ def get_and_count_sample_pairs(
     :param samples_non_ref: Number of non_ref samples per site.
     :return ht: MatrixTable
     """
+    logger.info("Collecting samples and counting sample pairs...")
     mt = mt.annotate_rows(
         samples=hl.agg.filter(mt.GT.is_non_ref(), hl.agg.collect(mt.s))
     )
@@ -160,6 +161,8 @@ def get_and_count_sample_pairs(
     )
     ht = mt.select_rows(mt.sample_pairs).rows()
     ht = ht.explode(ht.sample_pairs)
+
+    logger.info("Aggregating shared sites per pair...")
     ht = ht.group_by(ht.sample_pairs).aggregate(n_non_ref_sites_shared=hl.agg.count())
     ht = ht.checkpoint(
         f"{temp_path}/pairwise_shared_{samples_non_ref}_sites.ht", overwrite=True
@@ -185,7 +188,9 @@ def get_samples_n_non_ref(
     :param samples_non_ref: Number of non_ref samples per site to filter to.
     :return: Table keyed by sample IDs and their number of singletons.
     """
-    logger.info("Counting singletons per sample...")
+    logger.info(
+        "Retrieving pairwise shared %i non ref sample sites...", samples_non_ref
+    )
     mt = hl.vds.read_vds(vds_path).variant_data
     mt = mt.filter_cols(~hl.literal(control_samples).contains(mt.s))
     ht = get_n_non_ref_sites(vds_path, samples_non_ref)
