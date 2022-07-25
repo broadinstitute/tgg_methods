@@ -197,7 +197,9 @@ def get_samples_n_non_ref(
     )
     mt = hl.vds.read_vds(vds_path).variant_data
     mt = mt.filter_cols(~hl.literal(control_samples).contains(mt.s))
-    ht = get_n_non_ref_sites(vds_path, samples_non_ref, het_only=het_only)
+    ht = get_n_non_ref_sites(
+        vds_path, samples_non_ref=samples_non_ref, het_only=het_only
+    )
     mt = mt.annotate_rows(**ht[mt.row_key])
     mt = mt.filter_rows(hl.is_defined(mt.ac))
     ht = get_and_count_sample_pairs(
