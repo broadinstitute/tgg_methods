@@ -64,7 +64,7 @@ def get_n_non_ref_sites(
     adj_only: bool = True,
     interval_qc_regions: bool = True,
     no_AS_lowqual: bool = True,
-    samples_non_ref: int = 3,
+    non_ref_samples: int = 3,
 ) -> hl.Table:
     """
     Filter VDS to autosomal sites in interval QC pass regions with an adj non ref of n.
@@ -76,7 +76,7 @@ def get_n_non_ref_sites(
     :param het_only: Filter to only het samples. Defaults to False.
     :param interval_qc_regions: Filter to interval QC regions. Defaults to True.
     :param no_AS_lowqual: Remove AS_lowqual sites. Defaults to True.
-    :param samples_non_ref: Number of non ref samples found in each variant to filter to, e.g. for tripletons, n_samples=3. Defaults to 3.
+    :param non_ref_samples: Number of non ref samples found in each variant to filter to, e.g. for tripletons, n_samples=3. Defaults to 3.
     :return: Table of high quality sites with private to n samples.
     """
     vds = hl.vds.read_vds(vds_path)
@@ -126,29 +126,29 @@ def get_n_non_ref_sites(
         n_non_ref=hl.agg.count_where(hl.is_defined(mt["GT"])) - mt.n_hom_ref
     )
 
-    logger.info("Filtering sites to where n_non_ref = %i...", samples_non_ref)
-    mt = mt.filter_rows(mt.n_non_ref == samples_non_ref)
+    logger.info("Filtering sites to where n_non_ref = %i...", non_ref_samples)
+    mt = mt.filter_rows(mt.n_non_ref == non_ref_samples)
 
     if het_only:
         mt = mt.filter_rows(mt.n_hom_alt == 0)
 
     # Add in condition for het only? use case doubletons?
     ht = mt.rows().checkpoint(
-        f"{temp_path}/n_non_ref_{samples_non_ref}_sample_high_quality_sites.ht",
+        f"{temp_path}/n_non_ref_{non_ref_samples}_sample_high_quality_sites.ht",
         overwrite=True,
     )
     return ht
 
 
 def get_and_count_sample_pairs(
-    mt: hl.MatrixTable, temp_path: str, samples_non_ref: int
+    mt: hl.MatrixTable, temp_path=TEMP_PATH, non_ref_samples=3,
 ) -> hl.Table:
     """
     Return the number of shared n non_ref sites per pair.
 
     :param mt: Matrix Table to compute pairs on.
-    :param temp_path: Path to write pair HT to.
-    :param samples_non_ref: Number of non_ref samples per site.
+    :param temp_path: Path to write pair HT to. Default to TEMP_PATH.
+    :param non_ref_samples: Number of non_ref samples per site. Defaults to 3.
     :return ht: MatrixTable
     """
     logger.info("Collecting samples and counting sample pairs...")
@@ -168,7 +168,7 @@ def get_and_count_sample_pairs(
     logger.info("Aggregating shared sites per pair...")
     ht = ht.group_by(ht.sample_pairs).aggregate(n_non_ref_sites_shared=hl.agg.count())
     ht = ht.checkpoint(
-        f"{temp_path}/pairwise_shared_{samples_non_ref}_sites.ht", overwrite=True
+        f"{temp_path}/pairwise_shared_{non_ref_samples}_sites.ht", overwrite=True
     )
     return ht
 
@@ -177,7 +177,7 @@ def get_samples_n_non_ref(
     vds_path: str = VDS_PATH,
     temp_path: str = TEMP_PATH,
     control_samples: Set[str] = {NA12878, SYNDIP},
-    samples_non_ref: int = 3,
+    non_ref_samples: int = 3,
     het_only: bool = False,
 ):
     """
@@ -189,21 +189,24 @@ def get_samples_n_non_ref(
     :param vds_path: Path to UKB 455k VDS. Default is VDS_PATH.
     :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
     :param control_samples: Set of control sample IDs to remove. Default is {NA12878, SYNDIP}.
-    :param samples_non_ref: Number of non_ref samples per site to filter to.
+    :param non_ref_samples: Number of non_ref samples per site to filter to. Defaults to 3.
     :return: Table keyed by sample IDs and their number of singletons.
     """
     logger.info(
-        "Retrieving pairwise shared %i non ref sample sites...", samples_non_ref
+        "Retrieving pairwise shared %i non ref sample sites...", non_ref_samples
     )
     mt = hl.vds.read_vds(vds_path).variant_data
     mt = mt.filter_cols(~hl.literal(control_samples).contains(mt.s))
     ht = get_n_non_ref_sites(
-        vds_path, samples_non_ref=samples_non_ref, het_only=het_only
+        vds_path=vds_path,
+        temp_path=temp_path,
+        non_ref_samples=non_ref_samples,
+        het_only=het_only,
     )
     mt = mt.annotate_rows(**ht[mt.row_key])
     mt = mt.filter_rows(hl.is_defined(mt.ac))
     ht = get_and_count_sample_pairs(
-        mt, temp_path=temp_path, samples_non_ref=samples_non_ref
+        mt, temp_path=temp_path, non_ref_samples=non_ref_samples
     )
     return ht
 
@@ -213,7 +216,10 @@ def main(args):
     try:
         hl.init(log="/singletons.log", default_reference="GRCh38")
         get_samples_n_non_ref(
-            args.vds_path, args.temp_path, args.non_ref_samples, args.het_only
+            vds_path=args.vds_path,
+            temp_path=args.temp_path,
+            non_ref_samples=args.non_ref_samples,
+            het_only=args.het_only,
         )
 
     finally:
