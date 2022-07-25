@@ -253,6 +253,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--non-ref-samples",
         help="Number of samples per site with non-reference alleles to filter to. Defaults to 3.",
+        type=int,
         default=3,
     )
     parser.add_argument(
