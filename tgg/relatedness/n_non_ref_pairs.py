@@ -245,7 +245,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--vds-path",
-        help="Path to temporary bucket to store hail logs.",
+        help="Path to 455k UKB VDS.",
         default=VDS_PATH,
     )
     parser.add_argument(
