@@ -15,7 +15,6 @@ logging.basicConfig(
 logger = logging.getLogger("sex_check")
 logger.setLevel(logging.INFO)
 
-
 def get_chr_cov(
     mt: hl.MatrixTable,
     build: str,
@@ -24,7 +23,7 @@ def get_chr_cov(
     call_rate_threshold: float = 0.25,
     af_threshold: float = 0.01,
 ) -> hl.expr.Float64Expression:
-    """
+     """
     Calculate mean chromosome coverage.
 
     :param mt: MatrixTable containing samples with chrY variants
@@ -35,16 +34,14 @@ def get_chr_cov(
     :param af_threshold: Minimum allele frequency threshold. Default is 0.01
     :return: Float64Expression of mean coverage of specified chromosome
     """
-
+    
     logger.warning(
         "This function expects the chrY to be at index 23 and chrX to be at index 22."
     )
-
+    
     if chr_name == "Y":
-        filter_nonpar_expr = sex_mt.locus.in_y_nonpar()
         chr_place = 23
     elif chr_name == "X":
-        filter_nonpar_expr = sex_mt.locus.in_x_nonpar()
         chr_place = 22
     else:
         try:
@@ -55,17 +52,23 @@ def get_chr_cov(
             return -99
 
     chr_name = hl.get_reference(build).contigs[chr_place]
-
+    
     logger.info(
         "Filtering to chromosome (and filtering to non-par regions if chromosome is X or Y)..."
     )
     sex_mt = hl.filter_intervals(
-        mt, [hl.parse_locus_interval(chr_name, reference_genome=build)]
+        mt, [hl.parse_locus_interval(chr_name, reference_genome=build)],
     )
+
+    if chr_place == 23:
+        filter_nonpar_expr = sex_mt.locus.in_y_nonpar()
+    elif chr_place == 22:
+        filter_nonpar_expr = sex_mt.locus.in_x_nonpar()
+
     if chr_place in [22, 23]:
         logger.info("Filtering to non-PAR regions")
         sex_mt = sex_mt.filter_rows((filter_nonpar_expr), keep=True)
-
+    
     # Filter to common SNVs above defined callrate (should only have one index in the array because the MT only contains biallelic variants)
     sex_mt = sex_mt.filter_rows(sex_mt[af_field] > af_threshold)
 
@@ -74,7 +77,10 @@ def get_chr_cov(
     sex_mt = sex_mt.filter_rows(sex_mt.variant_qc.call_rate > call_rate_threshold)
 
     logger.info("Returning mean coverage on chromosome %s...", chr_name)
-    return sex_mt.aggregate(hl.agg.mean(sex_mt.DP))
+    
+    sex_mt = sex_mt.annotate_cols(**{f"{chr_name}_mean_dp": hl.agg.mean(sex_mt.DP)})
+    sex_ht = sex_mt.cols()
+    return(sex_ht)
 
 
 def run_hails_impute_sex(
@@ -186,18 +192,14 @@ def call_sex(
     logger.info("Inferring sex...")
     # TODO: Change "female" and "male" to "XX" and "XY"
     if use_y_cov:
-        mt = mt.annotate_cols(
-            **{
-                ("chr%s_mean_dp", normalization_contig): get_chr_cov(
-                    mt, build, call_rate_threshold, normalization_contig
-                ),
-                "chry_mean_dp": get_chr_cov(mt, build, call_rate_threshold, "Y"),
-            }
-        )
+        sex_ht = get_chr_cov(mt, 'GRCh38', normalization_contig)
+        mt = mt.annotate_cols(**sex_ht[mt.col_key])
+        sex_ht = get_chr_cov(mt, 'GRCh38', 'Y')
+        mt = mt.annotate_cols(**sex_ht[mt.col_key])
         mt = mt.annotate_cols(
             normalized_y_coverage=hl.or_missing(
-                mt["chr%s_mean_dp", normalization_contig] > 0,
-                mt.chry_mean_dp / mt["chr%s_mean_dp", normalization_contig],
+                mt[f"chr{normalization_contig}_mean_dp"] > 0,
+                mt.chrY_mean_dp / mt[f"chr{normalization_contig}_mean_dp"],
             )
         )
         sex_ht = run_hails_impute_sex(
