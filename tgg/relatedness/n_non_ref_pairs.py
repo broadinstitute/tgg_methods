@@ -227,11 +227,19 @@ if __name__ == "__main__":
         help="Token to authenticate slack. Must be specified if --slack-channel is also set.",
     )
     parser.add_argument(
-        "--temp-path", help="Path to temporary bucket to store hail logs.",
+        "--vds-path",
+        help="Path to temporary bucket to store hail logs.",
+        default=VDS_PATH,
+    )
+    parser.add_argument(
+        "--temp-path",
+        help="Path to temporary bucket to store hail logs.",
+        default=TEMP_PATH,
     )
     parser.add_argument(
         "--non-ref-samples",
-        help="Number of samples per site with non-reference alleles to filter to.",
+        help="Number of samples per site with non-reference alleles to filter to. Defaults to 3.",
+        default=3,
     )
     args = parser.parse_args()
 
