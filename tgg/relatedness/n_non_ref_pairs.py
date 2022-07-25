@@ -67,7 +67,8 @@ def get_n_non_ref_sites(
     non_ref_samples: int = 3,
 ) -> hl.Table:
     """
-    Filter VDS to autosomal sites in interval QC pass regions with an adj non ref of n.
+    Filter VDS to autosomal sites in interval QC pass regions with an adj non reference allele count of n.
+    
     :param vds_path: Path to VDS. Default is VDS_PATH.
     :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
     :param tranche_data: UKB tranche data (data source and data freeze number). Default is TRANCHE_DATA.
@@ -77,8 +78,8 @@ def get_n_non_ref_sites(
     :param adj_only: Filter GT to adj. Defaults to True.
     :param interval_qc_regions: Filter to interval QC regions. Defaults to True.
     :param no_AS_lowqual: Remove AS_lowqual sites. Defaults to True.
-    :param non_ref_samples: Number of non ref samples found in each variant to filter to, e.g. for tripletons, n_samples=3. Defaults to 3.
-    :return: Table of high quality sites with private to n samples.
+    :param non_ref_samples: Desired number of non ref samples for each variant, e.g. for tripletons, n_samples=3. Defaults to 3.
+    :return: Table of high quality sites filtered to variants with specified number of non-reference samples.
     """
     vds = hl.vds.read_vds(vds_path)
     mt = vds.variant_data
@@ -107,8 +108,9 @@ def get_n_non_ref_sites(
         logger.info("Filtering to adj and calculating allele count...")
         mt = filter_to_adj(mt)
 
-    logger.info("Changing old callstat annotation...")
-    mt = mt.transmute_rows(original_call_stats=mt.call_stats)
+    if "call_stats" in mt.row:
+        logger.info("Changing old callstat annotation...")
+        mt = mt.transmute_rows(original_call_stats=mt.call_stats)
 
     logger.info("Recalculating call stats post-quick QC...")
     mt = mt.annotate_rows(hail_call_stats=hl.agg.call_stats(mt.GT, mt.alleles))
@@ -146,10 +148,10 @@ def get_and_count_sample_pairs(
     """
     Return the number of shared n non_ref sites per pair.
 
-    :param mt: Matrix Table to compute pairs on.
+    :param mt: MatrixTable to compute pairs on.
     :param temp_path: Path to write pair HT to. Default to TEMP_PATH.
     :param non_ref_samples: Number of non_ref samples per site. Defaults to 3.
-    :return ht: MatrixTable
+    :return ht: Table with sample pairs and number of variants shared per pair
     """
     logger.info("Collecting samples and counting sample pairs...")
     mt = mt.annotate_rows(
@@ -184,7 +186,7 @@ def get_samples_n_non_ref(
     Get number of shared non ref sites per sample pair in the 455k VDS.
 
     Filter VDS variant data to sites present in specified input Table, collect sample IDs, annotate IDs onto rows,
-    explode on sample pairs, count pairs and write HT to temporary path.
+    explode on sample pairs, count pairs, and write HT to temporary path.
 
     :param vds_path: Path to UKB 455k VDS. Default is VDS_PATH.
     :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
@@ -231,7 +233,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         """
-        This script calculates the number of singletons in individuals in the 455k VDS.
+        This script calculates the number of shared non ref sites per sample pair in the 455k VDS.
         """
     )
     parser.add_argument(
@@ -259,7 +261,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--het-only",
-        help="Whether to only count sites where all samples are het",
+        help="Whether to only count sites where all samples are het.",
         action="store_true",
     )
     args = parser.parse_args()
