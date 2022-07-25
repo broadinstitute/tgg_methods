@@ -129,6 +129,9 @@ def get_n_non_ref_sites(
     logger.info("Filtering sites to where n_non_ref = %i...", samples_non_ref)
     mt = mt.filter_rows(mt.n_non_ref == samples_non_ref)
 
+    if het_only:
+        mt = mt.filter_rows(mt.n_hom_alt == 0)
+
     # Add in condition for het only? use case doubletons?
     ht = mt.rows().checkpoint(
         f"{temp_path}/n_non_ref_{samples_non_ref}_sample_high_quality_sites.ht",
