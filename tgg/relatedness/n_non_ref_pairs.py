@@ -133,7 +133,6 @@ def get_n_non_ref_sites(
     if het_only:
         mt = mt.filter_rows(mt.n_hom_alt == 0)
 
-    # Add in condition for het only? use case doubletons?
     ht = mt.rows().checkpoint(
         f"{temp_path}/n_non_ref_{non_ref_samples}_sample_high_quality_sites.ht",
         overwrite=True,
