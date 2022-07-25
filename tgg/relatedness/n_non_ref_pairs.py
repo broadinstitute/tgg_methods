@@ -1,4 +1,4 @@
-"""Utility functions to calculate singletons and plot distribution."""
+"""Utility functions to calculate shared sites among sample pairs"""
 import argparse
 import logging
 from typing import Set, Tuple
@@ -67,7 +67,7 @@ def get_n_non_ref_sites(
     samples_non_ref: int = 3,
 ) -> hl.Table:
     """
-    Filter  VDS to autosomal sites in interval QC pass regions with an adj allele count of n and no homozygotes.
+    Filter VDS to autosomal sites in interval QC pass regions with an adj non ref of n.
     :param vds_path: Path to VDS. Default is VDS_PATH.
     :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
     :param tranche_data: UKB tranche data (data source and data freeze number). Default is TRANCHE_DATA.
@@ -109,9 +109,7 @@ def get_n_non_ref_sites(
     logger.info("Changing old callstat annotation...")
     mt = mt.transmute_rows(original_call_stats=mt.call_stats)
 
-    logger.info(
-        "Recalculating call stats post quick QC -- same QC as doubleton analysis but with the bi-allelic snp filter..."
-    )
+    logger.info("Recalculating call stats post-quick QC...")
     mt = mt.annotate_rows(hail_call_stats=hl.agg.call_stats(mt.GT, mt.alleles))
 
     logger.info(
@@ -139,7 +137,9 @@ def get_n_non_ref_sites(
     return ht
 
 
-def get_and_count_sample_pairs(mt: hl.MatrixTable, temp_path: str, samples_non_ref: int) -> hl.Table:
+def get_and_count_sample_pairs(
+    mt: hl.MatrixTable, temp_path: str, samples_non_ref: int
+) -> hl.Table:
     """
     Return the number of shared n non_ref sites per pair.
 
@@ -177,7 +177,7 @@ def get_samples_n_non_ref(
     Get number of shared non ref sites per sample pair in the 455k VDS.
 
     Filter VDS variant data to sites present in specified input Table, collect sample IDs, annotate IDs onto rows,
-    explode on sample pairs, count pair and write HT to temporary path.
+    explode on sample pairs, count pairs and write HT to temporary path.
 
     :param vds_path: Path to UKB 455k VDS. Default is VDS_PATH.
     :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
@@ -191,7 +191,9 @@ def get_samples_n_non_ref(
     ht = get_n_non_ref_sites(vds_path, samples_non_ref)
     mt = mt.annotate_rows(**ht[mt.row_key])
     mt = mt.filter_rows(hl.is_defined(mt.ac))
-    ht = get_and_count_sample_pairs(mt)
+    ht = get_and_count_sample_pairs(
+        mt, temp_path=temp_path, samples_non_ref=samples_non_ref
+    )
     return ht
 
 
