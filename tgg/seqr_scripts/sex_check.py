@@ -280,7 +280,8 @@ def main(args):
     :param args: User's command line inputs
     """
 
-    call_sex(**vars(args))
+    # call_sex(**vars(args))
+    print(args.callset)
 
 
 if __name__ == "__main__":
