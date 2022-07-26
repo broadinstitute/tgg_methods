@@ -105,7 +105,7 @@ def get_n_non_ref_sites(
         mt = mt.filter_rows(hl.is_defined(interval_ht[mt.locus]))
 
     if adj_only:
-        logger.info("Filtering to adj and calculating allele count...")
+        logger.info("Filtering to adj...")
         mt = filter_to_adj(mt)
 
     if "call_stats" in mt.row:
