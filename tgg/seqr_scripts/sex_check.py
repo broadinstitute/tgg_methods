@@ -15,6 +15,7 @@ logging.basicConfig(
 logger = logging.getLogger("sex_check")
 logger.setLevel(logging.INFO)
 
+
 def get_chr_cov(
     mt: hl.MatrixTable,
     build: str,
@@ -23,7 +24,7 @@ def get_chr_cov(
     call_rate_threshold: float = 0.25,
     af_threshold: float = 0.01,
 ) -> hl.expr.Float64Expression:
-     """
+    """
     Calculate mean chromosome coverage.
 
     :param mt: MatrixTable containing samples with chrY variants
@@ -34,11 +35,11 @@ def get_chr_cov(
     :param af_threshold: Minimum allele frequency threshold. Default is 0.01
     :return: Float64Expression of mean coverage of specified chromosome
     """
-    
+
     logger.warning(
         "This function expects the chrY to be at index 23 and chrX to be at index 22."
     )
-    
+
     if chr_name == "Y":
         chr_place = 23
     elif chr_name == "X":
@@ -52,12 +53,13 @@ def get_chr_cov(
             return -99
 
     chr_name = hl.get_reference(build).contigs[chr_place]
-    
+
     logger.info(
         "Filtering to chromosome (and filtering to non-par regions if chromosome is X or Y)..."
     )
     sex_mt = hl.filter_intervals(
-        mt, [hl.parse_locus_interval(chr_name, reference_genome=build)],
+        mt,
+        [hl.parse_locus_interval(chr_name, reference_genome=build)],
     )
 
     if chr_place == 23:
@@ -68,7 +70,7 @@ def get_chr_cov(
     if chr_place in [22, 23]:
         logger.info("Filtering to non-PAR regions")
         sex_mt = sex_mt.filter_rows((filter_nonpar_expr), keep=True)
-    
+
     # Filter to common SNVs above defined callrate (should only have one index in the array because the MT only contains biallelic variants)
     sex_mt = sex_mt.filter_rows(sex_mt[af_field] > af_threshold)
 
@@ -77,10 +79,10 @@ def get_chr_cov(
     sex_mt = sex_mt.filter_rows(sex_mt.variant_qc.call_rate > call_rate_threshold)
 
     logger.info("Returning mean coverage on chromosome %s...", chr_name)
-    
+
     sex_mt = sex_mt.annotate_cols(**{f"{chr_name}_mean_dp": hl.agg.mean(sex_mt.DP)})
     sex_ht = sex_mt.cols()
-    return(sex_ht)
+    return sex_ht
 
 
 def run_hails_impute_sex(
@@ -192,9 +194,9 @@ def call_sex(
     logger.info("Inferring sex...")
     # TODO: Change "female" and "male" to "XX" and "XY"
     if use_y_cov:
-        sex_ht = get_chr_cov(mt, 'GRCh38', normalization_contig)
+        sex_ht = get_chr_cov(mt, "GRCh38", normalization_contig)
         mt = mt.annotate_cols(**sex_ht[mt.col_key])
-        sex_ht = get_chr_cov(mt, 'GRCh38', 'Y')
+        sex_ht = get_chr_cov(mt, "GRCh38", "Y")
         mt = mt.annotate_cols(**sex_ht[mt.col_key])
         mt = mt.annotate_cols(
             normalized_y_coverage=hl.or_missing(
@@ -280,8 +282,7 @@ def main(args):
     :param args: User's command line inputs
     """
 
-    # call_sex(**vars(args))
-    print(args.callset)
+    call_sex(**vars(args))
 
 
 if __name__ == "__main__":
@@ -298,7 +299,10 @@ if __name__ == "__main__":
         action="store_true",
     )
     parser.add_argument(
-        "-y", "--y-cov-threshold", help="Y coverage threshold used to infer sex aneuploidies (XY samples below and XX samples above this threshold will be inferred as having aneuploidies)", default=0.1
+        "-y",
+        "--y-cov-threshold",
+        help="Y coverage threshold used to infer sex aneuploidies (XY samples below and XX samples above this threshold will be inferred as having aneuploidies)",
+        default=0.1,
     )
     parser.add_argument(
         "-m",
@@ -313,7 +317,10 @@ if __name__ == "__main__":
         default=0.50,
     )
     parser.add_argument(
-        "-a", "--aaf-threshold", help="Alternate allele frequency threshold for `hl.impute_sex`. Default is 0.05", default=0.05
+        "-a",
+        "--aaf-threshold",
+        help="Alternate allele frequency threshold for `hl.impute_sex`. Default is 0.05",
+        default=0.05,
     )
     parser.add_argument(
         "-c",
@@ -331,4 +338,3 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     main(args)
-
