@@ -81,11 +81,14 @@ def get_n_non_ref_sites(
     :param non_ref_samples: Desired number of non ref samples for each variant, e.g. for tripletons, n_samples=3. Defaults to 3.
     :return: Table of high quality sites filtered to variants with specified number of non-reference samples.
     """
+    logger.warning(
+        "Reading in VDS. This script assumes the VDS multi-allelics have been split..."
+    )
     vds = hl.vds.read_vds(vds_path)
     mt = vds.variant_data
 
     if autosomes_only:
-        logger.info("Filter to autosomes...")
+        logger.info("Filtering to autosomes...")
         mt = mt.filter_rows(mt.locus.in_autosome())
 
     if snp_only:
@@ -116,9 +119,10 @@ def get_n_non_ref_sites(
     mt = mt.annotate_rows(hail_call_stats=hl.agg.call_stats(mt.GT, mt.alleles))
 
     logger.info(
-        "Get AC at alt allele(call_stats includes a count for each allele, including reference) and annotate with hom_var, het, hom_alt..."
+        "Get AC for alt allele and annotate site with the number of hom_var, het, hom_alt, and non ref samples..."
     )
     mt = mt.annotate_rows(
+        # Get AC at allele index 1 (hail call_stats includes a count for each allele, including reference)
         ac=mt.hail_call_stats.AC[1],
         n_het=hl.agg.count_where(hl.is_defined(mt["GT"]))
         - hl.sum(mt.hail_call_stats.homozygote_count),
@@ -139,14 +143,19 @@ def get_n_non_ref_sites(
         f"{temp_path}/n_non_ref_{non_ref_samples}_sample_high_quality_sites.ht",
         overwrite=True,
     )
+    logger.info("Found %i sites where n_non_ref == %i", ht.count(), non_ref_samples)
     return ht
 
 
-def get_and_count_sample_pairs(mt: hl.MatrixTable) -> hl.Table:
+def get_and_count_sample_pairs(
+    mt: hl.MatrixTable, temp_path=TEMP_PATH, non_ref_samples=3
+) -> hl.Table:
     """
     Return the number of shared n non_ref sites per pair.
 
     :param mt: MatrixTable to compute pairs on.
+    :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
+    :param non_ref_samples: Number of non_ref samples per site to filter to. Defaults to 3.
     :return ht: Table with sample pairs and number of variants shared per pair
     """
     logger.info("Collecting samples and counting sample pairs...")
@@ -162,6 +171,10 @@ def get_and_count_sample_pairs(mt: hl.MatrixTable) -> hl.Table:
     )
     ht = mt.select_rows(mt.sample_pairs).rows()
     ht = ht.explode(ht.sample_pairs)
+    ht = ht.checkpoint(
+        f"{temp_path}/n_non_ref_{non_ref_samples}_sites_sample_pairs.ht",
+        overwrite=True,
+    )
 
     logger.info("Aggregating shared sites per pair...")
     ht = ht.group_by(ht.sample_pairs).aggregate(n_non_ref_sites_shared=hl.agg.count())
