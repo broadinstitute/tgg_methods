@@ -207,8 +207,8 @@ def call_sex(
             build,
             outdir,
             mt_name,
-            male_fstat_threshold,
-            female_fstat_threshold,
+            xy_fstat_threshold,
+            xx_fstat_threshold,
             aaf_threshold,
         )
         sex_ht = sex_ht.annotate(
@@ -237,8 +237,8 @@ def call_sex(
             sex_ht.expected_homs,
             sex_ht.observed_homs,
             sex_ht.sex,
-            sex_ht.chrY_mean_cov,
-            sex_ht.chr20_mean_cov,
+            sex_ht.chrY_mean_dp,
+            sex_ht.chr20_mean_dp,
             sex_ht.normalized_y_coverage,
         )
 
@@ -248,8 +248,8 @@ def call_sex(
             build,
             outdir,
             mt_name,
-            male_fstat_threshold,
-            female_fstat_threshold,
+            xy_fstat_threshold,
+            xx_fstat_threshold,
             aaf_threshold,
         )
         sex_ht = sex_ht.annotate(ambiguous_sex=hl.is_missing(sex_ht.is_female))
@@ -268,7 +268,7 @@ def call_sex(
             sex_ht.sex,
         )
 
-    outfile = "%s/sex_%s.txt", outdir, mt_name
+    outfile = f"{outdir}/sex_{mt_name}.txt"
     sex_ht.export(outfile)
     return sex_ht
 
