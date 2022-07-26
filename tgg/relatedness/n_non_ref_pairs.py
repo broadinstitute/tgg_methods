@@ -213,8 +213,11 @@ def get_samples_n_non_ref(
     )
     mt = mt.annotate_rows(**ht[mt.row_key])
     mt = mt.filter_rows(hl.is_defined(mt.ac))
-    ht = get_and_count_sample_pairs(mt)
-    ht.write(f"{temp_path}/pairwise_shared_{non_ref_samples}_sites.ht", overwrite=True)
+    ht = get_and_count_sample_pairs(mt, temp_path, non_ref_samples)
+    ht.write(
+        f"{temp_path}/pairwise_{non_ref_samples}_non_ref_shared_sites.ht",
+        overwrite=True,
+    )
 
 
 def main(args):
