@@ -103,7 +103,7 @@ def run_hails_impute_sex(
     """
 
     logger.warning(
-        "User needs to decide on fstat thresholds for male/female by looking at fstat plots"
+        "User needs to decide on fstat thresholds for XY/XX by looking at fstat plots!"
     )
 
     # Filter to the X chromosome and impute sex
