@@ -151,7 +151,7 @@ def call_sex(
     xx_fstat_threshold: float = 0.5,
     aaf_threshold: float = 0.05,
     call_rate_threshold: float = 0.25,
-) -> hl.Table:
+) -> None:
     """
     Call sex for the samples in a given callset and export results file to the callset directory.
 
