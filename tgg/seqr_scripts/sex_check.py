@@ -254,7 +254,7 @@ def call_sex(
             "ambiguous_sex",
             hl.if_else(sex_ht.is_female, "XX", "XY"),
         )
-        sex_ht = sex_ht.annotate(sex=sex_expr)
+    sex_ht = sex_ht.annotate(sex=sex_expr)
 
     outfile = f"{outdir}/sex_{mt_name}.txt"
     sex_ht.export(outfile)
