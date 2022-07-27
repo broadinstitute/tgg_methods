@@ -211,15 +211,6 @@ def call_sex(
                     mt.chrX_mean_dp / mt[f"chr{normalization_contig}_mean_dp"],
                 )
             )
-        sex_ht = run_hails_impute_sex(
-            mt,
-            build,
-            outdir,
-            mt_name,
-            xy_fstat_threshold,
-            xx_fstat_threshold,
-            aaf_threshold,
-        )
         sex_ht = sex_ht.annotate(
             ambiguous_sex=hl.is_missing(sex_ht.is_female),
             sex_aneuploidy=(sex_ht.is_female)
