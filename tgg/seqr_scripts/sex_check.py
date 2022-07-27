@@ -20,9 +20,9 @@ def get_chr_cov(
     mt: hl.MatrixTable,
     build: str,
     chr_name: str,
-    af_field: str = "AF",
     call_rate_threshold: float = 0.25,
     af_threshold: float = 0.01,
+    af_field: str = "AF",
 ) -> hl.Table:
     """
     Calculate mean chromosome coverage.
@@ -30,9 +30,9 @@ def get_chr_cov(
     :param mt: MatrixTable containing samples with chrY variants
     :param build: Reference used, either GRCh37 or GRCh38
     :param chr_name: Chosen chromosome. Must be either autosome (number only) or sex chromosome (X, Y)
-    :param af_field: Name of field containing allele frequency information. Default is "AF"
     :param call_rate_threshold: Minimum call rate threshold. Default is 0.25
     :param af_threshold: Minimum allele frequency threshold. Default is 0.01
+    :param af_field: Name of field containing allele frequency information. Default is "AF"
     :return: Table annotated with mean coverage of specified chromosome
     """
 
@@ -63,9 +63,9 @@ def get_chr_cov(
     )
 
     if chr_place == 22:
-        sex_mt  = sex_mt.filter_rows(sex_mt.locus.in_x_nonpar())
+        sex_mt = sex_mt.filter_rows(sex_mt.locus.in_x_nonpar())
     if chr_place == 23:
-        sex_mt  = sex_mt.filter_rows(sex_mt.locus.in_y_nonpar())    
+        sex_mt = sex_mt.filter_rows(sex_mt.locus.in_y_nonpar())
 
     # Filter to common SNVs above defined callrate (should only have one index in the array because the MT only contains biallelic variants)
     sex_mt = sex_mt.filter_rows(sex_mt[af_field] > af_threshold)
@@ -193,9 +193,9 @@ def call_sex(
 
     logger.info("Inferring sex...")
     if use_y_cov:
-        norm_ht = get_chr_cov(mt, "GRCh38", normalization_contig)
+        norm_ht = get_chr_cov(mt, "GRCh38", normalization_contig, call_rate_threshold)
         mt = mt.annotate_cols(**norm_ht[mt.col_key])
-        chry_ht = get_chr_cov(mt, "GRCh38", "Y")
+        chry_ht = get_chr_cov(mt, "GRCh38", "Y", call_rate_threshold)
         mt = mt.annotate_cols(**chry_ht[mt.col_key])
         mt = mt.annotate_cols(
             normalized_y_coverage=hl.or_missing(
@@ -204,14 +204,14 @@ def call_sex(
             )
         )
         if add_x_cov:
-            chrx_ht = get_chr_cov(mt, "GRCh38", "X")
+            chrx_ht = get_chr_cov(mt, "GRCh38", "X", call_rate_threshold)
             mt = mt.annotate_cols(**chrx_ht[mt.col_key])
             mt = mt.annotate_cols(
-            normalized_x_coverage=hl.or_missing(
-                mt[f"chr{normalization_contig}_mean_dp"] > 0,
-                mt.chrX_mean_dp / mt[f"chr{normalization_contig}_mean_dp"],
+                normalized_x_coverage=hl.or_missing(
+                    mt[f"chr{normalization_contig}_mean_dp"] > 0,
+                    mt.chrX_mean_dp / mt[f"chr{normalization_contig}_mean_dp"],
+                )
             )
-        )
         sex_ht = run_hails_impute_sex(
             mt,
             build,
@@ -240,17 +240,6 @@ def call_sex(
         )
 
         sex_ht = sex_ht.annotate(sex=sex_expr)
-        sex_ht = sex_ht.select(
-            sex_ht.is_female,
-            sex_ht.f_stat,
-            sex_ht.n_called,
-            sex_ht.expected_homs,
-            sex_ht.observed_homs,
-            sex_ht.sex,
-            sex_ht.chrY_mean_dp,
-            sex_ht.chr20_mean_dp,
-            sex_ht.normalized_y_coverage,
-        )
 
     else:
         sex_ht = run_hails_impute_sex(
@@ -269,14 +258,6 @@ def call_sex(
             hl.if_else(sex_ht.is_female, "XX", "XY"),
         )
         sex_ht = sex_ht.annotate(sex=sex_expr)
-        sex_ht = sex_ht.select(
-            sex_ht.is_female,
-            sex_ht.f_stat,
-            sex_ht.n_called,
-            sex_ht.expected_homs,
-            sex_ht.observed_homs,
-            sex_ht.sex,
-        )
 
     outfile = f"{outdir}/sex_{mt_name}.txt"
     sex_ht.export(outfile)
