@@ -224,8 +224,8 @@ def call_sex(
             hl.case()
             .when(sex_ht.ambiguous_sex, "ambiguous_sex")
             .when(sex_ht.sex_aneuploidy, "sex_aneuploidy")
-            .when(sex_ht.is_female, "female")
-            .default("male")
+            .when(sex_ht.is_female, "XX")
+            .default("XY")
         )
 
         sex_ht = sex_ht.annotate(sex=sex_expr)
