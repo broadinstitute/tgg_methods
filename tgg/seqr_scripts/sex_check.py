@@ -190,7 +190,6 @@ def call_sex(
     logger.info("Build inferred as %s", build)
 
     logger.info("Inferring sex...")
-    # TODO: Change "female" and "male" to "XX" and "XY"
     if use_y_cov:
         norm_ht = get_chr_cov(mt, "GRCh38", normalization_contig)
         mt = mt.annotate_cols(**norm_ht[mt.col_key])
