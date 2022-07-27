@@ -144,6 +144,7 @@ def run_hails_impute_sex(
 def call_sex(
     callset: str,
     use_y_cov: bool = False,
+    add_x_cov: bool = False,
     y_cov_threshold: float = 0.1,
     normalization_contig: str = "20",
     xy_fstat_threshold: float = 0.75,
@@ -156,6 +157,7 @@ def call_sex(
 
     :param str callset: String of full MatrixTable path for the callset
     :param use_y_cov: Set to True to calculate and use chrY coverage for sex inference. Default is False
+    :param add_x_cov: Set to True to calculate chrX coverage. Must be specified with use_y_cov. Default is False
     :param y_cov_threshold: Y coverage threshold used to infer sex aneuploidies.
         XY samples below and XX samples above this threshold will be inferred as having aneuploidies.
         Default is 0.1
@@ -199,6 +201,15 @@ def call_sex(
             normalized_y_coverage=hl.or_missing(
                 mt[f"chr{normalization_contig}_mean_dp"] > 0,
                 mt.chrY_mean_dp / mt[f"chr{normalization_contig}_mean_dp"],
+            )
+        )
+        if add_x_cov:
+            chrx_ht = get_chr_cov(mt, "GRCh38", "X")
+            mt = mt.annotate_cols(**chrx_ht[mt.col_key])
+            mt = mt.annotate_cols(
+            normalized_x_coverage=hl.or_missing(
+                mt[f"chr{normalization_contig}_mean_dp"] > 0,
+                mt.chrX_mean_dp / mt[f"chr{normalization_contig}_mean_dp"],
             )
         )
         sex_ht = run_hails_impute_sex(
@@ -295,6 +306,11 @@ if __name__ == "__main__":
         help="Whether to use chromosome Y coverage when inferring sex. Note that Y coverage is required to infer sex aneuploidies",
         action="store_true",
     )
+    parser.add_argument(
+        "-x",
+        "--add_x_cov",
+        help="Whether to also calculate chromosome X mean coverage. Must be specified with use-y-cov",
+        action="store_true",
     parser.add_argument(
         "-y",
         "--y-cov-threshold",
