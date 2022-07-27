@@ -311,6 +311,7 @@ if __name__ == "__main__":
         "--add_x_cov",
         help="Whether to also calculate chromosome X mean coverage. Must be specified with use-y-cov",
         action="store_true",
+    )
     parser.add_argument(
         "-y",
         "--y-cov-threshold",
