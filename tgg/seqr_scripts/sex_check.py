@@ -191,8 +191,8 @@ def call_sex(
     logger.info("Inferring sex...")
     # TODO: Change "female" and "male" to "XX" and "XY"
     if use_y_cov:
-        sex_ht = get_chr_cov(mt, "GRCh38", normalization_contig)
-        mt = mt.annotate_cols(**sex_ht[mt.col_key])
+        norm_ht = get_chr_cov(mt, "GRCh38", normalization_contig)
+        mt = mt.annotate_cols(**norm_ht[mt.col_key])
         chry_ht = get_chr_cov(mt, "GRCh38", "Y")
         mt = mt.annotate_cols(**chry_ht[mt.col_key])
         mt = mt.annotate_cols(
