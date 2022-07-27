@@ -155,7 +155,9 @@ def call_sex(
 
     :param str callset: String of full MatrixTable path for the callset
     :param use_y_cov: Set to True to calculate and use chrY coverage for sex inference. Default is False
-    :param y_cov_threshold: Coverage on chrY above which supports male call. Default is 0.1
+    :param y_cov_threshold: Y coverage threshold used to infer sex aneuploidies.
+        XY samples below and XX samples above this threshold will be inferred as having aneuploidies.
+        Default is 0.1
     :param normalization_contig: Chosen chromosome for calculating normalized coverage. Default is "20"
     :param xy_fstat_threshold: F-stat threshold above which a sample will be called XY. Default is 0.75
     :param xx_fstat_threshold: F-stat threshold below which a sample will be called XX. Default is 0.5
