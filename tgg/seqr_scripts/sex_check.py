@@ -23,7 +23,7 @@ def get_chr_cov(
     af_field: str = "AF",
     call_rate_threshold: float = 0.25,
     af_threshold: float = 0.01,
-) -> hl.expr.Float64Expression:
+) -> hl.Table:
     """
     Calculate mean chromosome coverage.
 
