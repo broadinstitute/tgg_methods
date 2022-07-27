@@ -269,7 +269,6 @@ def main(args):
 
     :param args: User's command line inputs
     """
-
     call_sex(**vars(args))
 
 
