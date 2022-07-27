@@ -37,7 +37,7 @@ def get_chr_cov(
     """
 
     logger.warning(
-        "This function expects the chrY to be at index 23 and chrX to be at index 22."
+        "This function expects chrY to be at index 23 and chrX to be at index 22 in the reference genome contigs list!"
     )
 
     if chr_name == "Y":
