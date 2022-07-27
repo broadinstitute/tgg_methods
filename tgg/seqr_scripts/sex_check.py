@@ -238,7 +238,6 @@ def call_sex(
             .when(sex_ht.is_female, "XX")
             .default("XY")
         )
-
         sex_ht = sex_ht.annotate(sex=sex_expr)
 
     else:
