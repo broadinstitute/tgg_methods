@@ -62,14 +62,10 @@ def get_chr_cov(
         [hl.parse_locus_interval(chr_name, reference_genome=build)],
     )
 
+    if chr_place == 22:
+        sex_mt  = sex_mt.filter_rows(sex_mt.locus.in_x_nonpar())
     if chr_place == 23:
-        filter_nonpar_expr = sex_mt.locus.in_y_nonpar()
-    elif chr_place == 22:
-        filter_nonpar_expr = sex_mt.locus.in_x_nonpar()
-
-    if chr_place in [22, 23]:
-        logger.info("Filtering to non-PAR regions")
-        sex_mt = sex_mt.filter_rows((filter_nonpar_expr), keep=True)
+        sex_mt  = sex_mt.filter_rows(sex_mt.locus.in_y_nonpar())    
 
     # Filter to common SNVs above defined callrate (should only have one index in the array because the MT only contains biallelic variants)
     sex_mt = sex_mt.filter_rows(sex_mt[af_field] > af_threshold)
