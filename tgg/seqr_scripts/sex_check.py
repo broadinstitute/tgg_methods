@@ -288,7 +288,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-x",
-        "--add_x_cov",
+        "--add-x-cov",
         help="Whether to also calculate chromosome X mean coverage. Must be specified with use-y-cov",
         action="store_true",
     )
