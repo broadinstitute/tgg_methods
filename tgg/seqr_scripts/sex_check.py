@@ -240,17 +240,6 @@ def call_sex(
         )
 
         sex_ht = sex_ht.annotate(sex=sex_expr)
-        sex_ht = sex_ht.select(
-            sex_ht.is_female,
-            sex_ht.f_stat,
-            sex_ht.n_called,
-            sex_ht.expected_homs,
-            sex_ht.observed_homs,
-            sex_ht.sex,
-            sex_ht.chrY_mean_dp,
-            sex_ht.chr20_mean_dp,
-            sex_ht.normalized_y_coverage,
-        )
 
     else:
         sex_ht = run_hails_impute_sex(
