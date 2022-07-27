@@ -258,7 +258,6 @@ def call_sex(
 
     outfile = f"{outdir}/sex_{mt_name}.txt"
     sex_ht.export(outfile)
-    return sex_ht
 
 
 def main(args):
