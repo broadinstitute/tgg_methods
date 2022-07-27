@@ -133,6 +133,7 @@ def run_hails_impute_sex(
     plt.axvline(xy_fstat_threshold, color="blue", linestyle="dashed", linewidth=1)
     plt.axvline(xx_fstat_threshold, color="red", linestyle="dashed", linewidth=1)
 
+    # TODO: Change this path to be an argument (rather than having code decide on the output path)
     outplot = f"{outdir}/fstat_{callset_name}.png"
     with hl.hadoop_open(outplot, "wb") as out:
         plt.savefig(out)
