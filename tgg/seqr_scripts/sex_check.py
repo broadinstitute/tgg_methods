@@ -175,7 +175,6 @@ def call_sex(
     mt_name = callset.split("/")[-1].strip("\.mt")
     logger.info("Reading matrix table for callset: %s", callset)
     logger.info("Using chromosome Y coverage? %s", use_y_cov)
-
     mt = hl.read_matrix_table(callset)
 
     # Filter to SNVs and biallelics
