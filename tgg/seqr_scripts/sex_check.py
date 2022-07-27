@@ -191,8 +191,8 @@ def call_sex(
     if use_y_cov:
         sex_ht = get_chr_cov(mt, "GRCh38", normalization_contig)
         mt = mt.annotate_cols(**sex_ht[mt.col_key])
-        sex_ht = get_chr_cov(mt, "GRCh38", "Y")
-        mt = mt.annotate_cols(**sex_ht[mt.col_key])
+        chry_ht = get_chr_cov(mt, "GRCh38", "Y")
+        mt = mt.annotate_cols(**chry_ht[mt.col_key])
         mt = mt.annotate_cols(
             normalized_y_coverage=hl.or_missing(
                 mt[f"chr{normalization_contig}_mean_dp"] > 0,
