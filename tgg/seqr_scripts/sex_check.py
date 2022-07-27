@@ -166,7 +166,7 @@ def call_sex(
     :param xx_fstat_threshold: F-stat threshold below which a sample will be called XX. Default is 0.5
     :param aaf_threshold: Alternate allele frequency threshold for `hl.impute_sex`. Default is 0.05
     :param call_rate_threshold: Minimum required call rate. Default is 0.25
-    :return: Table with sex annotations
+    :return: None; function writes sex information to text file
     """
 
     # Read in matrix table and define output directory
