@@ -191,6 +191,15 @@ def call_sex(
     logger.info("Build inferred as %s", build)
 
     logger.info("Inferring sex...")
+    sex_ht = run_hails_impute_sex(
+            mt,
+            build,
+            outdir,
+            mt_name,
+            xy_fstat_threshold,
+            xx_fstat_threshold,
+            aaf_threshold,
+        )
     if use_y_cov:
         norm_ht = get_chr_cov(mt, "GRCh38", normalization_contig, call_rate_threshold)
         mt = mt.annotate_cols(**norm_ht[mt.col_key])
