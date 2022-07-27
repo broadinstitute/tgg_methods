@@ -258,14 +258,6 @@ def call_sex(
             hl.if_else(sex_ht.is_female, "XX", "XY"),
         )
         sex_ht = sex_ht.annotate(sex=sex_expr)
-        sex_ht = sex_ht.select(
-            sex_ht.is_female,
-            sex_ht.f_stat,
-            sex_ht.n_called,
-            sex_ht.expected_homs,
-            sex_ht.observed_homs,
-            sex_ht.sex,
-        )
 
     outfile = f"{outdir}/sex_{mt_name}.txt"
     sex_ht.export(outfile)
