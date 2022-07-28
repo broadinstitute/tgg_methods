@@ -221,6 +221,7 @@ def call_sex(
             )
         )
         if add_x_cov:
+            final_annotations.append("chrX_mean_dp", "normalized_x_coverage")
             chrx_ht = get_chr_cov(mt, "GRCh38", "X", call_rate_threshold)
             mt = mt.annotate_cols(**chrx_ht[mt.col_key])
             mt = mt.annotate_cols(
