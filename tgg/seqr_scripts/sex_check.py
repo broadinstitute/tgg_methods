@@ -155,7 +155,8 @@ def call_sex(
     """
     Call sex for the samples in a given callset and export results file to the callset directory.
 
-    :param str callset: String of full MatrixTable path for the callset
+    :param callset: String of full MatrixTable path for the callset
+    :param temp_path: Path to bucket for temporary data
     :param use_y_cov: Set to True to calculate and use chrY coverage for sex inference. Default is False
     :param add_x_cov: Set to True to calculate chrX coverage. Must be specified with use_y_cov. Default is False
     :param y_cov_threshold: Y coverage threshold used to infer sex aneuploidies.
