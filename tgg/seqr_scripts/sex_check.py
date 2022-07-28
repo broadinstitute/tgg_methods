@@ -209,6 +209,7 @@ def call_sex(
     sex_ht = sex_ht.checkpoint(f"{temp_path}/sex_{mt_name}.ht", overwrite=True)
     
     if use_y_cov:
+        final_annotations.append( f"chr{normalization_contig}_mean_dp", "chrY_mean_dp", "normalized_y_coverage")
         norm_ht = get_chr_cov(mt, "GRCh38", normalization_contig, call_rate_threshold)
         mt = mt.annotate_cols(**norm_ht[mt.col_key])
         chry_ht = get_chr_cov(mt, "GRCh38", "Y", call_rate_threshold)
