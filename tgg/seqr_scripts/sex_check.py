@@ -153,6 +153,7 @@ def call_sex(
     xx_fstat_threshold: float = 0.5,
     aaf_threshold: float = 0.05,
     call_rate_threshold: float = 0.25,
+    final_annotations: List[str] = ["is_female", "f_stat", "n_called", "expected_homs", "observed_homs", "sex"],
 ) -> None:
     """
     Call sex for the samples in a given callset and export results file to the callset directory.
