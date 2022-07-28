@@ -1,8 +1,8 @@
 import argparse
 import logging
-from os.path import dirname
-import matplotlib.pyplot as plt
 from typing import List
+import matplotlib.pyplot as plt
+
 
 import hail as hl
 
@@ -268,7 +268,7 @@ if __name__ == "__main__":
         description="This script infers the sex of samples"
     )
     parser.add_argument(
-        "-t", "--temp", required=True, help="Path to bucket (where to store temporary data)"
+        "-i", "--callset", required=True, help="Path to Callset MatrixTable"
     )
     parser.add_argument(
         "-t", "--temp", required=True, help="Path to bucket (where to store temporary data)"
@@ -324,6 +324,12 @@ if __name__ == "__main__":
         "--normalization-contig",
         help="Autosome to use to normalize sex chromosome coverage. Default is chromosome 20",
         default="20",
+    )
+    parser.add_argument(
+        "-l",
+        "--final_annotations",
+        help="List of columns to keep in final table.",
+        default=["is_female", "f_stat", "n_called", "expected_homs", "observed_homs", "sex"],
     )
 
     args = parser.parse_args()
