@@ -276,7 +276,7 @@ if __name__ == "__main__":
         description="This script infers the sex of samples"
     )
     parser.add_argument(
-        "-i", "--callset", required=True, help="Path to Callset MatrixTable"
+        "-t", "--temp", required=True, help="Path to bucket (where to store temporary data)"
     )
     parser.add_argument(
         "-u",
