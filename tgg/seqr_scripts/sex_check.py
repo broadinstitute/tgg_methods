@@ -2,6 +2,7 @@ import argparse
 import logging
 from os.path import dirname
 import matplotlib.pyplot as plt
+from typing import List
 
 import hail as hl
 
