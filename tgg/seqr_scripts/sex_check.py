@@ -143,6 +143,7 @@ def run_hails_impute_sex(
 
 def call_sex(
     callset: str,
+    temp_path: str,
     use_y_cov: bool = False,
     add_x_cov: bool = False,
     y_cov_threshold: float = 0.1,
