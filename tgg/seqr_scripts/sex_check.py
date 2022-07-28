@@ -148,7 +148,14 @@ def call_sex(
     xx_fstat_threshold: float = 0.5,
     aaf_threshold: float = 0.05,
     call_rate_threshold: float = 0.25,
-    final_annotations: List[str] = ["is_female", "f_stat", "n_called", "expected_homs", "observed_homs", "sex"],
+    final_annotations: List[str] = [
+        "is_female",
+        "f_stat",
+        "n_called",
+        "expected_homs",
+        "observed_homs",
+        "sex",
+    ],
 ) -> None:
     """
     Call sex for the samples in a given callset and export results file to the callset directory.
@@ -192,17 +199,23 @@ def call_sex(
 
     logger.info("Inferring sex...")
     sex_ht = run_hails_impute_sex(
-            mt,
-            build,
-            out_path,
-            xy_fstat_threshold,
-            xx_fstat_threshold,
-            aaf_threshold,
-        )
+        mt,
+        build,
+        out_path,
+        xy_fstat_threshold,
+        xx_fstat_threshold,
+        aaf_threshold,
+    )
     sex_ht = sex_ht.checkpoint(f"{temp_path}/sex_{mt_name}.ht", overwrite=True)
 
     if use_y_cov:
-        final_annotations.extend([f"chr{normalization_contig}_mean_dp", "chrY_mean_dp", "normalized_y_coverage"])
+        final_annotations.extend(
+            [
+                f"chr{normalization_contig}_mean_dp",
+                "chrY_mean_dp",
+                "normalized_y_coverage",
+            ]
+        )
         norm_ht = get_chr_cov(mt, "GRCh38", normalization_contig, call_rate_threshold)
         sex_ht = sex_ht.annotate(**norm_ht[sex_ht.s])
         chry_ht = get_chr_cov(mt, "GRCh38", "Y", call_rate_threshold)
@@ -271,10 +284,16 @@ if __name__ == "__main__":
         "-i", "--callset", required=True, help="Path to Callset MatrixTable"
     )
     parser.add_argument(
-        "-t", "--temp", required=True, help="Path to bucket (where to store temporary data)"
+        "-t",
+        "--temp",
+        required=True,
+        help="Path to bucket (where to store temporary data)",
     )
     parser.add_argument(
-        "-o", "--out-path", required=True, help="Path to bucket (where to store text file of final table)"
+        "-o",
+        "--out-path",
+        required=True,
+        help="Path to bucket (where to store text file of final table)",
     )
     parser.add_argument(
         "-u",
@@ -329,7 +348,14 @@ if __name__ == "__main__":
         "-l",
         "--final_annotations",
         help="List of columns to keep in final table.",
-        default=["is_female", "f_stat", "n_called", "expected_homs", "observed_homs", "sex"],
+        default=[
+            "is_female",
+            "f_stat",
+            "n_called",
+            "expected_homs",
+            "observed_homs",
+            "sex",
+        ],
     )
 
     args = parser.parse_args()
