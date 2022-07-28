@@ -2,6 +2,7 @@ import argparse
 import logging
 from os.path import dirname
 import matplotlib.pyplot as plt
+from typing import List
 
 import hail as hl
 
@@ -26,7 +27,6 @@ def get_chr_cov(
 ) -> hl.Table:
     """
     Calculate mean chromosome coverage.
-
     :param mt: MatrixTable containing samples with chrY variants
     :param build: Reference used, either GRCh37 or GRCh38
     :param chr_name: Chosen chromosome. Must be either autosome (number only) or sex chromosome (X, Y)
@@ -83,19 +83,16 @@ def get_chr_cov(
 def run_hails_impute_sex(
     mt: hl.MatrixTable,
     build: str,
-    outdir: str,
-    callset_name: str,
+    out_path: str,
     xy_fstat_threshold: float = 0.75,
     xx_fstat_threshold: float = 0.5,
     aaf_threshold: float = 0.05,
 ) -> hl.Table:
     """
     Impute sex, annotate MatrixTable with results, and output a histogram of fstat values.
-
     :param MatrixTable mt: MatrixTable containing samples to be ascertained for sex
     :param build: Reference used, either GRCh37 or GRCh38
-    :param callset_name: Basename for callset and output results
-    :param outdir: Directory to output results
+    :param out_path: Path to bucket for histogram
     :param xy_fstat_threshold: F-stat threshold above which a sample will be called XY. Default is 0.75
     :param xx_fstat_threshold: F-stat threshold below which a sample will be called XX. Default is 0.5
     :param aaf_threshold: Alternate allele frequency threshold for `hl.impute_sex`. Default is 0.05
@@ -133,9 +130,7 @@ def run_hails_impute_sex(
     plt.axvline(xy_fstat_threshold, color="blue", linestyle="dashed", linewidth=1)
     plt.axvline(xx_fstat_threshold, color="red", linestyle="dashed", linewidth=1)
 
-    # TODO: Change this path to be an argument (rather than having code decide on the output path)
-    outplot = f"{outdir}/fstat_{callset_name}.png"
-    with hl.hadoop_open(outplot, "wb") as out:
+    with hl.hadoop_open(out_path, "wb") as out:
         plt.savefig(out)
 
     return sex_ht
@@ -143,6 +138,8 @@ def run_hails_impute_sex(
 
 def call_sex(
     callset: str,
+    temp_path: str,
+    out_path: str,
     use_y_cov: bool = False,
     add_x_cov: bool = False,
     y_cov_threshold: float = 0.1,
@@ -151,11 +148,13 @@ def call_sex(
     xx_fstat_threshold: float = 0.5,
     aaf_threshold: float = 0.05,
     call_rate_threshold: float = 0.25,
-) -> hl.Table:
+    final_annotations: List[str] = ["is_female", "f_stat", "n_called", "expected_homs", "observed_homs", "sex"],
+) -> None:
     """
     Call sex for the samples in a given callset and export results file to the callset directory.
-
     :param str callset: String of full MatrixTable path for the callset
+    :param temp_path: Path to bucket for temporary data
+    :param out_path: Path to bucket for text file of final table
     :param use_y_cov: Set to True to calculate and use chrY coverage for sex inference. Default is False
     :param add_x_cov: Set to True to calculate chrX coverage. Must be specified with use_y_cov. Default is False
     :param y_cov_threshold: Y coverage threshold used to infer sex aneuploidies.
@@ -166,16 +165,16 @@ def call_sex(
     :param xx_fstat_threshold: F-stat threshold below which a sample will be called XX. Default is 0.5
     :param aaf_threshold: Alternate allele frequency threshold for `hl.impute_sex`. Default is 0.05
     :param call_rate_threshold: Minimum required call rate. Default is 0.25
-    :return: Table with sex annotations
+    :param final_annotations: List of fields to keep in final output text file.
+        Default is ["is_female", "f_stat", "n_called", "expected_homs", "observed_homs", "sex"].
+    :return: None; function writes sex information to text file
     """
 
     # Read in matrix table and define output directory
     # TODO: Generalize before moving into gnomad_methods
-    outdir = dirname(callset)
     mt_name = callset.split("/")[-1].strip("\.mt")
     logger.info("Reading matrix table for callset: %s", callset)
     logger.info("Using chromosome Y coverage? %s", use_y_cov)
-
     mt = hl.read_matrix_table(callset)
 
     # Filter to SNVs and biallelics
@@ -192,35 +191,38 @@ def call_sex(
     logger.info("Build inferred as %s", build)
 
     logger.info("Inferring sex...")
-    if use_y_cov:
-        norm_ht = get_chr_cov(mt, "GRCh38", normalization_contig, call_rate_threshold)
-        mt = mt.annotate_cols(**norm_ht[mt.col_key])
-        chry_ht = get_chr_cov(mt, "GRCh38", "Y", call_rate_threshold)
-        mt = mt.annotate_cols(**chry_ht[mt.col_key])
-        mt = mt.annotate_cols(
-            normalized_y_coverage=hl.or_missing(
-                mt[f"chr{normalization_contig}_mean_dp"] > 0,
-                mt.chrY_mean_dp / mt[f"chr{normalization_contig}_mean_dp"],
-            )
-        )
-        if add_x_cov:
-            chrx_ht = get_chr_cov(mt, "GRCh38", "X", call_rate_threshold)
-            mt = mt.annotate_cols(**chrx_ht[mt.col_key])
-            mt = mt.annotate_cols(
-                normalized_x_coverage=hl.or_missing(
-                    mt[f"chr{normalization_contig}_mean_dp"] > 0,
-                    mt.chrX_mean_dp / mt[f"chr{normalization_contig}_mean_dp"],
-                )
-            )
-        sex_ht = run_hails_impute_sex(
+    sex_ht = run_hails_impute_sex(
             mt,
             build,
-            outdir,
-            mt_name,
+            out_path,
             xy_fstat_threshold,
             xx_fstat_threshold,
             aaf_threshold,
         )
+    sex_ht = sex_ht.checkpoint(f"{temp_path}/sex_{mt_name}.ht", overwrite=True)
+
+    if use_y_cov:
+        final_annotations.extend([f"chr{normalization_contig}_mean_dp", "chrY_mean_dp", "normalized_y_coverage"])
+        norm_ht = get_chr_cov(mt, "GRCh38", normalization_contig, call_rate_threshold)
+        sex_ht = sex_ht.annotate(**norm_ht[sex_ht.s])
+        chry_ht = get_chr_cov(mt, "GRCh38", "Y", call_rate_threshold)
+        sex_ht = sex_ht.annotate(**chry_ht[sex_ht.s])
+        sex_ht = sex_ht.annotate(
+            normalized_y_coverage=hl.or_missing(
+                sex_ht[f"chr{normalization_contig}_mean_dp"] > 0,
+                sex_ht.chrY_mean_dp / sex_ht[f"chr{normalization_contig}_mean_dp"],
+            )
+        )
+        if add_x_cov:
+            final_annotations.extend(["chrX_mean_dp", "normalized_x_coverage"])
+            chrx_ht = get_chr_cov(mt, "GRCh38", "X", call_rate_threshold)
+            sex_ht = sex_ht.annotate(**chrx_ht[sex_ht.s])
+            sex_ht = sex_ht.annotate(
+                normalized_x_coverage=hl.or_missing(
+                    sex_ht[f"chr{normalization_contig}_mean_dp"] > 0,
+                    sex_ht.chrX_mean_dp / sex_ht[f"chr{normalization_contig}_mean_dp"],
+                )
+            )
         sex_ht = sex_ht.annotate(
             ambiguous_sex=hl.is_missing(sex_ht.is_female),
             sex_aneuploidy=(sex_ht.is_female)
@@ -238,29 +240,18 @@ def call_sex(
             .when(sex_ht.is_female, "XX")
             .default("XY")
         )
-        sex_ht = sex_ht.annotate(sex=sex_expr)
 
     else:
-        sex_ht = run_hails_impute_sex(
-            mt,
-            build,
-            outdir,
-            mt_name,
-            xy_fstat_threshold,
-            xx_fstat_threshold,
-            aaf_threshold,
-        )
         sex_ht = sex_ht.annotate(ambiguous_sex=hl.is_missing(sex_ht.is_female))
         sex_expr = hl.if_else(
             sex_ht.ambiguous_sex,
             "ambiguous_sex",
             hl.if_else(sex_ht.is_female, "XX", "XY"),
         )
-        sex_ht = sex_ht.annotate(sex=sex_expr)
+    sex_ht = sex_ht.annotate(sex=sex_expr)
+    sex_ht = sex_ht.select(*final_annotations)
 
-    outfile = f"{outdir}/sex_{mt_name}.txt"
-    sex_ht.export(outfile)
-    return sex_ht
+    sex_ht.export(out_path)
 
 
 def main(args):
@@ -281,6 +272,12 @@ if __name__ == "__main__":
         "-i", "--callset", required=True, help="Path to Callset MatrixTable"
     )
     parser.add_argument(
+        "-t", "--temp", required=True, help="Path to bucket (where to store temporary data)"
+    )
+    parser.add_argument(
+        "-o", "--out-path", required=True, help="Path to bucket (where to store text file of final table)"
+    )
+    parser.add_argument(
         "-u",
         "--use-y-cov",
         help="Whether to use chromosome Y coverage when inferring sex. Note that Y coverage is required to infer sex aneuploidies",
@@ -288,7 +285,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-x",
-        "--add_x_cov",
+        "--add-x-cov",
         help="Whether to also calculate chromosome X mean coverage. Must be specified with use-y-cov",
         action="store_true",
     )
