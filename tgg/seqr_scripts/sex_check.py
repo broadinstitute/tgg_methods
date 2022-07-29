@@ -27,6 +27,7 @@ def get_chr_cov(
 ) -> hl.Table:
     """
     Calculate mean chromosome coverage.
+    
     :param mt: MatrixTable containing samples with chrY variants
     :param build: Reference used, either GRCh37 or GRCh38
     :param chr_name: Chosen chromosome. Must be either autosome (number only) or sex chromosome (X, Y)
