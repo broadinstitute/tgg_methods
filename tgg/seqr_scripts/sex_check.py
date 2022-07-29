@@ -160,7 +160,8 @@ def call_sex(
     ],
 ) -> None:
     """
-    Call sex for the samples in a given callset and export results file to the callset directory.
+    Call sex for the samples in a given callset and export results file to the desired path.
+    
     :param str callset: String of full MatrixTable path for the callset
     :param temp_path: Path to bucket for temporary data
     :param out_path: Path to bucket for text file of final table
