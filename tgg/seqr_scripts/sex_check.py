@@ -84,7 +84,7 @@ def get_chr_cov(
 def run_hails_impute_sex(
     mt: hl.MatrixTable,
     build: str,
-    out_path: str,
+    out_bucket: str,
     xy_fstat_threshold: float = 0.75,
     xx_fstat_threshold: float = 0.5,
     aaf_threshold: float = 0.05,
@@ -94,7 +94,7 @@ def run_hails_impute_sex(
     
     :param MatrixTable mt: MatrixTable containing samples to be ascertained for sex
     :param build: Reference used, either GRCh37 or GRCh38
-    :param out_path: Path to bucket for histogram
+    :param out_bucket: Bucket name for f-stat histogram
     :param xy_fstat_threshold: F-stat threshold above which a sample will be called XY. Default is 0.75
     :param xx_fstat_threshold: F-stat threshold below which a sample will be called XX. Default is 0.5
     :param aaf_threshold: Alternate allele frequency threshold for `hl.impute_sex`. Default is 0.05
@@ -132,6 +132,7 @@ def run_hails_impute_sex(
     plt.axvline(xy_fstat_threshold, color="blue", linestyle="dashed", linewidth=1)
     plt.axvline(xx_fstat_threshold, color="red", linestyle="dashed", linewidth=1)
 
+    out_path = f"{out_bucket}/fstat_histogram.png"  
     with hl.hadoop_open(out_path, "wb") as out:
         plt.savefig(out)
 
@@ -141,7 +142,7 @@ def run_hails_impute_sex(
 def call_sex(
     callset: str,
     temp_path: str,
-    out_path: str,
+    out_bucket: str,
     use_y_cov: bool = False,
     add_x_cov: bool = False,
     y_cov_threshold: float = 0.1,
@@ -164,7 +165,7 @@ def call_sex(
     
     :param str callset: String of full MatrixTable path for the callset
     :param temp_path: Path to bucket for temporary data
-    :param out_path: Path to bucket for text file of final table and for f-stat histogram
+    :param out_bucket: Bucket name for text file of final table and for f-stat histogram
     :param use_y_cov: Set to True to calculate and use chrY coverage for sex inference. Default is False
     :param add_x_cov: Set to True to calculate chrX coverage. Must be specified with use_y_cov. Default is False
     :param y_cov_threshold: Y coverage threshold used to infer sex aneuploidies.
@@ -204,7 +205,7 @@ def call_sex(
     sex_ht = run_hails_impute_sex(
         mt,
         build,
-        out_path,
+        out_bucket,
         xy_fstat_threshold,
         xx_fstat_threshold,
         aaf_threshold,
@@ -266,6 +267,8 @@ def call_sex(
         )
     sex_ht = sex_ht.annotate(sex=sex_expr)
     sex_ht = sex_ht.select(*final_annotations)
+    
+    out_path = f"{out_bucket}/{mt_name}_sex.txt" 
     sex_ht.export(out_path)
 
 
@@ -293,9 +296,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-o",
-        "--out-path",
+        "--out-bucket",
         required=True,
-        help="Path to bucket (where to store text file of final table)",
+        help="Bucket name (where to store text file of final table and f-stat histogram)",
     )
     parser.add_argument(
         "-u",
