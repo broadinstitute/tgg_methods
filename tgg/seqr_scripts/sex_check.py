@@ -266,7 +266,6 @@ def call_sex(
         )
     sex_ht = sex_ht.annotate(sex=sex_expr)
     sex_ht = sex_ht.select(*final_annotations)
-
     sex_ht.export(out_path)
 
 
