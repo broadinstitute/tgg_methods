@@ -164,7 +164,7 @@ def call_sex(
     
     :param str callset: String of full MatrixTable path for the callset
     :param temp_path: Path to bucket for temporary data
-    :param out_path: Path to bucket for text file of final table
+    :param out_path: Path to bucket for text file of final table and for f-stat histogram
     :param use_y_cov: Set to True to calculate and use chrY coverage for sex inference. Default is False
     :param add_x_cov: Set to True to calculate chrX coverage. Must be specified with use_y_cov. Default is False
     :param y_cov_threshold: Y coverage threshold used to infer sex aneuploidies.
