@@ -68,7 +68,8 @@ def get_n_non_ref_sites(
     control_samples={NA12878, SYNDIP},
 ) -> hl.Table:
     """
-    Filter VDS to autosomal sites in interval QC pass regions with an adj non reference allele count of n.
+    Filter VDS to autosomal sites in interval QC pass regions with an adj non reference allele count of 
+    n and annotate site non ref samples.
 
     :param vds_path: Path to VDS. Default is VDS_PATH.
     :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
@@ -167,7 +168,7 @@ def get_and_count_sample_pairs(ht: hl.Table,) -> hl.Table:
     ht = ht.annotate(
         sample_pairs=hl.range(0, ht.samples.length()).flatmap(
             lambda i: hl.range(i + 1, ht.samples.length()).map(
-                lambda j: hl.tuple([ht.samples[i], ht.samples[j]])
+                lambda j: hl.set([ht.samples[i], ht.samples[j]])
             )
         )
     )
