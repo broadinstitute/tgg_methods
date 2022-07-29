@@ -179,7 +179,7 @@ def call_sex(
     :return: None; function writes sex information to text file
     """
 
-    # Read in matrix table and define output directory
+    # Read in matrix table and define output file name prefix
     # TODO: Generalize before moving into gnomad_methods
     mt_name = callset.split("/")[-1].strip("\.mt")
     logger.info("Reading matrix table for callset: %s", callset)
