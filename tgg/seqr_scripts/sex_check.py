@@ -76,8 +76,7 @@ def get_chr_cov(
 
     logger.info("Returning mean coverage on chromosome %s...", chr_name)
     sex_mt = sex_mt.annotate_cols(**{f"{chr_name}_mean_dp": hl.agg.mean(sex_mt.DP)})
-    sex_ht = sex_mt.cols()
-    return sex_ht
+    return sex_mt.cols()
 
 
 def run_hails_impute_sex(
