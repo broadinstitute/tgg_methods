@@ -69,9 +69,8 @@ def get_chr_cov(
         sex_mt = sex_mt.filter_rows(sex_mt.locus.in_y_nonpar())
 
     # Filter to common SNVs above defined callrate (should only have one index in the array because the MT only contains biallelic variants)
-    sex_mt = sex_mt.filter_rows(sex_mt[af_field] > af_threshold)
-
     # TODO: Make callrate filtering optional before adding code to gnomad_methods
+    sex_mt = sex_mt.filter_rows(sex_mt[af_field] > af_threshold)
     sex_mt = hl.variant_qc(sex_mt)
     sex_mt = sex_mt.filter_rows(sex_mt.variant_qc.call_rate > call_rate_threshold)
 
