@@ -27,7 +27,7 @@ def get_chr_cov(
 ) -> hl.Table:
     """
     Calculate mean chromosome coverage.
-    
+
     :param mt: MatrixTable containing samples with chrY variants
     :param build: Reference used, either GRCh37 or GRCh38
     :param chr_name: Chosen chromosome. Must be either autosome (number only) or sex chromosome (X, Y)
@@ -91,7 +91,7 @@ def run_hails_impute_sex(
 ) -> hl.Table:
     """
     Impute sex, annotate MatrixTable with results, and output a histogram of fstat values.
-    
+
     :param MatrixTable mt: MatrixTable containing samples to be ascertained for sex
     :param build: Reference used, either GRCh37 or GRCh38
     :param out_bucket: Bucket name for f-stat histogram
@@ -132,7 +132,7 @@ def run_hails_impute_sex(
     plt.axvline(xy_fstat_threshold, color="blue", linestyle="dashed", linewidth=1)
     plt.axvline(xx_fstat_threshold, color="red", linestyle="dashed", linewidth=1)
 
-    out_path = f"{out_bucket}/fstat_histogram.png"  
+    out_path = f"{out_bucket}/fstat_histogram.png"
     with hl.hadoop_open(out_path, "wb") as out:
         plt.savefig(out)
 
@@ -162,7 +162,7 @@ def call_sex(
 ) -> None:
     """
     Call sex for the samples in a given callset and export results file to the desired path.
-    
+
     :param str callset: String of full MatrixTable path for the callset
     :param temp_path: Path to bucket for temporary data
     :param out_bucket: Bucket name for text file of final table and for f-stat histogram
@@ -267,8 +267,8 @@ def call_sex(
         )
     sex_ht = sex_ht.annotate(sex=sex_expr)
     sex_ht = sex_ht.select(*final_annotations)
-    
-    out_path = f"{out_bucket}/{mt_name}_sex.txt" 
+
+    out_path = f"{out_bucket}/{mt_name}_sex.txt"
     sex_ht.export(out_path)
 
 
