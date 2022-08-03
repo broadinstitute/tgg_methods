@@ -5,7 +5,7 @@ import pymysql
 # To get list of available dbs, connect and run SHOW DATABASES
 
 
-CURRENT_ENSEMBL_DATABASE = "homo_sapiens_core_103_38"
+CURRENT_ENSEMBL_DATABASE = "homo_sapiens_core_107_38"
 
 """
 homo_sapiens_cdna_102_38
