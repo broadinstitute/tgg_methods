@@ -1,3 +1,5 @@
+import collections
+
 import pymysql
 
 
@@ -22,22 +24,72 @@ homo_sapiens_variation_102_38
 homo_sapiens_variation_103_38
 """
 
-def get_canonical_transcripts(database=CURRENT_ENSEMBL_DATABASE):
-    gene_id_to_canonical_transcript_id = {}
+
+def _get_gene_id_to_transcript_ids(database=CURRENT_ENSEMBL_DATABASE, only_canonical_transcripts=False):
+    """Internal method for retrieving a dictionary containing gene_id => transcript ids
+
+    Args:
+        database (str): The Ensembl database name (eg. "homo_sapiens_core_107_38")
+        only_canonical_transcripts (bool): If True, only canonical transcripts will be returned
+
+    Return:
+        dict: mapping ENSG id string to a list of ENST id strings
+    """
+
+    gene_id_to_transcript_id = collections.defaultdict(list)
     with pymysql.connect(host="useastdb.ensembl.org", user="anonymous", database=database) as conn:
         with conn.cursor() as c:
+            if only_canonical_transcripts:
+                join_keys = "canonical_transcript_id = transcript_id"
+            else:
+                join_keys = "transcript.gene_id = gene.gene_id"
+
             columns = ["gene.stable_id", "transcript.stable_id"]
             columns_str = ", ".join(columns)
-            c.execute(f"SELECT {columns_str} FROM gene LEFT JOIN transcript ON canonical_transcript_id = transcript_id")
+            c.execute(f"SELECT {columns_str} FROM gene LEFT JOIN transcript ON {join_keys}")
 
             for row in c:
                 d = dict(zip(columns, row))
                 gene_id = d['gene.stable_id']
                 transcript_id = d['transcript.stable_id']
-                if gene_id in gene_id_to_canonical_transcript_id:
-                    other_id = gene_id_to_canonical_transcript_id[gene_id]
-                    raise Exception(f"{gene_id} has more than 1 canonical transcript: {transcript_id}, {other_id}")
-                gene_id_to_canonical_transcript_id[gene_id] = transcript_id
+                gene_id_to_transcript_id[gene_id].append(transcript_id)
+
+    return gene_id_to_transcript_id
+
+
+def get_all_transcripts(database=CURRENT_ENSEMBL_DATABASE):
+    """Returns a dictionary mapping each Ensembl gene_id => transcript ids
+
+    Args:
+        database (str): The Ensembl database name (eg. "homo_sapiens_core_107_38")
+
+    Return:
+        dict: mapping ENSG id string to a list of ENST id strings
+    """
+
+    return _get_gene_id_to_transcript_ids(database=database, only_canonical_transcripts=False)
+
+
+def get_canonical_transcripts(database=CURRENT_ENSEMBL_DATABASE):
+    """Returns a dictionary mapping each Ensembl gene_id => canonical transcript id
+
+    Args:
+        database (str): The Ensembl database name (eg. "homo_sapiens_core_107_38")
+
+    Return:
+        dict: mapping ENSG id string to the canonical ENST id string
+    """
+
+    gene_id_to_transcript_ids = _get_gene_id_to_transcript_ids(database=database, only_canonical_transcripts=True)
+
+    gene_id_to_canonical_transcript_id = {}
+    for gene_id, transcript_ids in gene_id_to_transcript_ids.items():
+        if len(transcript_ids) > 1:
+            raise Exception(f"{gene_id} has more than 1 canonical transcript: " + ", ".join(transcript_ids))
+        if len(transcript_ids) == 0:
+            raise Exception(f"{gene_id} has 0 canonical transcripts")
+
+        gene_id_to_canonical_transcript_id[gene_id] = transcript_ids[0]
 
     return gene_id_to_canonical_transcript_id
 
