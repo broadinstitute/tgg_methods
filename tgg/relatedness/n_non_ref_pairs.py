@@ -165,6 +165,7 @@ def get_and_count_sample_pairs(ht: hl.Table) -> hl.Table:
     :return ht: Table with sample pairs and number of variants shared per pair
     """
     logger.info("Collecting and counting sample pairs...")
+    # Use a set to capture unique pairs with the hl.agg.count as hl.agg.collect function is non-deterministic
     ht = ht.annotate(
         sample_pairs=hl.range(0, ht.samples.length()).flatmap(
             lambda i: hl.range(i + 1, ht.samples.length()).map(
