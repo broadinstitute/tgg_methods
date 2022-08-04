@@ -157,7 +157,7 @@ def get_n_non_ref_sites(
     return ht
 
 
-def get_and_count_sample_pairs(ht: hl.Table,) -> hl.Table:
+def get_and_count_sample_pairs(ht: hl.Table) -> hl.Table:
     """
     Return the number of shared n non_ref sites per pair.
 
