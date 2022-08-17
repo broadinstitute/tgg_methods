@@ -65,9 +65,11 @@ def get_n_non_ref_sites(
     interval_qc_regions: bool = True,
     no_AS_lowqual: bool = True,
     non_ref_samples: int = 3,
+    control_samples={NA12878, SYNDIP},
 ) -> hl.Table:
     """
-    Filter VDS to autosomal sites in interval QC pass regions with an adj non reference allele count of n.
+    Filter VDS to autosomal sites in interval QC pass regions with an adj non reference allele count of 
+    n and annotate site non ref samples.
 
     :param vds_path: Path to VDS. Default is VDS_PATH.
     :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
@@ -79,6 +81,7 @@ def get_n_non_ref_sites(
     :param interval_qc_regions: Filter to interval QC regions. Defaults to True.
     :param no_AS_lowqual: Remove AS_lowqual sites. Defaults to True.
     :param non_ref_samples: Desired number of non ref samples for each variant, e.g. for tripletons, n_samples=3. Defaults to 3.
+    :param control_samples: Set of control samples to remove. Defaults to {NA12878, SYNDIP}. 
     :return: Table of high quality sites filtered to variants with specified number of non-reference samples.
     """
     logger.warning(
@@ -86,6 +89,8 @@ def get_n_non_ref_sites(
     )
     vds = hl.vds.read_vds(vds_path)
     mt = vds.variant_data
+
+    mt = mt.filter_cols(~hl.literal(control_samples).contains(mt.s))
 
     if autosomes_only:
         logger.info("Filtering to autosomes...")
@@ -139,6 +144,11 @@ def get_n_non_ref_sites(
     if het_only:
         mt = mt.filter_rows(mt.n_hom_alt == 0)
 
+    logger.info("Finding non_ref samples at each site...")
+    mt = mt.annotate_rows(
+        samples=hl.agg.filter(mt.GT.is_non_ref(), hl.agg.collect(mt.s))
+    )
+
     ht = mt.rows().checkpoint(
         f"{temp_path}/n_non_ref_{non_ref_samples}_sample_high_quality_sites.ht",
         overwrite=True,
@@ -147,35 +157,23 @@ def get_n_non_ref_sites(
     return ht
 
 
-def get_and_count_sample_pairs(
-    mt: hl.MatrixTable, temp_path=TEMP_PATH, non_ref_samples=3
-) -> hl.Table:
+def get_and_count_sample_pairs(ht: hl.Table) -> hl.Table:
     """
     Return the number of shared n non_ref sites per pair.
 
-    :param mt: MatrixTable to compute pairs on.
-    :param temp_path: Path to bucket to store Table and other temporary data. Default is TEMP_PATH.
-    :param non_ref_samples: Number of non_ref samples per site to filter to. Defaults to 3.
+    :param ht: Table to compute pairs on.
     :return ht: Table with sample pairs and number of variants shared per pair
     """
-    logger.info("Collecting samples and counting sample pairs...")
-    mt = mt.annotate_rows(
-        samples=hl.agg.filter(mt.GT.is_non_ref(), hl.agg.collect(mt.s))
-    )
-    mt = mt.annotate_rows(
-        sample_pairs=hl.range(0, mt.samples.length()).flatmap(
-            lambda i: hl.range(i + 1, mt.samples.length()).map(
-                lambda j: hl.tuple([mt.samples[i], mt.samples[j]])
+    logger.info("Collecting and counting sample pairs...")
+    # Use a set to capture unique pairs with the hl.agg.count as hl.agg.collect function is non-deterministic
+    ht = ht.annotate(
+        sample_pairs=hl.range(0, ht.samples.length()).flatmap(
+            lambda i: hl.range(i + 1, ht.samples.length()).map(
+                lambda j: hl.set([ht.samples[i], ht.samples[j]])
             )
         )
     )
-    ht = mt.select_rows(mt.sample_pairs).rows()
     ht = ht.explode(ht.sample_pairs)
-    ht = ht.checkpoint(
-        f"{temp_path}/n_non_ref_{non_ref_samples}_sites_sample_pairs.ht",
-        overwrite=True,
-    )
-
     logger.info("Aggregating shared sites per pair...")
     ht = ht.group_by(ht.sample_pairs).aggregate(n_non_ref_sites_shared=hl.agg.count())
     return ht
@@ -203,17 +201,14 @@ def get_samples_n_non_ref(
     logger.info(
         "Retrieving pairwise shared %i non ref sample sites...", non_ref_samples
     )
-    mt = hl.vds.read_vds(vds_path).variant_data
-    mt = mt.filter_cols(~hl.literal(control_samples).contains(mt.s))
     ht = get_n_non_ref_sites(
         vds_path=vds_path,
         temp_path=temp_path,
         non_ref_samples=non_ref_samples,
         het_only=het_only,
+        control_samples=control_samples,
     )
-    mt = mt.annotate_rows(**ht[mt.row_key])
-    mt = mt.filter_rows(hl.is_defined(mt.ac))
-    ht = get_and_count_sample_pairs(mt, temp_path, non_ref_samples)
+    ht = get_and_count_sample_pairs(ht)
     ht.write(
         f"{temp_path}/pairwise_{non_ref_samples}_non_ref_shared_sites.ht",
         overwrite=True,
