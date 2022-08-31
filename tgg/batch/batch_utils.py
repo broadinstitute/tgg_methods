@@ -27,7 +27,7 @@ class HG38_REF_PATHS:
     )
     fai = "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai"
     dict = "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict"
-    gencode_v36_gtf = "gs://macarthurlab-rnaseq/ref/gencode.v36.annotation.gtf"
+    gencode_v36_gtf = "gs://tgg-rnaseq/ref/gencode.v36.annotation.gtf"
 
 
 class HG37_REF_PATHS:
