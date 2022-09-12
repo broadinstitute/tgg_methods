@@ -50,11 +50,12 @@ def get_gene_id_to_transcript_metadata(
                 join_clause = "transcript.gene_id = gene.gene_id"
 
             columns = [
+                # Gene fields
                 "gene.stable_id",
                 "gene.biotype",
                 "gene.created_date",
                 "gene.modified_date",
-
+                # Transcript fields
                 "transcript.stable_id",
                 "transcript.biotype",
                 "transcript.created_date",
