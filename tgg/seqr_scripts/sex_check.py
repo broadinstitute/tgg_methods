@@ -2,6 +2,8 @@ import argparse
 import logging
 from typing import List
 import matplotlib.pyplot as plt
+import warnings
+import sys
 
 
 import hail as hl
@@ -275,7 +277,13 @@ def main(args):
 
     :param args: User's command line inputs
     """
-    call_sex(**vars(args))
+    with warnings.catch_warnings():
+        warnings.filterwarnings('RuntimeWarning', r'All-NaN (slice|axis) encountered')
+    try:
+         call_sex(**vars(args))
+    except ValueError as e:
+        logger.info("same nan error")
+        sys.exit(0)
 
 
 if __name__ == "__main__":
@@ -287,7 +295,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-t",
-        "--temp",
+        "--temp-path",
         required=True,
         help="Path to bucket (where to store temporary data)",
     )
