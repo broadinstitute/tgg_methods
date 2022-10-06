@@ -2,9 +2,6 @@ import argparse
 import logging
 from typing import List
 import matplotlib.pyplot as plt
-import warnings
-import sys
-
 
 import hail as hl
 
@@ -194,7 +191,7 @@ def call_sex(
 
     # Filter to pass variants only (empty set)
     # TODO: Make this an optional argument before moving to gnomad_methods
-    mt = mt.filter_rows(mt.filters.length() == 0, keep=True)
+    mt = mt.filter_rows(~hl.is_defined(mt.filters), keep=True) # NOTE: As of v0.2.102, hail imports empty sets as missing/NaN
 
     # Infer build:
     build = get_reference_genome(mt.locus).name
