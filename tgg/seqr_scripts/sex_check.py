@@ -277,7 +277,6 @@ def main(args):
     call_sex(**vars(args))
 
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="This script infers the sex of samples"
