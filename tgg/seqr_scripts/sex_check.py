@@ -3,7 +3,6 @@ import logging
 from typing import List
 import matplotlib.pyplot as plt
 
-
 import hail as hl
 
 from gnomad.utils.reference_genome import get_reference_genome
@@ -190,9 +189,10 @@ def call_sex(
         (hl.len(mt.alleles) == 2) & hl.is_snp(mt.alleles[0], mt.alleles[1])
     )
 
-    # Filter to pass variants only (empty set)
+    # Filter to PASS variants only (variants with empty filter set)
+    # NOTE: As of v0.2.102, hail imports empty sets as missing/NaN
     # TODO: Make this an optional argument before moving to gnomad_methods
-    mt = mt.filter_rows(mt.filters.length() == 0, keep=True)
+    mt = mt.filter_rows(hl.is_missing(mt.filters))
 
     # Infer build:
     build = get_reference_genome(mt.locus).name
@@ -287,7 +287,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-t",
-        "--temp",
+        "--temp-path",
         required=True,
         help="Path to bucket (where to store temporary data)",
     )
