@@ -191,7 +191,7 @@ def call_sex(
 
     # Filter to pass variants only (empty set)
     # TODO: Make this an optional argument before moving to gnomad_methods
-    mt = mt.filter_rows(~hl.is_defined(mt.filters), keep=True) # NOTE: As of v0.2.102, hail imports empty sets as missing/NaN
+    mt = mt.filter_rows(hl.is_missing(mt.filters))
 
     # Infer build:
     build = get_reference_genome(mt.locus).name
