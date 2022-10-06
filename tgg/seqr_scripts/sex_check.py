@@ -274,13 +274,8 @@ def main(args):
 
     :param args: User's command line inputs
     """
-    with warnings.catch_warnings():
-        warnings.filterwarnings('RuntimeWarning', r'All-NaN (slice|axis) encountered')
-    try:
-         call_sex(**vars(args))
-    except ValueError as e:
-        logger.info("same nan error")
-        sys.exit(0)
+    call_sex(**vars(args))
+
 
 
 if __name__ == "__main__":
