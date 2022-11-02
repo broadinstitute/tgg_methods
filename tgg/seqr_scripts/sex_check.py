@@ -189,7 +189,7 @@ def call_sex(
         (hl.len(mt.alleles) == 2) & hl.is_snp(mt.alleles[0], mt.alleles[1])
     )
 
-    # Filter to PASS variants only (variants with empty filter set)
+    # Filter to PASS variants only (variants with empty or missing filter set)
     # TODO: Make this an optional argument before moving to gnomad_methods
     mt = mt.filter_rows(hl.is_missing(mt.filters) | (mt.filters.length() == 0), keep=True)
 
