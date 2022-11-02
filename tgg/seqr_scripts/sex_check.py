@@ -190,7 +190,6 @@ def call_sex(
     )
 
     # Filter to PASS variants only (variants with empty filter set)
-    # NOTE: As of v0.2.102, hail imports empty sets as missing/NaN so need to confirm the field is defined
     # TODO: Make this an optional argument before moving to gnomad_methods
     mt = mt.filter_rows(hl.is_missing(mt.filters) | (mt.filters.length() == 0), keep=True)
 
