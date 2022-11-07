@@ -233,8 +233,8 @@ def check_sex(sex_ht: hl.Table, output_dir: str, output_name: str,) -> None:
 
     ped_ht = ped_ht.annotate(
         given_sex=hl.case()
-        .when(ped_ht.Sex == "M", "male")
-        .when(ped_ht.Sex == "F", "female")
+        .when(ped_ht.Sex == "M", "XY")
+        .when(ped_ht.Sex == "F", "XX")
         .default(ped_ht.Sex)
     ).drop("Sex")
 
@@ -335,7 +335,7 @@ def main(args):
 
     if run_ibd:
         logger.info("Running identity by descent...")
-        ibd_results_ht = hl.identity_by_descent(mt, maf=mt.AF, min=0.10, max=1.0)
+        ibd_results_ht = hl.identity_by_descent(mt, maf=mt.af, min=0.10, max=1.0)
         ibd_results_ht = ibd_results_ht.annotate(
             ibd0=ibd_results_ht.ibd.Z0,
             ibd1=ibd_results_ht.ibd.Z1,
