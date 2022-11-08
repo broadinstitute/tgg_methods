@@ -78,7 +78,7 @@ def remap_samples(
     Rename `s` col in the MatrixTable and inferred sex ht.
 
     :param original_mt_path: Path to original MatrixTable location
-    :param input_mt: MatrixTable 
+    :param input_mt: MatrixTable
     :param pedigree: Pedigree file from seqr loaded as a Hail Table
     :param inferred_sex: Path to text file of inferred sexes
     :return: mt and sex ht with sample names remapped
@@ -99,7 +99,7 @@ def remap_samples(
             remap_hts.append(remap_ht)
 
     logger.info("Found %d projects that need to be remapped.", len(remap_hts))
-    
+
     if len(remap_hts) > 0:
         ht = remap_hts[0]
         for next_ht in remap_hts[1:]:
@@ -164,13 +164,15 @@ def add_project_and_family_annotations(
     # Add annotation for seqr projects of sample i and sample j
     hl_seqr_projects = hl.literal(seqr_projects)
     ht = ht.annotate(
-        seqr_proj_i=hl_seqr_projects.get(ht.i), seqr_proj_j=hl_seqr_projects.get(ht.j),
+        seqr_proj_i=hl_seqr_projects.get(ht.i),
+        seqr_proj_j=hl_seqr_projects.get(ht.j),
     )
 
     # Add annotation for family ids of sample i and sample j
     hl_family_ids = hl.literal(family_ids)
     ht = ht.annotate(
-        fam_id_i=hl_family_ids.get(ht.i), fam_id_j=hl_family_ids.get(ht.j),
+        fam_id_i=hl_family_ids.get(ht.i),
+        fam_id_j=hl_family_ids.get(ht.j),
     )
 
     return ht
@@ -215,7 +217,11 @@ def filter_kin_ht(
     return ht
 
 
-def check_sex(sex_ht: hl.Table, output_dir: str, output_name: str,) -> None:
+def check_sex(
+    sex_ht: hl.Table,
+    output_dir: str,
+    output_name: str,
+) -> None:
 
     """
     Compare inferred to given sex and output file with column added for discrepancies.
@@ -231,12 +237,12 @@ def check_sex(sex_ht: hl.Table, output_dir: str, output_name: str,) -> None:
     ped_ht = hl.import_table(f"{output_dir}/{output_name}_functioning_pedigree.ped")
     ped_ht = ped_ht.key_by(s=ped_ht.Individual_ID).select("Sex")
 
-    ped_ht = ped_ht.annotate(
+    ped_ht = ped_ht.transmute(
         given_sex=hl.case()
-        .when(ped_ht.Sex == "M", "male")
-        .when(ped_ht.Sex == "F", "female")
+        .when(ped_ht.Sex == "M", "XY")
+        .when(ped_ht.Sex == "F", "XX")
         .default(ped_ht.Sex)
-    ).drop("Sex")
+    )
 
     sex_ht = sex_ht.join(ped_ht, how="outer")
     sex_ht = sex_ht.annotate(discrepant_sex=sex_ht.sex != sex_ht.given_sex)
@@ -335,7 +341,7 @@ def main(args):
 
     if run_ibd:
         logger.info("Running identity by descent...")
-        ibd_results_ht = hl.identity_by_descent(mt, maf=mt.AF, min=0.10, max=1.0)
+        ibd_results_ht = hl.identity_by_descent(mt, maf=mt.af, min=0.10, max=1.0)
         ibd_results_ht = ibd_results_ht.annotate(
             ibd0=ibd_results_ht.ibd.Z0,
             ibd1=ibd_results_ht.ibd.Z1,
@@ -377,7 +383,14 @@ def main(args):
         logger.info(
             "Filtering kinship table to remove unrelated individuals from analysis..."
         )
-        kin_ht = filter_kin_ht(kin_ht, out_summary, first_degree_pi_hat, grandparent_pi_hat, grandparent_ibd1, grandparent_ibd2)
+        kin_ht = filter_kin_ht(
+            kin_ht,
+            out_summary,
+            first_degree_pi_hat,
+            grandparent_pi_hat,
+            grandparent_ibd1,
+            grandparent_ibd2,
+        )
 
     # Output basic stats
     out_summary.write(
