@@ -52,7 +52,9 @@ def main(args):
 
     Used when CMG/MGRC collaborators request VCFs of their data.
     """
-    hl.init(log="/subset.log", default_reference="GRCh38")
+    hl.init(
+        log="/subset.log", tmp_dir="gs://seqr-scratch-temp", default_reference="GRCh38"
+    )
 
     if args.vcf_path:
         logger.info("Importing VCF...")
