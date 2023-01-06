@@ -112,13 +112,6 @@ for item_to_union in tableParts[1:]:
 # cannot figure how to make LOGGER work ? 
 print(f'Size of ~50k random, ~10k indel, ~10k long ref, ~10k long var, ~10k sex chr as: {ht_union.count()}')
 
-# TEMPORARY PATH BELOW PLEASE USE YOUR OWN PATH 
-# final_struct = final_struct.checkpoint("gs://seqr-scratch-temp/marten-temp-01-04/non-multiallelic-checkpoint.ht")
-fs = final_struct.count()
-print(f'Samples before monoallelic spike-in: {fs}')
-# 01-04 @ 5:08 pm: only ~79,000 spiked-in when I wanted 90,000 , probably lots of overlap 
-# between random and the extra ones 
-
 # Construct a table of only multiallelic sites
 
 # for 3 random partitions, only takes the highly multiallelic sites (>5 variants per loci)
