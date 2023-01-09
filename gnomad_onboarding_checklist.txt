@@ -1,0 +1,83 @@
+### Admin
+
+- [ ] Explore Slack workspaces and channels
+- [ ] Review standing meetings
+- [ ] Add to relevant meeting invitations
+- [ ] Review TGG, ATGU, Broad social events/opportunities
+- [ ] Complete gnomAD Memorandum of Understanding
+- [ ] Complete CITI Human Subjects training and Data Stewardship module
+- [ ] Assign relevant GCP IAM permissions
+- [ ] Link GitHub username to Broad GitHub organization
+- [ ] Add to gnomAD Github teams
+- [ ] Make sure has access to Zenhub
+- [ ] Add to UNIX groups
+- [ ] Download Zoom, Slack, and Google Hangouts to connect with your peers and managers
+
+### Social
+- [ ] Join the virtual-coffee Slack channel
+- [ ] Set up a 1:1 coffee with a TGG lab member
+- [ ] Set up a 1:1 coffee with a methods group member
+- [ ] Attend a lab lunch
+- [ ] Attend a happy hour
+
+### Workflow
+- [ ] Review Agile process
+- [ ] Review Github workflow (issues, PRs, code review, merging)
+
+### gnomAD methods codebase & cloud
+
+- [ ] Install and explore gsutil
+- [ ] Review gnomAD repos
+- [ ] Clone repos
+- [ ] Overview of GCP Console 
+- [ ] Overview of GCP Projects
+
+### Data pipelines and tools
+
+- [ ] Do the Hail tutorials
+- [ ] Start a Dataproc cluster using hailctl
+- [ ] Run a pipeline task on Dataproc
+- [ ] Hail Batch
+- [ ] Annotate a variant dataset with VEP
+
+### Git/GitHub conventions
+
+- [ ] Atomic commits/PRs
+- [ ] Commit messages
+- [ ] Making PRs
+- [ ] Issue assignments
+- [ ] Reviewing code
+
+### gnomAD variant data
+
+- [ ] Overview of gnomAD browser variant page
+- [ ] Structure of gnomAD variant data
+- [ ] Count/frequency fields (AC, AN, Hom, AF)
+- [ ] Ancestry
+- [ ] Local ancestry
+- [ ] Datasets/versions, ExAC, major/minor releases
+- [ ] Popmax
+- [ ] External references
+- [ ] Report a variant
+- [ ] Age data
+- [ ] Genotype quality metrics
+- [ ] Site quality metrics
+- [ ] Read data (where it comes from, how people use this)
+
+### Other topics
+
+- [ ] ClinVar
+- [ ] Liftover
+- [ ] Mitocondrial variants
+- [ ] Co-occurrence
+- [ ] STRs
+
+### Planning, presenting work, getting feedback, and shipping new functionality
+
+- [ ] Review gnomAD QC flowchart 
+- [ ] Share an update at gnomAD production standup
+- [ ] Present results from an analysis at ATGU/DSP meeting
+- [ ] Post results and summary in the gnomAD QC Slack channel
+- [ ] Incorporate feedback from reviewers
+- [ ] Merge a new feature into main 
+- [ ] Update changelog
