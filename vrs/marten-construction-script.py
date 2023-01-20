@@ -168,7 +168,7 @@ ht_final = ht_final.distinct()
 duplicates_removed = org_count - ht_final.count()
 logger.info(f'Number of duplicates removed: %i' , duplicates_removed)
 
-# Final Export
+# Export final table and VCF and append header info for missing FILTER descriptions
 logger.info(f'Before exporting, there are %i total variants',ht_final.count())
 final_path = "gs://gnomad-marten/outputs-and-finals-01-20-23/marten-vcf-01-20-23"
 final_path_hail = final_path + ".ht"
