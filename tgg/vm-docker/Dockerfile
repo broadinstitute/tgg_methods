@@ -110,7 +110,7 @@ RUN apt-get update \
 RUN python3 -m pip install --upgrade pip
 
 # Install hail and other python libraries
-ENV HAIL_VERSION="0.2.95"
+ENV HAIL_VERSION="0.2.108"
 RUN python3 --version
 RUN python3 -m pip install \
     wheel \
@@ -135,12 +135,7 @@ RUN export SPARK_HOME=$(find_spark_home.py) && \
         -e 's:spark\.hadoop\.google\.cloud\.auth\.service\.account\.enable.*:spark.hadoop.google.cloud.auth.service.account.enable true:' \
         -e 's:spark\.hadoop\.google\.cloud\.auth\.service\.account\.json\.keyfile.*:spark\.hadoop\.google\.cloud\.auth\.service\.account\.json\.keyfile /gsa-key/key.json:'
 
-# Install R
-ENV R_VERSION="3.5.2-1"
-RUN apt-get install -y \
-    r-base=${R_VERSION} \
-    r-base-dev=${R_VERSION} 
-
+# Install bedtools
 ENV BEDTOOLS_VERSION="2.29.0"
 RUN wget https://github.com/arq5x/bedtools2/releases/download/v${BEDTOOLS_VERSION}/bedtools-${BEDTOOLS_VERSION}.tar.gz \
 	&& tar xzf bedtools-${BEDTOOLS_VERSION}.tar.gz \
