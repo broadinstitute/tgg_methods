@@ -1,6 +1,8 @@
-# Daniel Marten 01-20-2023
-# Construct a ~100k Variant Test VCF for GA4GH-VRS Project
-# Reach out to me at: marten@broadinstitute.org
+"""
+Script that constructs a ~100k Variant Test VCF for GA4GH-VRS Project
+
+Contact: Daniel Marten (marten@broadinstitute.org)
+"""
 
 # Import and set up important packages/modules
 import hail as hl
