@@ -17,7 +17,6 @@ from gnomad.resources.resource_utils import (
     VersionedVariantDatasetResource,
 )
 
-# Import logging for logs (to replace print statements)
 import logging
 
 logging.basicConfig(
@@ -37,7 +36,7 @@ hl.init(global_seed=5)
 ht_whole = public_release("genomes").ht()
 
 # Set a temporary path and variables to make writing checkpoints easier (and easier to edit for future users)
-tmp_path = 'gs://gnomad-tmp-4day/marten-temp-01-20-pr-v2/'
+tmp_path = "gs://gnomad-tmp-4day/marten-temp-01-20-pr-v2/"
 read_if_var = True
 overwrite_var = True
 
@@ -59,10 +58,9 @@ var_freq = ht_whole.aggregate(hl.agg.count_where(hl.len(ht_whole.alleles[1])>5))
 x_freq = ht_whole.aggregate(hl.agg.count_where(ht_whole.locus.contig == "chrX")) / whole_count
 y_freq = ht_whole.aggregate(hl.agg.count_where(ht_whole.locus.contig == "chrY")) / whole_count
 
-logger.info("Indel Frequency: %f , Ref Frequency: %f , Var Frequency: %f , X Frequency: %f , Y Frequency: %f", 
+logger.info("Indel Frequency: %f , Long Ref Frequency: %f , Long Var Frequency: %f , X Frequency: %f , Y Frequency: %f", 
             indel_freq, ref_freq, var_freq, x_freq, y_freq)
 
-print(f'Frequencies as: indels {indel_freq} and long ref {ref_freq} and long var {var_freq} and x freq {x_freq} and y freq {y_freq}')
 
 """
 indel_freq = 0.14525709561723196
@@ -121,14 +119,14 @@ ht_union = ht_union.checkpoint(f'{tmp_path}union_path_temp.ht', _read_if_exists=
 
 # Construct a table of only multiallelic sites
 
-# For 3 random partitions, only takes the highly multiallelic sites (>5 variants per loci)
+# For 3 random partitions, only take the highly multiallelic sites (>5 variants per loci)
 ht_filt = ht_whole._filter_partitions(sample(range(ht_whole.n_partitions()), 3))
 group_ht = ht_filt.group_by(ht_filt.locus).aggregate(n=hl.agg.count())
 group_ht = group_ht.filter(group_ht.n > 5) 
 multiAlleleCount = group_ht.count()
  
 # Collect all variants at highly multiallelic loci    
-# Do collect() and filter() since it is fairly easy just for one field (locus) , instead of an innter join
+# Do collect() and filter() since it is fairly easy just for one field (locus) , instead of an inner join
 multiList = group_ht.locus.collect(_localize = False)
 ht_multiallelic = ht_filt.filter(multiList.contains(ht_filt.locus))
 logger.info(f'There are %i very multiallelic sites with %i total variants that will be added', multiAlleleCount , ht_multiallelic.count())
@@ -161,8 +159,8 @@ ht_minrep = ht_minrep.checkpoint(f'{tmp_path}minrep-checkpoint.ht', _read_if_exi
 # Counts and further assembly
 minrepcount = ht_minrep.count()
 logger.info(f'There are %i variants in the minrep set', minrepcount)
-ht_prefinal = ht_union.union(ht_multiallelic)
-ht_final = ht_prefinal.union(ht_minrep)
+ht_final = ht_union.union(ht_multiallelic)
+ht_final = ht_final.union(ht_minrep)
 
 # Check for duplicates and de-duplication
 org_count = ht_final.count()
@@ -171,7 +169,7 @@ duplicates_removed = org_count - ht_final.count()
 logger.info(f'Number of duplicates removed: %i' , duplicates_removed)
 
 # Export final table and VCF and append header info for missing FILTER descriptions
-logger.info(f'Before exporting, there are %i total variants',ht_final.count())
+logger.info(f'Before exporting, there are %i total variants', ht_final.count())
 final_path = "gs://gnomad-marten/outputs-and-finals-01-20-23/marten-vcf-01-20-23"
 final_path_hail = final_path + ".ht"
 final_path_vcf = final_path + ".vcf"
