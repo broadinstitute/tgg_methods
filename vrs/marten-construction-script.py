@@ -188,7 +188,7 @@ def main(args):
     multi_list = group_ht.locus.collect(_localize=False)
     ht_multiallelic = ht_filt.filter(multi_list.contains(ht_filt.locus))
     logger.info(
-        f"There are %d very multiallelic sites with %d total variants that will be added",
+        f"There are %d very multiallelic sites with %d total variants that will be added.",
         n_multiallelic,
         ht_multiallelic.count(),
     )
@@ -269,104 +269,104 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--google-cloud-project",
-        help="Google Cloud Project for billing purposes, default = broad-mpg-gnomad",
+        help="Google Cloud Project for billing purposes, default = broad-mpg-gnomad.",
         default="broad-mpg-gnomad",
     )
     parser.add_argument(
         "--tmp-dir",
-        help="Path for storing checkpoints, default to gs://gnomad-tmp-4day/vrs , which is temp directory set for Hail",
+        help="Path for storing checkpoints, default to gs://gnomad-tmp-4day/vrs , which is temp directory set for Hail.",
         default="gs://gnomad-tmp-4day/vrs",
     )
     parser.add_argument(
         "--final-path",
-        help="Final path for outputting vcf, vcf.bgz, and mt",
+        help="Final path for outputting vcf, vcf.bgz, and mt.",
         default="gs://gnomad-tmp-4day/vrs",
     )
     parser.add_argument(
         "--py-rand-seed",
-        help="Random seed for python, Default is 505",
+        help="Random seed for python, Default is 505.",
         default=505,
         type=int,
     )
     parser.add_argument(
         "--hail-rand-seed",
-        help="Random seed for hail, Default is 5",
+        help="Random seed for hail, Default is 5.",
         default=5,
         type=int,
     )
     parser.add_argument(
         "--n-random",
-        help="Number of random variants, default = 50,000",
+        help="Number of random variants, default = 50,000.",
         type=int,
         default=50000,
     )
     parser.add_argument(
         "--n-indel",
-        help="Number of additional spiked-in indels, default = 10,000",
+        help="Number of additional spiked-in indels, default = 10,000.",
         type=int,
         default=10000,
     )
     parser.add_argument(
         "--n-long-ref",
-        help="Number of long reference allele variants (>5 bp), default = 10,000",
+        help="Number of long reference allele variants (>5 bp), default = 10,000.",
         type=int,
         default=10000,
     )
     parser.add_argument(
         "--n-long-var",
-        help="Number of long reference variant variants (>5 bp), default = 10,000",
+        help="Number of long reference variant variants (>5 bp), default = 10,000.",
         type=int,
         default=10000,
     )
     parser.add_argument(
         "--n-xchr",
-        help="Number of variants on chromosome X, default = 9,000",
+        help="Number of variants on chromosome X, default = 9,000.",
         type=int,
         default=9000,
     )
     parser.add_argument(
         "--n-ychr",
-        help="Number of variants on chromosome Y, default = 1,000",
+        help="Number of variants on chromosome Y, default = 1,000.",
         type=int,
         default=1000,
     )
     parser.add_argument(
         "--n-multiallelic-partitions",
-        help="Number of gnomAD v3.1.2 partitions to search for multiallelic variants, default = 3 partitions, approx 3200 variants/partition",
+        help="Number of gnomAD v3.1.2 partitions to search for multiallelic variants, default = 3 partitions, approx 3200 variants/partition.",
         type=int,
         default=3,
     )
     parser.add_argument(
         "--n-minrep-partitions",
-        help="Number of gnomAD v3.1.2 partitions to search for variants altered by min-rep, default = 5 partitions, approx 600 variants/partition",
+        help="Number of gnomAD v3.1.2 partitions to search for variants altered by min-rep, default = 5 partitions, approx 600 variants/partition.",
         type=int,
         default=5,
     )
     parser.add_argument(
         "--overwrite",
-        help="Pass to --overwrite when checkpointing, overwrites when checkpointing, highly recommended",
+        help="Pass to --overwrite when checkpointing, overwrites when checkpointing, highly recommended.",
         action="store_true",
     )  # defaults to False, highly recommended to include!
     parser.add_argument(
         "--header-fix-path",
-        help="Path for files to append to header: gnomAD filters AC0 and AS_VSQR are not defaults in VCF Tools and need to be added",
+        help="Path for files to append to header: gnomAD filters AC0 and AS_VSQR are not defaults in VCF Tools and need to be added.",
         default="gs://gnomad-marten/outputs-and-finals-01-20-23/marten_filter_header_0120.txt",
     )
     parser.add_argument(
         "--downsample",
-        help="Downsample the original whole Hail table at the start",
+        help="Downsample the original whole Hail table at the start.",
         type=float,
         default=1.00,
     )
     parser.add_argument(
         "--naive-coalesce",
-        help="Provide an integer to pass to naive_coalesce before exporting VCF",
+        help="Provide an integer to pass to naive_coalesce before exporting VCF.",
         type=int,
         default=100,
     )
     parser.add_argument(
         "--export-bgz",
-        help="Block gzip output VCF (file will end with .vcf.bgz). If not set, will output uncompressed VCF",
+        help="Block gzip output VCF (file will end with .vcf.bgz). If not set, will output uncompressed VCF.",
         action="store_true",
     )
     args = parser.parse_args()
