@@ -338,7 +338,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--n-minrep-partitions",
-        help="Number of gnomAD v3.1.2 partitions to search for variants altered by min-rep, default = 5 partitions, approx 600 variants/partition.",
+        help="Number of gnomAD v3.1.2 partitions to search for variants altered by min-rep. Default is 5 partitions, approx 600 variants/partition.",
         type=int,
         default=5,
     )
