@@ -1,5 +1,5 @@
 """
-Script that constructs a ~100k Variant Test VCF for GA4GH-VRS Project
+Script that constructs a ~100k Variant Test VCF for GA4GH-VRS Project.
 
 Contact: Daniel Marten (marten@broadinstitute.org)
 """
@@ -11,20 +11,8 @@ from random import sample
 
 import hail as hl
 from gnomad.resources.grch38.gnomad import public_release
-from gnomad.resources.resource_utils import (MatrixTableResource,
-                                             VariantDatasetResource,
-                                             VersionedMatrixTableResource,
-                                             VersionedVariantDatasetResource)
 
-from gnomad_qc.v3.resources.basics import (get_checkpoint_path,
-                                           get_gnomad_v3_vds,
-                                           gnomad_v3_genotypes_vds,
-                                           qc_temp_prefix)
-from gnomad_qc.v3.resources.constants import CURRENT_RELEASE, CURRENT_VERSION
-from gnomad_qc.v3.resources.release import (append_to_vcf_header_path,
-                                            hgdp_tgp_subset,
-                                            release_header_path, release_sites,
-                                            release_vcf_path)
+from gnomad_qc.v3.resources.basics import gnomad_v3_genotypes_vds
 
 logging.basicConfig(
     format="%(asctime)s (%(name)s %(lineno)s): %(message)s",
@@ -96,8 +84,7 @@ def main(args):
     # e.g.: For 1000 variants, 145 will be indels
     # for 1000 variants, 40 will be on chromosome X and only 1.5 will be on chromosome Y
 
-    # Downsample the matrix table if the User doesn't have the capacity to annotate and go through 759million variants
-    # if args.downsample is float and args.downsample < 1.00:
+    # Downsample the matrix table if the user doesn't have the capacity to annotate and go through 759million variants
     if args.downsample < 1.00:
         ht_whole = ht_whole.sample(args.downsample)
         whole_count *= args.downsample
@@ -116,7 +103,7 @@ def main(args):
     }
 
     # Create desired counts dictionary with variant type as the key and desired number of that variant type in the test subset as the value
-    # NOTE: would like to incorporate Multiallelic and Min-Rep into this dictionary (and above)
+    # NOTE: would like to incorporate multiallelic and min-rep into this dictionary (and above)
     # BUT since they are generated very differently, it's difficult to work out.
     # UPDATE 02/02: added args <3
     desired_counts = {
@@ -161,7 +148,7 @@ def main(args):
     ht_union = hts[0].union(*hts[1:])
 
     logger.info(
-        f"Total size of random, indel, long ref, long var, sex chr combined Table as: %d",
+        f"Total number of variants (including random, indel, long ref, long var, sex chr) in combined Table as: %d",
         ht_union.count(),
     )
     ht_union = ht_union.checkpoint(
@@ -213,7 +200,7 @@ def main(args):
         sample(range(ht_minrep.n_partitions()), args.n_minrep_partitions)
     )
 
-    # Perform an inner join, which will join on both Locus and Allele
+    # Perform an inner join, which will join on both locus and allele
     ht_minrep = ht_minrep.select()
     ht_minrep = ht_minrep.join(ht_whole, how="inner")
 
@@ -247,10 +234,10 @@ def main(args):
         _read_if_exists=False,
     )
     logger.info(
-        f"Before exporting to VCF, there are %d total variants", ht_final.count()
+        f"Total number of variants in VCF: %d", ht_final.count()
     )
 
-    # Export vcf
+    # Export VCF
     final_vcf_path = f"{args.final_path}/testing-vcf-export.vcf"
     if args.export_bgz:
         logger.info("Will zip VCF with .bgz extension")
@@ -269,12 +256,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--google-cloud-project",
-        help="Google Cloud Project for billing purposes, default = broad-mpg-gnomad.",
+        help="Google Cloud Project for billing purposes. Default is broad-mpg-gnomad.",
         default="broad-mpg-gnomad",
     )
     parser.add_argument(
         "--tmp-dir",
-        help="Path for storing checkpoints, default to gs://gnomad-tmp-4day/vrs , which is temp directory set for Hail.",
+        help="Path for storing checkpoints. Default is gs://gnomad-tmp-4day/vrs , which is temp directory set for Hail.",
         default="gs://gnomad-tmp-4day/vrs",
     )
     parser.add_argument(
@@ -284,55 +271,59 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--py-rand-seed",
-        help="Random seed for python, Default is 505.",
+        help="Random seed for python. Default is 505.",
         default=505,
         type=int,
     )
     parser.add_argument(
+        "--google-project", help="Google project to use for requester-pays",
+        default="broad-mpg-gnomad",
+    )
+    parser.add_argument(
         "--hail-rand-seed",
-        help="Random seed for hail, Default is 5.",
+        help="Random seed for hail. Default is 5.",
         default=5,
         type=int,
     )
     parser.add_argument(
         "--n-random",
-        help="Number of random variants, default = 50,000.",
+        help="Number of random variants. Default is 50,000.",
         type=int,
         default=50000,
     )
     parser.add_argument(
         "--n-indel",
-        help="Number of additional spiked-in indels, default = 10,000.",
+        help="Number of additional spiked-in indels. Default is 10,000.",
         type=int,
         default=10000,
     )
     parser.add_argument(
         "--n-long-ref",
-        help="Number of long reference allele variants (>5 bp), default = 10,000.",
+        help="Number of long reference allele variants (>5 bp). Default is 10,000.",
         type=int,
         default=10000,
     )
     parser.add_argument(
         "--n-long-var",
-        help="Number of long reference variant variants (>5 bp), default = 10,000.",
+        help="Number of long alternate allele variants (>5 bp). Default is 10,000.",
         type=int,
         default=10000,
     )
     parser.add_argument(
         "--n-xchr",
-        help="Number of variants on chromosome X, default = 9,000.",
+        help="Number of variants on chromosome X. Default is 9,000.",
         type=int,
         default=9000,
     )
     parser.add_argument(
         "--n-ychr",
-        help="Number of variants on chromosome Y, default = 1,000.",
+        help="Number of variants on chromosome Y. Default is 1,000.",
         type=int,
         default=1000,
     )
     parser.add_argument(
         "--n-multiallelic-partitions",
-        help="Number of gnomAD v3.1.2 partitions to search for multiallelic variants, default = 3 partitions, approx 3200 variants/partition.",
+        help="Number of gnomAD v3.1.2 partitions to search for multiallelic variants. Default is 3 partitions, approx 3200 variants/partition.",
         type=int,
         default=3,
     )
@@ -354,13 +345,13 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--downsample",
-        help="Downsample the original whole Hail table at the start.",
+        help="Proportion to which to downsample the original whole Hail table at the start. Default is 1.00 (no downsampling)",
         type=float,
         default=1.00,
     )
     parser.add_argument(
         "--naive-coalesce",
-        help="Provide an integer to pass to naive_coalesce before exporting VCF.",
+        help="Integer to pass to naive_coalesce before exporting VCF.",
         type=int,
         default=100,
     )
