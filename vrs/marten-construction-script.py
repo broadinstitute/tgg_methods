@@ -11,7 +11,6 @@ from random import sample
 
 import hail as hl
 from gnomad.resources.grch38.gnomad import public_release
-
 from gnomad_qc.v3.resources.basics import gnomad_v3_genotypes_vds
 
 logging.basicConfig(
@@ -20,9 +19,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("create_vrs_test_dataset")
 logger.setLevel(logging.INFO)
-
-# Bucket to store temporary data
-TMP_DIR = "gs://gnomad-tmp-4day/vrs"
 
 
 def main(args):
@@ -33,7 +29,7 @@ def main(args):
     hl.init(
         default_reference="GRCh38",
         global_seed=args.hail_rand_seed,
-        tmp_dir=TMP_DIR,
+        tmp_dir=args.tmp_dir,
         quiet=True,
         spark_conf={
             "spark.hadoop.fs.gs.requester.pays.mode": "AUTO",
@@ -85,9 +81,13 @@ def main(args):
     # for 1000 variants, 40 will be on chromosome X and only 1.5 will be on chromosome Y
 
     # Downsample the matrix table if the user doesn't have the capacity to annotate and go through 759million variants
-    if args.downsample < 1.00:
+    if args.downsample <= 1.00:
         ht_whole = ht_whole.sample(args.downsample)
         whole_count *= args.downsample
+    else:
+        ValueError(
+            "Downsample value provided is greater than 1.00, which is not allowed! Float must be below 1.00"
+        )
 
     # Construct Tables for each of the targeted variant types desired for the test subset:
     # Default: 50k random, 10k extra indels, 10k additional long references, 10k  additional long variants, 10k on sex chromosomes (9k on X, 1k on Y)
@@ -118,13 +118,14 @@ def main(args):
     logger.info(f"Counts as: {desired_counts}")
 
     # Annotate the Table with the status of allele we are looking at
+    # Random is set to 'True' for all variants because we would like to sample all variants randomly
     ht_whole = ht_whole.annotate(
         indel=hl.is_indel(ht_whole.alleles[0], ht_whole.alleles[1]),
         long_ref=hl.len(ht_whole.alleles[0]) > 5,
         long_var=hl.len(ht_whole.alleles[1]) > 5,
         on_x=(ht_whole.locus.contig == "chrX"),
         on_y=(ht_whole.locus.contig == "chrY"),
-        random=True,  # a bit awkward but forced if we are doing everything the way we are doing it
+        random=True,
     )
     logger.info("Annotation finished")
 
@@ -223,25 +224,27 @@ def main(args):
     logger.info(f"Number of duplicates removed: %d", duplicates_removed)
 
     # Run naive_coalesce() or repartition() to reduce VCF output times
+    # QUESTION: if the default value is set to 100, would I even need this 'if' statement? 
+    logger.info(f"args.naive_coalesce as: %i",args.naive_coalesce)
     if args.naive_coalesce:
         ht_final = ht_final.naive_coalesce(args.naive_coalesce)
 
     # Export final Table and VCF (both zipped and unzipped) and append header info for missing FILTER descriptions
     # As noted in the arg parser section, gnomAD includes AC0 and AS_VQSR filters, which are absent in VCF Tools
     ht_final = ht_final.checkpoint(
-        f"{args.final_path}/testing-vcf-export.ht",
+        f"{args.final_dir}/annotation-testing-vcf-export.ht",
         overwrite=args.overwrite,
         _read_if_exists=False,
     )
-    logger.info(
-        f"Total number of variants in VCF: %d", ht_final.count()
-    )
+    logger.info(f"Total number of variants in VCF: %d", ht_final.count())
 
     # Export VCF
-    final_vcf_path = f"{args.final_path}/testing-vcf-export.vcf"
+    final_vcf_path = f"{args.final_dir}/annotation-testing-vcf-export.vcf"
     if args.export_bgz:
         logger.info("Will zip VCF with .bgz extension")
         final_vcf_path += ".bgz"
+    else:
+        logger.info("Will export without .bgz compression")
 
     hl.export_vcf(
         ht_final,
@@ -265,8 +268,8 @@ if __name__ == "__main__":
         default="gs://gnomad-tmp-4day/vrs",
     )
     parser.add_argument(
-        "--final-path",
-        help="Final path for outputting vcf, vcf.bgz, and mt.",
+        "--final-dir",
+        help="Final directory for outputting vcf, vcf.bgz, and mt into.",
         default="gs://gnomad-tmp-4day/vrs",
     )
     parser.add_argument(
@@ -274,10 +277,6 @@ if __name__ == "__main__":
         help="Random seed for python. Default is 505.",
         default=505,
         type=int,
-    )
-    parser.add_argument(
-        "--google-project", help="Google project to use for requester-pays",
-        default="broad-mpg-gnomad",
     )
     parser.add_argument(
         "--hail-rand-seed",
@@ -337,10 +336,10 @@ if __name__ == "__main__":
         "--overwrite",
         help="Pass to --overwrite when checkpointing, overwrites when checkpointing, highly recommended.",
         action="store_true",
-    )  # defaults to False, highly recommended to include!
+    )
     parser.add_argument(
         "--header-fix-path",
-        help="Path for files to append to header: gnomAD filters AC0 and AS_VSQR are not defaults in VCF Tools and need to be added.",
+        help="Path for lines to append to header: gnomAD filters AC0 and AS_VSQR are not defaults in VCF Headers and need to be added.",
         default="gs://gnomad-marten/outputs-and-finals-01-20-23/marten_filter_header_0120.txt",
     )
     parser.add_argument(
