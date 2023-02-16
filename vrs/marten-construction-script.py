@@ -11,6 +11,7 @@ from random import sample
 
 import hail as hl
 from gnomad.resources.grch38.gnomad import public_release
+
 from gnomad_qc.v3.resources.basics import gnomad_v3_genotypes_vds
 
 logging.basicConfig(
@@ -224,13 +225,12 @@ def main(args):
     logger.info(f"Number of duplicates removed: %d", duplicates_removed)
 
     # Run naive_coalesce() or repartition() to reduce VCF output times
-    # QUESTION: if the default value is set to 100, would I even need this 'if' statement? 
-    logger.info(f"args.naive_coalesce as: %i",args.naive_coalesce)
-    if args.naive_coalesce:
-        ht_final = ht_final.naive_coalesce(args.naive_coalesce)
+    # QUESTION: if the default value is set to 100, would I even need this 'if' statement?
+    logger.info(f"args.naive_coalesce as: %i", args.naive_coalesce)
+    ht_final = ht_final.naive_coalesce(args.naive_coalesce)
 
-    # Export final Table and VCF (both zipped and unzipped) and append header info for missing FILTER descriptions
-    # As noted in the arg parser section, gnomAD includes AC0 and AS_VQSR filters, which are absent in VCF Tools
+    # Export final Table and VCF (either zipped or unzipped) and append header info for missing FILTER descriptions
+    # As noted in the arg parser section, gnomAD includes AC0 and AS_VQSR filters, which are absent in the VCF header
     ht_final = ht_final.checkpoint(
         f"{args.final_dir}/annotation-testing-vcf-export.ht",
         overwrite=args.overwrite,
@@ -260,6 +260,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--google-cloud-project",
         help="Google Cloud Project for billing purposes. Default is broad-mpg-gnomad.",
+        type=str,
         default="broad-mpg-gnomad",
     )
     parser.add_argument(
@@ -339,7 +340,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--header-fix-path",
-        help="Path for lines to append to header: gnomAD filters AC0 and AS_VSQR are not defaults in VCF Headers and need to be added.",
+        help="Path for lines to append to header: gnomAD filters AC0 and AS_VSQR are not defaults in VCF headers and need to be added.",
         default="gs://gnomad-marten/outputs-and-finals-01-20-23/marten_filter_header_0120.txt",
     )
     parser.add_argument(
