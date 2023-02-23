@@ -86,7 +86,7 @@ def main(args):
         ht_whole = ht_whole.sample(args.downsample)
         whole_count *= args.downsample
     else:
-        ValueError(
+        raise ValueError(
             "Downsample value provided is greater than 1.00, which is not allowed! Float must be below 1.00"
         )
 
@@ -106,7 +106,6 @@ def main(args):
     # Create desired counts dictionary with variant type as the key and desired number of that variant type in the test subset as the value
     # NOTE: would like to incorporate multiallelic and min-rep into this dictionary (and above)
     # BUT since they are generated very differently, it's difficult to work out.
-    # UPDATE 02/02: added args <3
     desired_counts = {
         "random": args.n_random,
         "indel": args.n_indel,
@@ -225,7 +224,6 @@ def main(args):
     logger.info(f"Number of duplicates removed: %d", duplicates_removed)
 
     # Run naive_coalesce() or repartition() to reduce VCF output times
-    # QUESTION: if the default value is set to 100, would I even need this 'if' statement?
     logger.info(f"args.naive_coalesce as: %i", args.naive_coalesce)
     ht_final = ht_final.naive_coalesce(args.naive_coalesce)
 
