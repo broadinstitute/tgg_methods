@@ -1,4 +1,3 @@
-# Daniel Marten: 02-24-2023
 # Dockerfile for creating an image that can run the VRS Annotation Script inside of it
 # includes libpqdev and pythondev, plus psycopg2, ga4gh.vrs[extras] , and seqrepo
 # TODO: incorporate 'click' and custom Validation Error from ga4gh.vrs.extras.translator
@@ -36,16 +35,6 @@ RUN wget -qO - https://adoptopenjdk.jfrog.io/adoptopenjdk/api/gpg/key/public | a
 RUN mkdir tools 
 WORKDIR /tools
 
-# Install htslib
-# ENV SAMTOOLS_VERSION="1.11"
-# RUN wget https://github.com/samtools/htslib/releases/download/${SAMTOOLS_VERSION}/htslib-${SAMTOOLS_VERSION}.tar.bz2 \
-# 	&& tar xjf htslib-${SAMTOOLS_VERSION}.tar.bz2 \
-# 	&& rm htslib-${SAMTOOLS_VERSION}.tar.bz2 \
-# 	&& cd htslib-${SAMTOOLS_VERSION} \
-# 	&& ./configure \
-# 	&& make \
-# 	&& make install \
-# 	&& make clean
 
 
 # Install bcftools
@@ -114,7 +103,7 @@ RUN apt-get update \
 RUN python3 -m pip install --upgrade pip
 
 # Install hail and other python libraries
-# 02-13: at the end, include VRS annotation functionality
+# including packages needed for VRS annotation functionality
 ENV HAIL_VERSION="0.2.95"
 RUN python3 --version
 RUN python3 -m pip install \
