@@ -37,27 +37,6 @@ WORKDIR /tools
 
 
 
-# Install bcftools
-# RUN wget https://github.com/samtools/bcftools/releases/download/${SAMTOOLS_VERSION}/bcftools-${SAMTOOLS_VERSION}.tar.bz2 \
-# 	&& tar xjf bcftools-${SAMTOOLS_VERSION}.tar.bz2 \
-# 	&& rm bcftools-${SAMTOOLS_VERSION}.tar.bz2 \
-# 	&& cd bcftools-${SAMTOOLS_VERSION} \
-# 	&& ./configure \
-# 	&& make \
-# 	&& make install \
-# 	&& make clean
-
-# Install samtools
-# RUN wget https://github.com/samtools/samtools/releases/download/${SAMTOOLS_VERSION}/samtools-${SAMTOOLS_VERSION}.tar.bz2 \
-#	&& tar xjf samtools-${SAMTOOLS_VERSION}.tar.bz2 \
-# 	&& rm samtools-${SAMTOOLS_VERSION}.tar.bz2 \
-# 	&& cd samtools-${SAMTOOLS_VERSION} \
-# 	&& ./configure \
-# 	&& make \
-# 	&& make install \
-# 	&& make clean
-
-
 # install vcftools
 ENV VCFTOOLS_VERSION="0.1.16"
 RUN wget https://github.com/vcftools/vcftools/releases/download/v${VCFTOOLS_VERSION}/vcftools-${VCFTOOLS_VERSION}.tar.gz \
@@ -68,17 +47,6 @@ RUN wget https://github.com/vcftools/vcftools/releases/download/v${VCFTOOLS_VERS
 	&& make \
 	&& make install \
 	&& make clean
-
-
-# install picard
-# ENV PICARD_VERSION="2.25.0"
-# RUN wget https://github.com/broadinstitute/picard/releases/download/${PICARD_VERSION}/picard.jar 
-
-# install GATK
-# ENV GATK_VERSION="4.2.0.0"
-# RUN wget https://github.com/broadinstitute/gatk/releases/download/${GATK_VERSION}/gatk-${GATK_VERSION}.zip \
-#    && unzip gatk-${GATK_VERSION}.zip \
-#    && rm gatk-${GATK_VERSION}.zip 
 
 
 # Install python packages
@@ -104,7 +72,7 @@ RUN python3 -m pip install --upgrade pip
 
 # Install hail and other python libraries
 # including packages needed for VRS annotation functionality
-ENV HAIL_VERSION="0.2.95"
+ENV HAIL_VERSION="0.2.110"
 RUN python3 --version
 RUN python3 -m pip install \
     wheel \
@@ -120,7 +88,8 @@ RUN python3 -m pip install \
     dill \
     psycopg2 \
     ga4gh.vrs[extras] \
-    seqrepo
+    seqrepo \
+    click
 
 # Install GCS Connector
 RUN export SPARK_HOME=$(find_spark_home.py) && \
@@ -132,28 +101,5 @@ RUN export SPARK_HOME=$(find_spark_home.py) && \
         -e 's:spark\.hadoop\.google\.cloud\.auth\.service\.account\.enable.*:spark.hadoop.google.cloud.auth.service.account.enable true:' \
         -e 's:spark\.hadoop\.google\.cloud\.auth\.service\.account\.json\.keyfile.*:spark\.hadoop\.google\.cloud\.auth\.service\.account\.json\.keyfile /gsa-key/key.json:'
 
-# RUN aptitude -y install docker-compose
-# RUN ln -s /usr/local/bin/docker-compose /compose/docker-compose
-
-# Install R
-# ENV R_VERSION="3.5.2-1"
-# RUN apt-get install -y \
-#     r-base=${R_VERSION} \
-#     r-base-dev=${R_VERSION} 
-
-# ENV BEDTOOLS_VERSION="2.29.0"
-# RUN wget https://github.com/arq5x/bedtools2/releases/download/v${BEDTOOLS_VERSION}/bedtools-${BEDTOOLS_VERSION}.tar.gz \
-# 	&& tar xzf bedtools-${BEDTOOLS_VERSION}.tar.gz \
-# 	&& rm bedtools-${BEDTOOLS_VERSION}.tar.gz \
-# 	&& cd bedtools2 \
-# 	&& make \
-# 	&& make install \
-# 	&& make clean
-
-# separate steps for Seqrepo
-# RUN mkdir /usr/local/share/seqrepo
-# RUN sudo chown $USER /usr/local/share/seqrepo
-# RUN seqrepo pull -i 2018-11-26 
-# COPY marten-seqrepo /tmp/marten-seqrepo
 
 WORKDIR /home
