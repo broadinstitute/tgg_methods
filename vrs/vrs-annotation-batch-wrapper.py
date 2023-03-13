@@ -1,9 +1,8 @@
 """
-Daniel Marten: 03-02-2023
-This is a batch script which runs a vrs-annotation script on each shard of a VCF in parallel
+This is a batch script which runs a vrs-annotation script on a VCF
 Currently only outputs a NON-ZIPPED sharded VCF
 TODO: possible to read from VCFs which are not only 100 partitions that need to be changed manually
-TODO: add possiblity to zip output 
+TODO: add i to zip output 
 usage: python3 vrs-annotation-batch-wrapper.py --billing-project gnomad-vrs \
     --tmp-dir gnomad-vrs \
     --bucket-mount gnomad-vrs \
@@ -56,7 +55,7 @@ def main(args):
 
     backend = hb.ServiceBackend(args.billing_project, args.tmp_dir)
 
-    batch001 = hb.Batch(name="fuse_batch", backend=backend)
+    batch001 = hb.Batch(name="vrs", backend=backend)
 
     index_list = [str(yi).zfill(3) for yi in range(100)]
     # TODO: this only works for sharded VCFs with 100 partitions
@@ -67,7 +66,7 @@ def main(args):
         new_job = init_job_with_gcloud(
             batch=batch001, name=f"VCF_{vcf_index}_job", image=args.image
         )
-        new_job.cloudfuse(f"{args.bucket_mount}", "/local-seqrepo")
+        new_job.cloudfuse(f"{args.seqrepo_bucket}", "/local-seqrepo")
         # NOTE: the script gs://gnomad-vrs/marten-vrs-annotation.py has minor edits from 'vcf_annotation.py' from the GA4GH Team
         # namely, 'click' functionality for arguments has been changed to ArgParser
         # and some custom errors they included could not be updated
@@ -84,25 +83,26 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--billing-project", help="Project to bill!")
+    parser.add_argument("--billing-project", help="Project to bill.", type=str)
     parser.add_argument(
         "--tmp-dir",
-        help="Place to store temp files in GCP, default is same as --bucket-mount",
+        help="Name of google bucket for storing temp files.", type=str
     )
     parser.add_argument(
         "--image",
         default="us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten-vrs-image:0221",
-        help="Image in a GCP Repo",
+        help="Image in a GCP Artifact Registry repository.",
+        type=str
     )
     parser.add_argument(
-        "--bucket-mount", required=True, help="Bucket to mount to in GCP"
+        "--seqrepo-bucket", required=True, help="Name of bucket to mount containing download of seqrepo database in 'seqrepo/2018-11-26/'.", type=str
     )
     parser.add_argument(
         "--vcf-in",
-        help="Path of SHARDED .VCF.BGZ to pass to annotator, RELATIVE to mounted bucket",
-        default="vcf-10k-sharded-0228.vcf.bgz",
+        help="Path of SHARDED .VCF.BGZ to pass to annotator, RELATIVE to mounted bucket.",
+        default="vcf-10k-sharded-0228.vcf.bgz", type=str
     )
-    parser.add_argument("--vcf-out", help="Path and name of output VCF")
+    parser.add_argument("--vcf-out", help="Path and name of output VCF.", type=str)
 
     args = parser.parse_args()
 
