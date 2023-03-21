@@ -1,7 +1,5 @@
 """
-This is a batch script which runs a vrs-annotation script on a sharded-VCF
-Input: Hail Table
-Output: Annotated Hail Table
+This is a batch script which adds VRS IDs to a Hail Table by creating a sharded-VCF, running a vrs-annotation script on each shard, and annotating the merged results back onto the original Hail Table.
 To be run using Query-On-Batch (https://hail.is/docs/0.2/cloud/query_on_batch.html#:~:text=Hail%20Query%2Don%2DBatch%20uses,Team%20at%20our%20discussion%20forum.)
 usage: python3 vrs-annotation-batch-wrapper.py --billing-project gnomad-vrs \
     --tmp-dir gnomad-vrs \
@@ -37,14 +35,15 @@ def init_job_with_gcloud(
     """
     Create job and initialize glcoud authentication and gsutil commands.
     Wraps Ben Weisburd's init_job (https://github.com/broadinstitute/tgg_methods/blob/master/tgg/batch/batch_utils.py#L160) with additional gcloud steps.
-    Parameters passed through to init_job (descriptions taken from github documentation for the function):
-        :param batch: Batch object
-        :param name: job label which will show up in the Batch web UI
-        :param image: docker image name (eg. "weisburd/image-name@sha256:aa19845da5")
-        :param cpu: number of CPUs (between 0.25 to 16)
-        :param memory: amount of RAM in Gb (eg. 3.75)
-        :param disk_size: amount of disk in Gb (eg. 50)
-        :return: new job object
+    Parameters passed through to init_job:
+        :param batch: Batch object.
+        :param name: Job label which will show up in the Batch web UI.
+        :param image: Docker image name (eg. "us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten-vrs-image-v2-031323").
+        :param cpu: Number of CPUs (between 0.25 to 16).
+        :param memory: Amount of RAM in Gb (eg. 3.75).
+        :param disk_size: Amount of disk in Gb (eg. 50).
+        :param mount: Name of GCP Bucket to mount using cloudfuse.
+        :return: New job object.
     """
     job = init_job(batch, name, image, cpu, memory, disk_size)
     job.command(f"gcloud -q auth activate-service-account --key-file=/gsa-key/key.json")
@@ -68,12 +67,12 @@ def main(args):
 
     # NOTE: REPARTITION DOES NOT OUTPUT EVENLY? LAST SHARD IS 5-TIMES THE SIZE OF OTHERS (STORAGE) AND MANY TIMES THE NUMBER OF VARIANTS
     # REACHED OUT TO HAIL TEAM ABOUT ISSUE, IN PROGRESS
-    ht1 = ht0.repartition(args.user_partitions)
+    ht1 = ht0.repartition(args.partitions_for_vcf_export)
 
     hl.export_vcf(
         ht1,
         f"gs://{args.mount}/vrs-temp/shard-{prefix}.vcf.bgz",
-        append_to_header="gs://gnomad-vrs/header-fix.txt",
+        append_to_header=args.header_path,
         parallel="header_per_shard",
     )
 
@@ -91,7 +90,7 @@ def main(args):
 
     for vcf_index in ret_list:
 
-        # Setting up said job
+        # Setting up job
         new_job = init_job_with_gcloud(
             batch=batch001,
             name=f"VCF_job_{vcf_index.split('.')[0].split('-')[:2]}",
@@ -101,14 +100,14 @@ def main(args):
 
         # Script path for annotation is not expected to change for GA4GH if functionality is installed using pip in the DockerFile
         # ...unless GA4GH team changes their file structure and a new Image is used
-        script_path = (
+        vrs_script_path = (
             "/usr/local/lib/python3.9/dist-packages/ga4gh/vrs/extras/vcf_annotation.py"
         )
         # Print which file is being annotated, create directory for annotated shard, and then perform annotation
         new_job.command(f"echo at {vcf_index}")
         new_job.command("mkdir /temp-vcf-annotated/")
         new_job.command(
-            f"python3 {script_path} --vcf_in /local-seqrepo/vrs-temp/shard-{prefix}.vcf.bgz/{vcf_index} --vcf_out /temp-vcf-annotated/annotated-{vcf_index.split('.')[0]}.vcf --seqrepo_root_dir /local-seqrepo/seqrepo/2018-11-26/"
+            f"python3 {vrs_script_path} --vcf_in /local-seqrepo/vrs-temp/shard-{prefix}.vcf.bgz/{vcf_index} --vcf_out /temp-vcf-annotated/annotated-{vcf_index.split('.')[0]}.vcf --seqrepo_root_dir /local-seqrepo/seqrepo/2018-11-26/"
         )
 
         # Copy shard to its appropriate place in Google Bucket
@@ -156,8 +155,8 @@ if __name__ == "__main__":
         default="gs://gnomad-vrs/ht-inputs/ht-1k-TESTING-ONLY.ht",
     )
     parser.add_argument(
-        "--user-partitions",
-        help="Number of partitions to shard HT into for Annotation operation",
+        "--partitions-for-vcf-export",
+        help="Number of partitions to use when exporting the Table to a sharded VCF (each partition is exported to a separate VCF). This value determines the breakdown of jobs that will be ran (the VRS annotation script is ran in parallel on the VCFs).",
         default=100,
         type=int,
     )
@@ -165,8 +164,8 @@ if __name__ == "__main__":
         "--ht-output", help="Name of HT output RELATIVE to mounted bucket.", type=str
     )
     parser.add_argument(
-        "--header",
-        help="Full path of txt file to append to header",
+        "--header-path",
+        help="Full path of txt file containing lines to append to VCF headers for fields that maybe be missing when exporting the Table to VCF.",
         type=str,
         default="gs://gnomad-vrs/header-fix.txt",
     )
