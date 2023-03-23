@@ -20,11 +20,9 @@ import sys
 
 import hail as hl
 import hailtop.batch as hb
-# from gnomad_qc.v3.resources.annotations import vrs_annotations as v3_vrs_annotations
+from gnomad_qc.v3.resources.annotations import vrs_annotations as v3_vrs_annotations
 from gnomad.resources.grch38.gnomad import public_release
 from tgg.batch.batch_utils import init_job
-
-import gnomad_qc.v3.resources  # NOTE: to import the changes for VRS Annotations soon
 
 logging.basicConfig(
     format="%(asctime)s (%(name)s %(lineno)s): %(message)s",
@@ -70,14 +68,14 @@ def main(args):
 
     # Input paths (fixed) - note that the Hail Tables are altered outside of the script and may partition oddly
     input_paths_dict = {
-        "3.1.2": public_release("genomes").path,
+        "3.1.2": public_release("genomes").path ,
         "test_v3_1k": "gs://gnomad-vrs/ht-inputs/ht-1k-TESTING-ONLY.ht",
         "test_v3_10k": "gs://gnomad-vrs/ht-inputs/ht-10k-TESTING-ONLY.ht",
         "test_v3_100k": "gs://gnomad-vrs/ht-inputs/ht-100k-TESTING-ONLY.ht",
     }
 
     output_paths_dict = {
-        "3.1.2": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-RELEASE-TESTING-ONLY-ANNOTATED.ht",  # NOTE: to be changed with VRS imports
+        "3.1.2": v3_vrs_annotations.path,
         "test_v3_1k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-1k-TESTING-ONLY-ANNOTATED.ht",
         "test_v3_10k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-10k-TESTING-ONLY-ANNOTATED.ht",
         "test_v3_100k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-100k-TESTING-ONLY-ANNOTATED.ht",
