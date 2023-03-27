@@ -28,7 +28,7 @@ logging.basicConfig(
     format="%(asctime)s (%(name)s %(lineno)s): %(message)s",
     datefmt="%m/%d/%Y %I:%M:%S %p",
 )
-logger = logging.getLogger("create_vrs_test_dataset")
+logger = logging.getLogger("annotate_vrs_ids")
 logger.setLevel(logging.INFO)
 
 
@@ -84,7 +84,7 @@ def main(args):
         "test_v3_100k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-100k-output-full-annotated.ht",
     }
 
-    # Reads in Hail Table, partitions, and exports to sharded VCF within the folder to-be-mounted
+    # Reads in Hail Table, partitions, and exports to sharded VCF within the folder to be mounted
     ht_original = hl.read_table(input_paths_dict[args.version])
 
     # Option to downsample for testing, if you want to test on v3.1.2 but not all of it
@@ -158,7 +158,7 @@ def main(args):
         f"gs://gnomad-vrs/vrs-temp/annotated-{prefix}.vcf/*.vcf",
         reference_genome="GRCh38",
     ).make_table()
-    logger.info("Annotated table constructed")  # turn into logger statement
+    logger.info("Annotated table constructed") 
 
     # When you select something, even in the 'info' field, it is no longer in that struct!
     ht_annotated = ht_annotated.select(ht_annotated.info.VRS_Allele)
@@ -171,7 +171,7 @@ def main(args):
 
     if "test" not in args.version:
         # NOTE: this construction is very slow on a large scale, maybe consider a Join ?
-        logger.info("Constructing a final table")
+        logger.info("Adding VRS ids to original Table")
         ht_final = ht_original.annotate(
             info=ht_original.info.annotate(
                 VRS_Allele=ht_annotated[
@@ -203,7 +203,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--working-bucket",
-        help="Name GCP Bucket to mount for access",
+        help="Name of GCP Bucket to mount for access.",
         default="gnomad-vrs",
         type=str,
     )
