@@ -3,12 +3,12 @@ This is a batch script which adds VRS IDs to a Hail Table by creating a sharded-
 To be run using Query-On-Batch (https://hail.is/docs/0.2/cloud/query_on_batch.html#:~:text=Hail%20Query%2Don%2DBatch%20uses,Team%20at%20our%20discussion%20forum.)
 usage: python3 vrs-annotation-batch-wrapper.py \
     --billing-project gnomad-vrs \
-    --tmp-dir gnomad-vrs \
+    --working-bucket gnomad-vrs \
     --image us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten-vrs-image-v2-031323 \
     --version test_v3_1k \
     --prefix marten_prelim_test \
     --partitions-for-vcf-export 20 \
-    --header gs://gnomad-vrs/header-fix.txt
+    --header-path gs://gnomad-vrs/header-fix.txt
 """
 
 import argparse
@@ -20,8 +20,8 @@ import sys
 
 import hail as hl
 import hailtop.batch as hb
-from gnomad_qc.v3.resources.annotations import vrs_annotations as v3_vrs_annotations
 from gnomad.resources.grch38.gnomad import public_release
+from gnomad_qc.v3.resources.annotations import vrs_annotations as v3_vrs_annotations
 from tgg.batch.batch_utils import init_job
 
 logging.basicConfig(
@@ -63,8 +63,11 @@ def init_job_with_gcloud(
 
 def main(args):
 
-    # prefix and datetime are used to construct unique names for temporary files and outputs
-    prefix = args.prefix + datetime.datetime.now().strftime("%m:%d:%Y:%H:%M:%S")
+    # Working bucket definition
+    working_bucket = args.working_bucket 
+
+    # prefix to create custom named versions of outputs 
+    prefix = args.prefix + args.version 
 
     # Input paths (fixed) - note that the Hail Tables are altered outside of the script and may partition oddly
     input_paths_dict = {
@@ -76,20 +79,20 @@ def main(args):
 
     output_paths_dict = {
         "3.1.2": v3_vrs_annotations.path,
-        "test_v3_1k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-1k-TESTING-ONLY-ANNOTATED.ht",
-        "test_v3_10k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-10k-TESTING-ONLY-ANNOTATED.ht",
-        "test_v3_100k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-100k-TESTING-ONLY-ANNOTATED.ht",
+        "test_v3_1k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-1k-output-full-annotated.ht",
+        "test_v3_10k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-10k-output-full-annotated.ht",
+        "test_v3_100k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-100k-output-full-annotated.ht",
     }
 
     # Reads in Hail Table, partitions, and exports to sharded VCF within the folder to-be-mounted
     ht_original = hl.read_table(input_paths_dict[args.version])
 
     # Option to downsample for testing, if you want to test on v3.1.2 but not all of it
-    if args.whole_downsample < 1.00:
-        ht_original = ht_original.sample(args.whole_downsample)
+    if args.downsample < 1.00 and args.version == "3.1.2":
+        ht_original = ht_original.sample(args.downsample)
 
     # Select() removed all non-key rows - VRS-Allele here is then added back to original table
-    ht_select = (
+    ht = (
         ht_original.select()
     )  # QUESTION: is this okay or would this be cluttering the namespace ?
 
@@ -98,25 +101,25 @@ def main(args):
     # 03-21 Response from Tim Poterba: an issue since the TESTING TABLES were sampled and subsetted randomly
     # --> Release Data is not affected in the same way
     # UPDATE: Tim has diagnosed problem, not yet fixed it yet on Query-On-Batch
-    ht_partitioned = ht_select.repartition(args.partitions_for_vcf_export)
+    ht = ht.repartition(args.partitions_for_vcf_export)
 
     hl.export_vcf(
-        ht_partitioned,
-        f"gs://{args.working_bucket}/vrs-temp/shard-{prefix}.vcf.bgz",
+        ht,
+        f"gs://{working_bucket}/vrs-temp/shard-{prefix}.vcf.bgz",
         append_to_header=args.header_path,
         parallel="header_per_shard",
     )
 
     # Create a list of all shards of VCF
     file_dict = hl.utils.hadoop_ls(
-        f"gs://{args.working_bucket}/vrs-temp/shard-{prefix}.vcf.bgz/part-*.bgz"
+        f"gs://{working_bucket}/vrs-temp/shard-{prefix}.vcf.bgz/part-*.bgz"
     )
 
     # Create a list of all file names to later annotate in parallel
     file_list = [file_item["path"].split("/")[-1] for file_item in file_dict]
 
     # Creating backend and batch for coming annotation batch jobs
-    backend = hb.ServiceBackend(args.billing_project, args.working_bucket)
+    backend = hb.ServiceBackend(args.billing_project, working_bucket)
 
     batch_vrs = hb.Batch(name="vrs-annotation", backend=backend)
 
@@ -125,9 +128,9 @@ def main(args):
         # Setting up job
         new_job = init_job_with_gcloud(
             batch=batch_vrs,
-            name=f"VCF_job_{vcf_index.split('.')[0].split('-')[2]}",
+            name=f"VCF_job_{vcf_index.split('.')[0].split('-')[1]}",
             image=args.image,
-            mount=args.working_bucket,
+            mount=working_bucket,
         )
 
         # Script path for annotation is not expected to change for GA4GH if functionality is installed using pip in the DockerFile
@@ -144,7 +147,7 @@ def main(args):
 
         # Copy shard to its appropriate place in Google Bucket
         new_job.command(
-            f"gsutil cp /temp-vcf-annotated/annotated-{vcf_index.split('.')[0]}.vcf gs://{args.working_bucket}/vrs-temp/annotated-{prefix}.vcf/"
+            f"gsutil cp /temp-vcf-annotated/annotated-{vcf_index.split('.')[0]}.vcf gs://{working_bucket}/vrs-temp/annotated-{prefix}.vcf/"
         )
 
     # Execute all jobs in Batch
@@ -162,12 +165,9 @@ def main(args):
 
     # Checkpoint (write) resulting annotated table
     ht_annotated = ht_annotated.checkpoint(
-        f"gs://{args.working_bucket}/vrs-temp/outputs/VRS-{prefix}", overwrite=True
+        f"gs://{working_bucket}/vrs-temp/outputs/VRS-{prefix}", overwrite=args.overwrite
     )
     logger.info("Annotated Hail Table checkpointed")
-
-    # such that ht3 will be what is released, ht0 is the original, and ht2 is annotated with VRS Alleles
-    # I will clear up these names later this morning!!
 
     if "test" not in args.version:
         # NOTE: this construction is very slow on a large scale, maybe consider a Join ?
@@ -186,7 +186,7 @@ def main(args):
         )
 
     logger.info(f"Outputting final table at: {output_paths_dict[args.version]}")
-    ht_final.write(output_paths_dict[args.version])
+    ht_final.write(output_paths_dict[args.version],overwrite=args.overwrite)
     # hl.write_table(ht_final,output_paths_dict[args.version])
 
 
@@ -229,10 +229,15 @@ if __name__ == "__main__":
         default="gs://gnomad-vrs/header-fix.txt",
     )
     parser.add_argument(
-        "--whole-downsample",
+        "--downsample",
         help="If reading in the whole Release Table, option to downsample",
         default=1.00,
         type=float,
+    )
+    parser.add_argument(
+        "--overwrite",
+        help="Boolean to pass to ht.write(overwrite=_____)",
+        action='store_true'
     )
 
     args = parser.parse_args()
