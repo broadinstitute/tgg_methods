@@ -3,12 +3,12 @@ This is a batch script which adds VRS IDs to a Hail Table by creating a sharded-
 To be run using Query-On-Batch (https://hail.is/docs/0.2/cloud/query_on_batch.html#:~:text=Hail%20Query%2Don%2DBatch%20uses,Team%20at%20our%20discussion%20forum.)
 usage: python3 vrs-annotation-batch-wrapper.py \
     --billing-project gnomad-vrs \
-    --tmp-dir gnomad-vrs \
+    --working-bucket gnomad-vrs \
     --image us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten-vrs-image-v2-031323 \
     --version test_v3_1k \
     --prefix marten_prelim_test \
     --partitions-for-vcf-export 20 \
-    --header gs://gnomad-vrs/header-fix.txt
+    --header-path gs://gnomad-vrs/header-fix.txt
 """
 
 import argparse
@@ -20,15 +20,15 @@ import sys
 
 import hail as hl
 import hailtop.batch as hb
-from gnomad_qc.v3.resources.annotations import vrs_annotations as v3_vrs_annotations
 from gnomad.resources.grch38.gnomad import public_release
+from gnomad_qc.v3.resources.annotations import vrs_annotations as v3_vrs_annotations
 from tgg.batch.batch_utils import init_job
 
 logging.basicConfig(
     format="%(asctime)s (%(name)s %(lineno)s): %(message)s",
     datefmt="%m/%d/%Y %I:%M:%S %p",
 )
-logger = logging.getLogger("create_vrs_test_dataset")
+logger = logging.getLogger("annotate_vrs_ids")
 logger.setLevel(logging.INFO)
 
 
@@ -64,7 +64,7 @@ def init_job_with_gcloud(
 def main(args):
 
     # prefix and datetime are used to construct unique names for temporary files and outputs
-    prefix = args.prefix + datetime.datetime.now().strftime("%m:%d:%Y:%H:%M:%S")
+    prefix = args.prefix + datetime.datetime.now().strftime("%m-%d-%Y-%H-%M-%S")
 
     # Input paths (fixed) - note that the Hail Tables are altered outside of the script and may partition oddly
     input_paths_dict = {
@@ -81,14 +81,14 @@ def main(args):
         "test_v3_100k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-100k-TESTING-ONLY-ANNOTATED.ht",
     }
 
-    # Reads in Hail Table, partitions, and exports to sharded VCF within the folder to-be-mounted
+    # Reads in Hail Table, partitions, and exports to sharded VCF within the folder to be mounted
     ht_original = hl.read_table(input_paths_dict[args.version])
 
     # Option to downsample for testing, if you want to test on v3.1.2 but not all of it
     if args.whole_downsample < 1.00:
         ht_original = ht_original.sample(args.whole_downsample)
 
-    # Select() removed all non-key rows - VRS-Allele here is then added back to original table
+    # Select() removes all non-key rows - only want to keep the minimum annotations necessary to run the vrs annotation script( locus and alleles)
     ht_select = (
         ht_original.select()
     )  # QUESTION: is this okay or would this be cluttering the namespace ?
@@ -155,23 +155,20 @@ def main(args):
         f"gs://gnomad-vrs/vrs-temp/annotated-{prefix}.vcf/*.vcf",
         reference_genome="GRCh38",
     ).make_table()
-    logger.info("Annotated table constructed")  # turn into logger statement
+    logger.info("Annotated table constructed") 
 
     # When you select something, even in the 'info' field, it is no longer in that struct!
     ht_annotated = ht_annotated.select(ht_annotated.info.VRS_Allele)
 
     # Checkpoint (write) resulting annotated table
     ht_annotated = ht_annotated.checkpoint(
-        f"gs://{args.working_bucket}/vrs-temp/outputs/VRS-{prefix}", overwrite=True
+        f"gs://{args.working_bucket}/vrs-temp/outputs/VRS-{prefix}.ht", overwrite=True
     )
     logger.info("Annotated Hail Table checkpointed")
 
-    # such that ht3 will be what is released, ht0 is the original, and ht2 is annotated with VRS Alleles
-    # I will clear up these names later this morning!!
-
     if "test" not in args.version:
         # NOTE: this construction is very slow on a large scale, maybe consider a Join ?
-        logger.info("Constructing a final table")
+        logger.info("Adding VRS ids to original Table")
         ht_final = ht_original.annotate(
             info=ht_original.info.annotate(
                 VRS_Allele=ht_annotated[
@@ -187,7 +184,6 @@ def main(args):
 
     logger.info(f"Outputting final table at: {output_paths_dict[args.version]}")
     ht_final.write(output_paths_dict[args.version])
-    # hl.write_table(ht_final,output_paths_dict[args.version])
 
 
 if __name__ == "__main__":
@@ -203,7 +199,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--working-bucket",
-        help="Name GCP Bucket to mount for access",
+        help="Name of GCP Bucket to mount for access.",
         default="gnomad-vrs",
         type=str,
     )
@@ -229,8 +225,8 @@ if __name__ == "__main__":
         default="gs://gnomad-vrs/header-fix.txt",
     )
     parser.add_argument(
-        "--whole-downsample",
-        help="If reading in the whole Release Table, option to downsample",
+        "--downsample",
+        help="Proportion to which to downsample the Hail table at the start - particularly useful if want to only run on a portion of the whole release Table, but can also be used to further downsample the test datasets.",
         default=1.00,
         type=float,
     )
