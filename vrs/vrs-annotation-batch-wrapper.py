@@ -8,6 +8,7 @@ usage: python3 vrs-annotation-batch-wrapper.py \
     --version test_v3_1k \
     --prefix marten_prelim_test \
     --partitions-for-vcf-export 20 \
+    --downsample 0.1
     --header-path gs://gnomad-vrs/header-fix.txt
 """
 
@@ -71,25 +72,28 @@ def main(args):
 
     # Input paths (fixed) - note that the Hail Tables are altered outside of the script and may partition oddly
     input_paths_dict = {
-        "3.1.2": public_release("genomes").path ,
+        "v3.1.2": public_release("genomes").path ,
+        "test_v3.1.2": public_release("genomes").path ,
         "test_v3_1k": "gs://gnomad-vrs/ht-inputs/ht-1k-TESTING-ONLY.ht",
         "test_v3_10k": "gs://gnomad-vrs/ht-inputs/ht-10k-TESTING-ONLY.ht",
-        "test_v3_100k": "gs://gnomad-vrs/ht-inputs/ht-100k-TESTING-ONLY.ht",
+        "test_v3_100k": "gs://gnomad-vrs/ht-inputs/ht-100k-TESTING-ONLY-repartition-100p.ht", # updated with repartition
     }
 
     output_paths_dict = {
-        "3.1.2": v3_vrs_annotations.path,
-        "test_v3_1k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-1k-output-full-annotated.ht",
-        "test_v3_10k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-10k-output-full-annotated.ht",
-        "test_v3_100k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-100k-output-full-annotated.ht",
+        "v3.1.2": v3_vrs_annotations.path,
+        "test_v3.1.2": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-release-output.ht",
+        "test_v3_1k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-1k-output.ht",
+        "test_v3_10k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-10k-output.ht",
+        "test_v3_100k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-100k-output.ht",
     }
-check_resource_existence(output_step_resources =  {"vrs-annotation-batch-wrapper.py": [f"gs://{working_bucket}/vrs-temp/outputs/VRS-{prefix}", output_paths_dict[version]]}, overwrite = overwrite
+
+    check_resource_existence(output_step_resources =  {"vrs-annotation-batch-wrapper.py": [f"gs://{working_bucket}/vrs-temp/outputs/VRS-{prefix}", output_paths_dict[args.version]]}, overwrite = args.overwrite)
 
     # Read in Hail Table, partition, and export to sharded VCF within the folder to be mounted
     ht_original = hl.read_table(input_paths_dict[args.version])
 
-    # Option to downsample for testing, if you want to test on v3.1.2 but not all of it
-    if args.downsample < 1.00 and args.version == "3.1.2":
+    # Option to downsample for testing, if you want to annotate part of a Hail Table but not all of it
+    if args.downsample and args.downsample < 1.00:
         ht_original = ht_original.sample(args.downsample)
 
     # Use 'select' to remove all non-key rows - VRS-Allele here is then added back to original table
@@ -97,23 +101,31 @@ check_resource_existence(output_step_resources =  {"vrs-annotation-batch-wrapper
         ht_original.select()
     )
 
+    """
+    # Delete this block comment before merging - I do want to leave it in for now (as of 03/29) to keep track of progress at least
     # NOTE: REPARTITION DOES NOT OUTPUT EVENLY? LAST SHARD IS 5-TIMES THE SIZE OF OTHERS (STORAGE) AND MANY TIMES THE NUMBER OF VARIANTS
     # REACHED OUT TO HAIL TEAM ABOUT ISSUE, IN PROGRESS
     # 03-21 Response from Tim Poterba: an issue since the TESTING TABLES were sampled and subsetted randomly
     # --> Release Data is not affected in the same way
     # UPDATE: Tim has diagnosed problem, not yet fixed it yet on Query-On-Batch
-    ht = ht.repartition(args.partitions_for_vcf_export)
+    # UPDATE 03-28: All I had to do is Repartition them in a separate Notebook running Spark and re-output them
+    # It's fine AND everything matches the trush set from the VRS team!!! woo!!!
+    """
+
+    # Repartition the Hail Table if requested. In the following step, the Hail Table is exported to a Sharded VCF with one Shard per Partition
+    if args.partitions_for_vcf_export:
+        ht = ht.repartition(args.partitions_for_vcf_export)
 
     hl.export_vcf(
         ht,
-        f"gs://{working_bucket}/vrs-temp/shard-{prefix}.vcf.bgz",
+        f"gs://{working_bucket}/vrs-temp/shard-{args.version}.vcf.bgz",
         append_to_header=args.header_path,
         parallel="header_per_shard",
     )
 
     # Create a list of all shards of VCF
     file_dict = hl.utils.hadoop_ls(
-        f"gs://{working_bucket}/vrs-temp/shard-{prefix}.vcf.bgz/part-*.bgz"
+        f"gs://{working_bucket}/vrs-temp/shard-{args.version}.vcf.bgz/part-*.bgz"
     )
 
     # Create a list of all file names to later annotate in parallel
@@ -143,12 +155,12 @@ check_resource_existence(output_step_resources =  {"vrs-annotation-batch-wrapper
         new_job.command(f"echo now on: {vcf_index}")
         new_job.command("mkdir /temp-vcf-annotated/")
         new_job.command(
-            f"python3 {vrs_script_path} --vcf_in /local-vrs-mount/vrs-temp/shard-{prefix}.vcf.bgz/{vcf_index} --vcf_out /temp-vcf-annotated/annotated-{vcf_index.split('.')[0]}.vcf --seqrepo_root_dir /local-vrs-mount/seqrepo/2018-11-26/"
+            f"python3 {vrs_script_path} --vcf_in /local-vrs-mount/vrs-temp/shard-{args.version}.vcf.bgz/{vcf_index} --vcf_out /temp-vcf-annotated/annotated-{vcf_index.split('.')[0]}.vcf --seqrepo_root_dir /local-vrs-mount/seqrepo/2018-11-26/"
         )
 
         # Copy shard to its appropriate place in Google Bucket
         new_job.command(
-            f"gsutil cp /temp-vcf-annotated/annotated-{vcf_index.split('.')[0]}.vcf gs://{working_bucket}/vrs-temp/annotated-{prefix}.vcf/"
+            f"gsutil cp /temp-vcf-annotated/annotated-{vcf_index.split('.')[0]}.vcf gs://{working_bucket}/vrs-temp/annotated-{args.version}.vcf/"
         )
 
     # Execute all jobs in Batch
@@ -156,7 +168,7 @@ check_resource_existence(output_step_resources =  {"vrs-annotation-batch-wrapper
 
     # Import all annotated shards
     ht_annotated = hl.import_vcf(
-        f"gs://gnomad-vrs/vrs-temp/annotated-{prefix}.vcf/*.vcf",
+        f"gs://gnomad-vrs/vrs-temp/annotated-{args.version}.vcf/*.vcf",
         reference_genome="GRCh38",
     ).make_table()
     logger.info("Annotated table constructed") 
@@ -166,12 +178,13 @@ check_resource_existence(output_step_resources =  {"vrs-annotation-batch-wrapper
 
     # Checkpoint (write) resulting annotated table
     ht_annotated = ht_annotated.checkpoint(
-        f"gs://{working_bucket}/vrs-temp/outputs/VRS-{prefix}.ht", overwrite=args.overwrite
+        f"gs://{working_bucket}/vrs-temp/outputs/Annotated-Checkpoint-VRS-{prefix}.ht", overwrite=args.overwrite
     )
     logger.info("Annotated Hail Table checkpointed")
 
-    if "test" not in args.version:
-        # NOTE: this construction is very slow on a large scale, maybe consider a Join ?
+    # NOTE: how to generalize this when we're not working on v3.1.2?  
+    if "3.1.2" in args.version:
+        # NOTE: could performance be improved? 
         logger.info("Adding VRS ids to original Table")
         ht_final = ht_original.annotate(
             info=ht_original.info.annotate(
@@ -213,7 +226,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--partitions-for-vcf-export",
         help="Number of partitions to use when exporting the Table to a sharded VCF (each partition is exported to a separate VCF). This value determines the breakdown of jobs that will be ran (the VRS annotation script is ran in parallel on the VCFs).",
-        default=100,
+        default=None,
         type=int,
     )
     parser.add_argument(
@@ -231,7 +244,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--downsample",
         help="Proportion to which to downsample the original Hail Table input.",
-        default=1.00,
+        default=None,
         type=float,
     )
     parser.add_argument(
