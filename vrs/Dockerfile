@@ -1,6 +1,5 @@
 # Dockerfile for creating an image that can run the VRS Annotation Script inside of it
 # includes libpqdev and pythondev, plus psycopg2, ga4gh.vrs[extras] , and seqrepo
-# TODO: incorporate 'click' and custom Validation Error from ga4gh.vrs.extras.translator
 
 FROM 'google/cloud-sdk:slim'
 
@@ -71,7 +70,7 @@ RUN apt-get update \
 RUN python3 -m pip install --upgrade pip
 
 # Install hail and other python libraries
-# including packages needed for VRS annotation functionality
+# Including packages needed for VRS annotation functionality
 ENV HAIL_VERSION="0.2.110"
 RUN python3 --version
 RUN python3 -m pip install \
@@ -87,7 +86,7 @@ RUN python3 -m pip install \
     pybedtools \
     dill \
     psycopg2 \
-    ga4gh.vrs[extras] \
+    ga4gh.vrs[extras]==0.7.8 \
     seqrepo \
     click
 

@@ -22,6 +22,7 @@ import hail as hl
 import hailtop.batch as hb
 from gnomad.resources.grch38.gnomad import public_release
 from gnomad_qc.v3.resources.annotations import vrs_annotations as v3_vrs_annotations
+from gnomad_qc.resource_utils import check_resource_existence
 from tgg.batch.batch_utils import init_job
 
 logging.basicConfig(
@@ -63,10 +64,9 @@ def init_job_with_gcloud(
 
 def main(args):
 
-    # Working bucket definition
     working_bucket = args.working_bucket 
 
-    # prefix to create custom named versions of outputs 
+    # Prefix to create custom named versions of outputs 
     prefix = args.prefix + args.version 
 
     # Input paths (fixed) - note that the Hail Tables are altered outside of the script and may partition oddly
@@ -83,18 +83,19 @@ def main(args):
         "test_v3_10k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-10k-output-full-annotated.ht",
         "test_v3_100k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-100k-output-full-annotated.ht",
     }
+check_resource_existence(output_step_resources =  {"vrs-annotation-batch-wrapper.py": [f"gs://{working_bucket}/vrs-temp/outputs/VRS-{prefix}", output_paths_dict[version]]}, overwrite = overwrite
 
-    # Reads in Hail Table, partitions, and exports to sharded VCF within the folder to be mounted
+    # Read in Hail Table, partition, and export to sharded VCF within the folder to be mounted
     ht_original = hl.read_table(input_paths_dict[args.version])
 
     # Option to downsample for testing, if you want to test on v3.1.2 but not all of it
     if args.downsample < 1.00 and args.version == "3.1.2":
         ht_original = ht_original.sample(args.downsample)
 
-    # Select() removed all non-key rows - VRS-Allele here is then added back to original table
+    # Use 'select' to remove all non-key rows - VRS-Allele here is then added back to original table
     ht = (
         ht_original.select()
-    )  # QUESTION: is this okay or would this be cluttering the namespace ?
+    )
 
     # NOTE: REPARTITION DOES NOT OUTPUT EVENLY? LAST SHARD IS 5-TIMES THE SIZE OF OTHERS (STORAGE) AND MANY TIMES THE NUMBER OF VARIANTS
     # REACHED OUT TO HAIL TEAM ABOUT ISSUE, IN PROGRESS
@@ -118,7 +119,7 @@ def main(args):
     # Create a list of all file names to later annotate in parallel
     file_list = [file_item["path"].split("/")[-1] for file_item in file_dict]
 
-    # Creating backend and batch for coming annotation batch jobs
+    # Create backend and batch for coming annotation batch jobs
     backend = hb.ServiceBackend(args.billing_project, working_bucket)
 
     batch_vrs = hb.Batch(name="vrs-annotation", backend=backend)
@@ -165,7 +166,7 @@ def main(args):
 
     # Checkpoint (write) resulting annotated table
     ht_annotated = ht_annotated.checkpoint(
-        f"gs://{working_bucket}/vrs-temp/outputs/VRS-{prefix}", overwrite=args.overwrite
+        f"gs://{working_bucket}/vrs-temp/outputs/VRS-{prefix}.ht", overwrite=args.overwrite
     )
     logger.info("Annotated Hail Table checkpointed")
 
@@ -180,14 +181,13 @@ def main(args):
             )
         )
     else:
-        logger.info("Constructing a test table")
+        logger.info("Constructing a test Table")
         ht_final = ht_original.annotate(
             VRS_Allele=ht_annotated[ht_original.locus, ht_original.alleles].VRS_Allele
         )
 
     logger.info(f"Outputting final table at: {output_paths_dict[args.version]}")
     ht_final.write(output_paths_dict[args.version],overwrite=args.overwrite)
-    # hl.write_table(ht_final,output_paths_dict[args.version])
 
 
 if __name__ == "__main__":
@@ -230,13 +230,13 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--downsample",
-        help="If reading in the whole Release Table, option to downsample",
+        help="Proportion to which to downsample the original Hail Table input.",
         default=1.00,
         type=float,
     )
     parser.add_argument(
         "--overwrite",
-        help="Boolean to pass to ht.write(overwrite=_____)",
+        help="Boolean to pass to ht.write(overwrite=_____) determining whether or not to overwrite existing output for the final Table and checkpointed files.",
         action='store_true'
     )
 
