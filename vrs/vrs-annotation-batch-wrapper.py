@@ -3,13 +3,13 @@ This is a batch script which adds VRS IDs to a Hail Table by creating a sharded-
 To be run using Query-On-Batch (https://hail.is/docs/0.2/cloud/query_on_batch.html#:~:text=Hail%20Query%2Don%2DBatch%20uses,Team%20at%20our%20discussion%20forum.)
 usage: python3 vrs-annotation-batch-wrapper.py \
     --billing-project gnomad-vrs \
-    --working-bucket gnomad-vrs \
+    --working-bucket gnomad-vrs-io-finals \
     --image us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten-vrs-image-v2-031323 \
     --version test_v3_1k \
     --prefix marten_prelim_test \
     --partitions-for-vcf-export 20 \
     --downsample 0.1
-    --header-path gs://gnomad-vrs/header-fix.txt
+    --header-path gs://gnomad-vrs-io-finals/header-fix.txt
 """
 
 import argparse
@@ -22,9 +22,11 @@ import sys
 import hail as hl
 import hailtop.batch as hb
 from gnomad.resources.grch38.gnomad import public_release
-from gnomad_qc.v3.resources.annotations import vrs_annotations as v3_vrs_annotations
-from gnomad_qc.resource_utils import check_resource_existence
 from tgg.batch.batch_utils import init_job
+
+from gnomad_qc.resource_utils import check_resource_existence
+from gnomad_qc.v3.resources.annotations import \
+    vrs_annotations as v3_vrs_annotations
 
 logging.basicConfig(
     format="%(asctime)s (%(name)s %(lineno)s): %(message)s",
@@ -65,41 +67,52 @@ def init_job_with_gcloud(
 
 def main(args):
 
-    working_bucket = args.working_bucket 
+    hl.init(backend="batch")
 
-    # Prefix to create custom named versions of outputs 
-    prefix = args.prefix + args.version 
+    working_bucket = args.working_bucket
+
+    # Prefix to create custom named versions of outputs
+    prefix = args.prefix + args.version
 
     # Input paths (fixed) - note that the Hail Tables are altered outside of the script and may partition oddly
     input_paths_dict = {
-        "v3.1.2": public_release("genomes").path ,
-        "test_v3.1.2": public_release("genomes").path ,
-        "test_v3_1k": "gs://gnomad-vrs/ht-inputs/ht-1k-TESTING-ONLY.ht",
-        "test_v3_10k": "gs://gnomad-vrs/ht-inputs/ht-10k-TESTING-ONLY.ht",
-        "test_v3_100k": "gs://gnomad-vrs/ht-inputs/ht-100k-TESTING-ONLY-repartition-100p.ht", # updated with repartition
+        "v3.1.2": public_release("genomes").path,
+        "test_v3.1.2": public_release("genomes").path,
+        "test_v3_1k": "gs://gnomad-vrs-io-finals/ht-inputs/ht-1k-TESTING-ONLY-repartition-10p.ht",
+        "test_v3_10k": "gs://gnomad-vrs-io-finals/ht-inputs/ht-10k-TESTING-ONLY-repartition-50p.ht",
+        "test_v3_100k": "gs://gnomad-vrs-io-finals/ht-inputs/ht-100k-TESTING-ONLY-repartition-100p.ht",  # updated with repartition
     }
 
     output_paths_dict = {
         "v3.1.2": v3_vrs_annotations.path,
-        "test_v3.1.2": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-release-output.ht",
-        "test_v3_1k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-1k-output.ht",
-        "test_v3_10k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-10k-output.ht",
-        "test_v3_100k": f"gs://gnomad-vrs/vrs-temp/outputs/{prefix}-Full-ht-100k-output.ht",
+        "test_v3.1.2": f"gs://gnomad-vrs-io-finals/ht-outputs/{prefix}-Full-ht-release-output.ht",
+        "test_v3_1k": f"gs://gnomad-vrs-io-finals/ht-outputs/{prefix}-Full-ht-1k-output.ht",
+        "test_v3_10k": f"gs://gnomad-vrs-io-finals/ht-outputs/{prefix}-Full-ht-10k-output.ht",
+        "test_v3_100k": f"gs://gnomad-vrs-io-finals/ht-outputs/{prefix}-Full-ht-100k-output.ht",
     }
 
-    check_resource_existence(output_step_resources =  {"vrs-annotation-batch-wrapper.py": [f"gs://{working_bucket}/vrs-temp/outputs/VRS-{prefix}", output_paths_dict[args.version]]}, overwrite = args.overwrite)
+    check_resource_existence(
+        output_step_resources={
+            "vrs-annotation-batch-wrapper.py": [
+                f"gs://{working_bucket}/vrs-temp/outputs/VRS-{prefix}",
+                output_paths_dict[args.version],
+            ]
+        },
+        overwrite=args.overwrite,
+    )
 
     # Read in Hail Table, partition, and export to sharded VCF within the folder to be mounted
     ht_original = hl.read_table(input_paths_dict[args.version])
 
     # Option to downsample for testing, if you want to annotate part of a Hail Table but not all of it
     if args.downsample and args.downsample < 1.00:
+        logger.info("Downsampling Table...")
         ht_original = ht_original.sample(args.downsample)
 
     # Use 'select' to remove all non-key rows - VRS-Allele here is then added back to original table
-    ht = (
-        ht_original.select()
-    )
+    ht = ht_original.select()
+
+    logger.info("Table read in and selected")
 
     """
     # Delete this block comment before merging - I do want to leave it in for now (as of 03/29) to keep track of progress at least
@@ -123,13 +136,19 @@ def main(args):
         parallel="header_per_shard",
     )
 
+    logger.info("VCF Exported")
+
     # Create a list of all shards of VCF
     file_dict = hl.utils.hadoop_ls(
         f"gs://{working_bucket}/vrs-temp/shard-{args.version}.vcf.bgz/part-*.bgz"
     )
 
+    logger.info("Hadoop!")
+
     # Create a list of all file names to later annotate in parallel
     file_list = [file_item["path"].split("/")[-1] for file_item in file_dict]
+
+    logger.info("File list created... getting ready to start Batch Jobs")
 
     # Create backend and batch for coming annotation batch jobs
     backend = hb.ServiceBackend(args.billing_project, working_bucket)
@@ -152,7 +171,7 @@ def main(args):
             "/usr/local/lib/python3.9/dist-packages/ga4gh/vrs/extras/vcf_annotation.py"
         )
         # Print which file is being annotated, create directory for annotated shard, and then perform annotation
-        new_job.command(f"echo now on: {vcf_index}")
+        #  new_job.command(f"echo now on: {vcf_index}")
         new_job.command("mkdir /temp-vcf-annotated/")
         new_job.command(
             f"python3 {vrs_script_path} --vcf_in /local-vrs-mount/vrs-temp/shard-{args.version}.vcf.bgz/{vcf_index} --vcf_out /temp-vcf-annotated/annotated-{vcf_index.split('.')[0]}.vcf --seqrepo_root_dir /local-vrs-mount/seqrepo/2018-11-26/"
@@ -166,25 +185,29 @@ def main(args):
     # Execute all jobs in Batch
     batch_vrs.run()
 
+    logger.info("Batch Jobs executed, preparing to read in Sharded VCF from prior step")
+
     # Import all annotated shards
     ht_annotated = hl.import_vcf(
-        f"gs://gnomad-vrs/vrs-temp/annotated-{args.version}.vcf/*.vcf",
+        f"gs://{working_bucket}/vrs-temp/annotated-{args.version}.vcf/*.vcf",
         reference_genome="GRCh38",
     ).make_table()
-    logger.info("Annotated table constructed") 
+    logger.info("Annotated table constructed")
 
     # When you select something, even in the 'info' field, it is no longer in that struct!
     ht_annotated = ht_annotated.select(ht_annotated.info.VRS_Allele)
 
     # Checkpoint (write) resulting annotated table
     ht_annotated = ht_annotated.checkpoint(
-        f"gs://{working_bucket}/vrs-temp/outputs/Annotated-Checkpoint-VRS-{prefix}.ht", overwrite=args.overwrite
+        f"gs://{working_bucket}/vrs-temp/outputs/Annotated-Checkpoint-VRS-{prefix}.ht",
+        overwrite=args.overwrite,
     )
     logger.info("Annotated Hail Table checkpointed")
 
-    # NOTE: how to generalize this when we're not working on v3.1.2?  
+    # NOTE: how to generalize this when we're not working on v3.1.2?
+    # Output final Hail Tables with VRS Annotations
     if "3.1.2" in args.version:
-        # NOTE: could performance be improved? 
+        # NOTE: could performance be improved?
         logger.info("Adding VRS ids to original Table")
         ht_final = ht_original.annotate(
             info=ht_original.info.annotate(
@@ -199,8 +222,20 @@ def main(args):
             VRS_Allele=ht_annotated[ht_original.locus, ht_original.alleles].VRS_Allele
         )
 
-    logger.info(f"Outputting final table at: {output_paths_dict[args.version]}")
-    ht_final.write(output_paths_dict[args.version],overwrite=args.overwrite)
+        logger.info(f"Outputting final table at: {output_paths_dict[args.version]}")
+        ht_final.write(output_paths_dict[args.version], overwrite=args.overwrite)
+
+    # Deleting temporary files saves a great deal of space and keeps CloudFuse costs down
+    logger.info("Preparing to delete temporary files and sharded VCFs generated")
+    delete_temps = hb.Batch(name="delete_temps", backend=backend)
+    d1 = init_job_with_gcloud(
+        batch=delete_temps,
+        name=f"del_files",
+        image=args.image,
+        mount=working_bucket,
+    )
+    d1.command(f"gsutil -m -q rm -r gs://{working_bucket}/vrs-temp/")
+    delete_temps.run()
 
 
 if __name__ == "__main__":
@@ -217,7 +252,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--working-bucket",
         help="Name of GCP Bucket to mount for access.",
-        default="gnomad-vrs",
+        default="gnomad-vrs-io-finals",
         type=str,
     )
     parser.add_argument(
@@ -239,7 +274,7 @@ if __name__ == "__main__":
         "--header-path",
         help="Full path of txt file containing lines to append to VCF headers for fields that maybe be missing when exporting the Table to VCF.",
         type=str,
-        default="gs://gnomad-vrs/header-fix.txt",
+        default="gs://gnomad-vrs-io-finals/header-fix.txt",
     )
     parser.add_argument(
         "--downsample",
@@ -250,7 +285,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--overwrite",
         help="Boolean to pass to ht.write(overwrite=_____) determining whether or not to overwrite existing output for the final Table and checkpointed files.",
-        action='store_true'
+        action="store_true",
     )
 
     args = parser.parse_args()
