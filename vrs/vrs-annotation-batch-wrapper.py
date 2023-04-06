@@ -8,7 +8,7 @@ usage: python3 vrs-annotation-batch-wrapper.py \
     --version test_v3_1k \
     --prefix marten_prelim_test \
     --partitions-for-vcf-export 20 \
-    --downsample 0.1
+    --downsample 0.1 \
     --header-path gs://gnomad-vrs-io-finals/header-fix.txt
 """
 
@@ -109,7 +109,7 @@ def main(args):
         logger.info("Downsampling Table...")
         ht_original = ht_original.sample(args.downsample)
 
-    # Use 'select' to remove all non-key rows - VRS-Allele here is then added back to original table
+    # Use 'select' to remove all non-key rows - VRS-Allele is added back to original table based on just locus and allele
     ht = ht_original.select()
 
     logger.info("Table read in and selected")
@@ -125,7 +125,7 @@ def main(args):
     # It's fine AND everything matches the trush set from the VRS team!!! woo!!!
     """
 
-    # Repartition the Hail Table if requested. In the following step, the Hail Table is exported to a Sharded VCF with one Shard per Partition
+    # Repartition the Hail Table if requested. In the following step, the Hail Table is exported to a sharded VCF with one shard per partition
     if args.partitions_for_vcf_export:
         ht = ht.repartition(args.partitions_for_vcf_export)
 
@@ -171,7 +171,6 @@ def main(args):
             "/usr/local/lib/python3.9/dist-packages/ga4gh/vrs/extras/vcf_annotation.py"
         )
         # Print which file is being annotated, create directory for annotated shard, and then perform annotation
-        #  new_job.command(f"echo now on: {vcf_index}")
         new_job.command("mkdir /temp-vcf-annotated/")
         new_job.command(
             f"python3 {vrs_script_path} --vcf_in /local-vrs-mount/vrs-temp/shard-{args.version}.vcf.bgz/{vcf_index} --vcf_out /temp-vcf-annotated/annotated-{vcf_index.split('.')[0]}.vcf --seqrepo_root_dir /local-vrs-mount/seqrepo/2018-11-26/"
@@ -185,7 +184,7 @@ def main(args):
     # Execute all jobs in Batch
     batch_vrs.run()
 
-    logger.info("Batch Jobs executed, preparing to read in Sharded VCF from prior step")
+    logger.info("Batch Jobs executed, preparing to read in sharded VCF from prior step")
 
     # Import all annotated shards
     ht_annotated = hl.import_vcf(
@@ -199,13 +198,13 @@ def main(args):
 
     # Checkpoint (write) resulting annotated table
     ht_annotated = ht_annotated.checkpoint(
-        f"gs://{working_bucket}/vrs-temp/outputs/Annotated-Checkpoint-VRS-{prefix}.ht",
+        f"gs://{working_bucket}/vrs-temp/outputs/annotated-checkpoint-VRS-{prefix}.ht",
         overwrite=args.overwrite,
     )
     logger.info("Annotated Hail Table checkpointed")
 
     # NOTE: how to generalize this when we're not working on v3.1.2?
-    # Output final Hail Tables with VRS Annotations
+    # Output final Hail Tables with VRS annotations
     if "3.1.2" in args.version:
         # NOTE: could performance be improved?
         logger.info("Adding VRS ids to original Table")
