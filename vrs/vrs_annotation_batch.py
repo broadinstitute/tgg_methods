@@ -22,11 +22,10 @@ import sys
 import hail as hl
 import hailtop.batch as hb
 from gnomad.resources.grch38.gnomad import public_release
+from gnomad_qc.resource_utils import check_resource_existence
+from gnomad_qc.v3.resources.annotations import vrs_annotations as v3_vrs_annotations
 from tgg.batch.batch_utils import init_job
 
-from gnomad_qc.resource_utils import check_resource_existence
-from gnomad_qc.v3.resources.annotations import \
-    vrs_annotations as v3_vrs_annotations
 
 logging.basicConfig(
     format="%(asctime)s (%(name)s %(lineno)s): %(message)s",
@@ -67,12 +66,18 @@ def init_job_with_gcloud(
 
 def main(args):
 
-    hl.init(backend="batch")
+    hl.init(
+        backend="batch",
+        gcs_requester_pays_configuration="gnomad-vrs",  # NOTE: still pending permissions fix for writing to requester-pays bucket
+        default_reference="GRCh38",
+    )
 
     working_bucket = args.working_bucket
 
+    version = args.version
+
     # Prefix to create custom named versions of outputs
-    prefix = args.prefix + args.version
+    prefix = args.prefix + version
 
     # Input paths (fixed) - note that the Hail Tables are altered outside of the script and may partition oddly
     input_paths_dict = {
@@ -95,17 +100,17 @@ def main(args):
         output_step_resources={
             "vrs-annotation-batch-wrapper.py": [
                 f"gs://{working_bucket}/vrs-temp/outputs/VRS-{prefix}",
-                output_paths_dict[args.version],
+                output_paths_dict[version],
             ]
         },
         overwrite=args.overwrite,
     )
 
     # Read in Hail Table, partition, and export to sharded VCF within the folder to be mounted
-    ht_original = hl.read_table(input_paths_dict[args.version])
+    ht_original = hl.read_table(input_paths_dict[version])
 
     # Option to downsample for testing, if you want to annotate part of a Hail Table but not all of it
-    if args.downsample and args.downsample < 1.00:
+    if args.downsample < 1.00:
         logger.info("Downsampling Table...")
         ht_original = ht_original.sample(args.downsample)
 
@@ -127,23 +132,32 @@ def main(args):
 
     # Repartition the Hail Table if requested. In the following step, the Hail Table is exported to a sharded VCF with one shard per partition
     if args.partitions_for_vcf_export:
-        ht = ht.repartition(args.partitions_for_vcf_export)
+        if args.partitions_for_vcf_export < ht.n_partitions():
+            logger.info("Repartitioning Table by Naive Coalsece")
+            ht = ht.naive_coalesce(args.partitions_for_vcf_export)
+        elif args.partitions_for_vcf_export > ht.n_partitions():
+            logger.info(
+                "Repartitioning Table by Repartition, NOTE this results in a Shuffle"
+            )
+            ht = ht.repartition(args.partitions_for_vcf_export)
+
+    logger.info("Exporting sharded VCF")
 
     hl.export_vcf(
         ht,
-        f"gs://{working_bucket}/vrs-temp/shard-{args.version}.vcf.bgz",
+        f"gs://{working_bucket}/vrs-temp/shard-{version}.vcf.bgz",
         append_to_header=args.header_path,
         parallel="header_per_shard",
     )
 
-    logger.info("VCF Exported")
+    logger.info(
+        f"Gathered list of files in gs://{working_bucket}/vrs-temp/shard-{version}.vcf.bgz using Hail's Hadoop method"
+    )
 
     # Create a list of all shards of VCF
     file_dict = hl.utils.hadoop_ls(
-        f"gs://{working_bucket}/vrs-temp/shard-{args.version}.vcf.bgz/part-*.bgz"
+        f"gs://{working_bucket}/vrs-temp/shard-{version}.vcf.bgz/part-*.bgz"
     )
-
-    logger.info("Hadoop!")
 
     # Create a list of all file names to later annotate in parallel
     file_list = [file_item["path"].split("/")[-1] for file_item in file_dict]
@@ -173,12 +187,12 @@ def main(args):
         # Print which file is being annotated, create directory for annotated shard, and then perform annotation
         new_job.command("mkdir /temp-vcf-annotated/")
         new_job.command(
-            f"python3 {vrs_script_path} --vcf_in /local-vrs-mount/vrs-temp/shard-{args.version}.vcf.bgz/{vcf_index} --vcf_out /temp-vcf-annotated/annotated-{vcf_index.split('.')[0]}.vcf --seqrepo_root_dir /local-vrs-mount/seqrepo/2018-11-26/"
+            f"python3 {vrs_script_path} --vcf_in /local-vrs-mount/vrs-temp/shard-{version}.vcf.bgz/{vcf_index} --vcf_out /temp-vcf-annotated/annotated-{vcf_index.split('.')[0]}.vcf --seqrepo_root_dir /local-vrs-mount/seqrepo/2018-11-26/"
         )
 
         # Copy shard to its appropriate place in Google Bucket
         new_job.command(
-            f"gsutil cp /temp-vcf-annotated/annotated-{vcf_index.split('.')[0]}.vcf gs://{working_bucket}/vrs-temp/annotated-{args.version}.vcf/"
+            f"gsutil cp /temp-vcf-annotated/annotated-{vcf_index.split('.')[0]}.vcf gs://{working_bucket}/vrs-temp/annotated-{version}.vcf/"
         )
 
     # Execute all jobs in Batch
@@ -188,7 +202,7 @@ def main(args):
 
     # Import all annotated shards
     ht_annotated = hl.import_vcf(
-        f"gs://{working_bucket}/vrs-temp/annotated-{args.version}.vcf/*.vcf",
+        f"gs://{working_bucket}/vrs-temp/annotated-{version}.vcf/*.vcf",
         reference_genome="GRCh38",
     ).make_table()
     logger.info("Annotated table constructed")
@@ -205,7 +219,7 @@ def main(args):
 
     # NOTE: how to generalize this when we're not working on v3.1.2?
     # Output final Hail Tables with VRS annotations
-    if "3.1.2" in args.version:
+    if "3.1.2" in version:
         # NOTE: could performance be improved?
         logger.info("Adding VRS ids to original Table")
         ht_final = ht_original.annotate(
@@ -221,8 +235,8 @@ def main(args):
             VRS_Allele=ht_annotated[ht_original.locus, ht_original.alleles].VRS_Allele
         )
 
-        logger.info(f"Outputting final table at: {output_paths_dict[args.version]}")
-        ht_final.write(output_paths_dict[args.version], overwrite=args.overwrite)
+        logger.info(f"Outputting final table at: {output_paths_dict[version]}")
+        ht_final.write(output_paths_dict[version], overwrite=args.overwrite)
 
     # Deleting temporary files saves a great deal of space and keeps CloudFuse costs down
     logger.info("Preparing to delete temporary files and sharded VCFs generated")
@@ -278,7 +292,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--downsample",
         help="Proportion to which to downsample the original Hail Table input.",
-        default=None,
+        default=1.00,
         type=float,
     )
     parser.add_argument(
