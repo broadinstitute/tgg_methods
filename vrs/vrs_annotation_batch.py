@@ -1,7 +1,7 @@
 """
 This is a batch script which adds VRS IDs to a Hail Table by creating a sharded-VCF, running a vrs-annotation script on each shard, and annotating the merged results back onto the original Hail Table.
 To be run using Query-On-Batch (https://hail.is/docs/0.2/cloud/query_on_batch.html#:~:text=Hail%20Query%2Don%2DBatch%20uses,Team%20at%20our%20discussion%20forum.)
-usage: python3 vrs-annotation-batch-wrapper.py \
+usage: python3 vrs_annotation_batch.py \
     --billing-project gnomad-vrs \
     --working-bucket gnomad-vrs-io-finals \
     --image us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten-vrs-image-v2-031323 \
@@ -73,19 +73,17 @@ def main(args):
     )
 
     working_bucket = args.working_bucket
-
     version = args.version
 
     # Prefix to create custom named versions of outputs
     prefix = args.prefix + version
 
-    # Input paths (fixed) - note that the Hail Tables are altered outside of the script and may partition oddly
     input_paths_dict = {
         "v3.1.2": public_release("genomes").path,
         "test_v3.1.2": public_release("genomes").path,
         "test_v3_1k": "gs://gnomad-vrs-io-finals/ht-inputs/ht-1k-TESTING-ONLY-repartition-10p.ht",
         "test_v3_10k": "gs://gnomad-vrs-io-finals/ht-inputs/ht-10k-TESTING-ONLY-repartition-50p.ht",
-        "test_v3_100k": "gs://gnomad-vrs-io-finals/ht-inputs/ht-100k-TESTING-ONLY-repartition-100p.ht",  # updated with repartition
+        "test_v3_100k": "gs://gnomad-vrs-io-finals/ht-inputs/ht-100k-TESTING-ONLY-repartition-100p.ht",
     }
 
     output_paths_dict = {
@@ -137,7 +135,7 @@ def main(args):
             ht = ht.naive_coalesce(args.partitions_for_vcf_export)
         elif args.partitions_for_vcf_export > ht.n_partitions():
             logger.info(
-                "Repartitioning Table by Repartition, NOTE this results in a Shuffle"
+                "Repartitioning Table by Repartition, NOTE this results in a shuffle"
             )
             ht = ht.repartition(args.partitions_for_vcf_export)
 
@@ -221,7 +219,7 @@ def main(args):
     # Output final Hail Tables with VRS annotations
     if "3.1.2" in version:
         # NOTE: could performance be improved?
-        logger.info("Adding VRS ids to original Table")
+        logger.info("Adding VRS IDs to original Table")
         ht_final = ht_original.annotate(
             info=ht_original.info.annotate(
                 VRS_Allele=ht_annotated[
@@ -279,7 +277,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--prefix",
-        help="Prefix to append to names of all saved temp or output files.",
+        help="Prefix to append to names of all saved temp files and test version output files.",
         type=str,
         default="",
     )

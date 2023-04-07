@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	# clean up apt cache
     rm -rf /var/lib/apt/lists/*
 
-#install Java 8 for hail
+# Install Java 8 for hail
 RUN wget -qO - https://adoptopenjdk.jfrog.io/adoptopenjdk/api/gpg/key/public | apt-key add - \ 
     && add-apt-repository -y https://adoptopenjdk.jfrog.io/adoptopenjdk/deb/ \ 
     && apt-get update && apt-get install -y adoptopenjdk-8-hotspot
@@ -36,7 +36,7 @@ WORKDIR /tools
 
 
 
-# install vcftools
+# Install vcftools
 ENV VCFTOOLS_VERSION="0.1.16"
 RUN wget https://github.com/vcftools/vcftools/releases/download/v${VCFTOOLS_VERSION}/vcftools-${VCFTOOLS_VERSION}.tar.gz \
     && tar xf vcftools-${VCFTOOLS_VERSION}.tar.gz \
