@@ -4,7 +4,7 @@ To be run using Query-On-Batch (https://hail.is/docs/0.2/cloud/query_on_batch.ht
 usage: python3 vrs_annotation_batch.py \
     --billing-project gnomad-vrs \
     --working-bucket gnomad-vrs-io-finals \
-    --image us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten-vrs-image-v2-031323 \
+    --image us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten_vrs_image_hail_0_2_112 \
     --version test_v3_1k \
     --prefix marten_prelim_test \
     --partitions-for-vcf-export 20 \
@@ -71,6 +71,13 @@ def main(args):
         gcs_requester_pays_configuration="gnomad-vrs",  # NOTE: still pending permissions fix for writing to requester-pays bucket
         default_reference="GRCh38",
     )
+
+    logger.info(f"Hail version as: {hl.version()}")
+
+    # Example schema
+    logger.info("Example VRS schema for 2 variants:")
+    ht_example = hl.read_table("gs://gnomad-vrs-io-finals/ht-inputs/two-snps.ht")
+    ht_example.show()
 
     working_bucket = args.working_bucket
     version = args.version
@@ -167,30 +174,34 @@ def main(args):
 
     batch_vrs = hb.Batch(name="vrs-annotation", backend=backend)
 
-    for vcf_index in file_list:
+    for vcf_name in file_list:
 
         # Setting up job
         new_job = init_job_with_gcloud(
             batch=batch_vrs,
-            name=f"VCF_job_{vcf_index.split('.')[0].split('-')[1]}",
+            name=f"VCF_job_{vcf_name.split('.')[0].split('-')[1]}",
             image=args.image,
             mount=working_bucket,
         )
 
-        # Script path for annotation is not expected to change for GA4GH if functionality is installed using pip in the DockerFile
-        # ...unless GA4GH team changes their file structure and a new Image is used
+        # Script path for annotation is not expected to change for GA4GH if dependencies are installed using pip in the DockerFile
         vrs_script_path = (
             "/usr/local/lib/python3.9/dist-packages/ga4gh/vrs/extras/vcf_annotation.py"
         )
-        # Print which file is being annotated, create directory for annotated shard, and then perform annotation
+
+        # Store VCF input path read as a Batch InputResourceFile
+        vcf_input = f'/local-vrs-mount/vrs-temp/shard-{version}.vcf.bgz/{vcf_name}'
+        vcf_output = f'/temp-vcf-annotated/annotated-{vcf_name.split(".")[0]}.vcf'
+
+        # Perform VRS Annotation on vcf_input and store output in /tmp-vcf-annotated
         new_job.command("mkdir /temp-vcf-annotated/")
         new_job.command(
-            f"python3 {vrs_script_path} --vcf_in /local-vrs-mount/vrs-temp/shard-{version}.vcf.bgz/{vcf_index} --vcf_out /temp-vcf-annotated/annotated-{vcf_index.split('.')[0]}.vcf --seqrepo_root_dir /local-vrs-mount/seqrepo/2018-11-26/"
+            f"python3 {vrs_script_path} --vcf_in {vcf_input} --vcf_out {vcf_output} --seqrepo_root_dir /local-vrs-mount/seqrepo/2018-11-26/"
         )
 
-        # Copy shard to its appropriate place in Google Bucket
+        # Copy annotated shard to its appropriate place in Google Bucket
         new_job.command(
-            f"gsutil cp /temp-vcf-annotated/annotated-{vcf_index.split('.')[0]}.vcf gs://{working_bucket}/vrs-temp/annotated-{version}.vcf/"
+            f"gsutil cp {vcf_output} gs://{working_bucket}/vrs-temp/annotated-{version}.vcf/"
         )
 
     # Execute all jobs in Batch
@@ -233,8 +244,8 @@ def main(args):
             VRS_Allele=ht_annotated[ht_original.locus, ht_original.alleles].VRS_Allele
         )
 
-        logger.info(f"Outputting final table at: {output_paths_dict[version]}")
-        ht_final.write(output_paths_dict[version], overwrite=args.overwrite)
+    logger.info(f"Outputting final table at: {output_paths_dict[version]}")
+    ht_final.write(output_paths_dict[version], overwrite=args.overwrite)
 
     # Deleting temporary files saves a great deal of space and keeps CloudFuse costs down
     logger.info("Preparing to delete temporary files and sharded VCFs generated")
@@ -256,7 +267,7 @@ if __name__ == "__main__":
     parser.add_argument("--billing-project", help="Project to bill.", type=str)
     parser.add_argument(
         "--image",
-        default="us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten-vrs-image-v2-031323",
+        default="us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten_vrs_image_hail_0_2_112",
         help="Image in a GCP Artifact Registry repository.",
         type=str,
     )

@@ -71,7 +71,7 @@ RUN python3 -m pip install --upgrade pip
 
 # Install hail and other python libraries
 # Including packages needed for VRS annotation functionality
-ENV HAIL_VERSION="0.2.110"
+ENV HAIL_VERSION="0.2.112"
 RUN python3 --version
 RUN python3 -m pip install \
     wheel \
