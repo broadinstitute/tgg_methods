@@ -189,11 +189,11 @@ def main(args):
             "/usr/local/lib/python3.9/dist-packages/ga4gh/vrs/extras/vcf_annotation.py"
         )
 
-        # Store VCF input path read as a Batch InputResourceFile
+        # Store VCF input and output paths
         vcf_input = f'/local-vrs-mount/vrs-temp/shard-{version}.vcf.bgz/{vcf_name}'
         vcf_output = f'/temp-vcf-annotated/annotated-{vcf_name.split(".")[0]}.vcf'
 
-        # Perform VRS Annotation on vcf_input and store output in /tmp-vcf-annotated
+        # Perform VRS annotation on vcf_input and store output in /temp-vcf-annotated
         new_job.command("mkdir /temp-vcf-annotated/")
         new_job.command(
             f"python3 {vrs_script_path} --vcf_in {vcf_input} --vcf_out {vcf_output} --seqrepo_root_dir /local-vrs-mount/seqrepo/2018-11-26/"
