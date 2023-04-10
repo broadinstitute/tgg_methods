@@ -104,7 +104,7 @@ def main(args):
     check_resource_existence(
         output_step_resources={
             "vrs-annotation-batch-wrapper.py": [
-                f"gs://{working_bucket}/vrs-temp/outputs/VRS-{prefix}",
+                f"gs://{working_bucket}/vrs-temp/outputs/annotated-checkpoint-VRS-{prefix}.ht",
                 output_paths_dict[version],
             ]
         },
