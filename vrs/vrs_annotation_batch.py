@@ -9,7 +9,7 @@ usage: python3 vrs_annotation_batch.py \
     --prefix marten_prelim_test \
     --partitions-for-vcf-export 20 \
     --downsample 0.1 \
-    --header-path gs://gnomad-vrs-io-finals/header-fix.txt
+    --header-path gs://gnomad-vrs-io-finals/header-fix.txt \ 
 """
 
 import argparse
@@ -42,7 +42,7 @@ def init_job_with_gcloud(
     cpu: float = None,
     memory: float = None,
     disk_size: float = None,
-    mount: str = None,
+    # mount: str = None,
 ):
     """
     Create job and initialize glcoud authentication and gsutil commands.
@@ -60,7 +60,8 @@ def init_job_with_gcloud(
     job = init_job(batch, name, image, cpu, memory, disk_size)
     job.command(f"gcloud -q auth activate-service-account --key-file=/gsa-key/key.json")
     job.command(f"curl -sSL broad.io/install-gcs-connector | python3")
-    job.cloudfuse(mount, "/local-vrs-mount")
+    # NOTE: could include clever code to read SeqRepo via cloudfuse only if some argument is passed 
+    # job.cloudfuse(mount, "/local-vrs-mount")
     return job
 
 
@@ -186,6 +187,10 @@ def main(args):
 
     batch_vrs = hb.Batch(name="vrs-annotation", backend=backend)
 
+    # Define SeqRepo to be read in, outside of the loop, to avoid reading it in for each job
+    seqrepo_path = f'gs://seqrepo-vrs/seqrepo/2018-11-26'
+    seqrepo_obj = batch_vrs.read_input(seqrepo_path)
+
     for vcf_name in file_list:
 
         # Setting up job
@@ -193,7 +198,9 @@ def main(args):
             batch=batch_vrs,
             name=f"VCF_job_{vcf_name.split('.')[0].split('-')[1]}",
             image=args.image,
-            mount=working_bucket,
+            # mount=working_bucket,
+            disk_size=args.disk_size,
+            memory=args.memory
         )
 
         # Script path for annotation is not expected to change for GA4GH if dependencies are installed using pip in the DockerFile
@@ -202,13 +209,15 @@ def main(args):
         )
 
         # Store VCF input and output paths
-        vcf_input = f'/local-vrs-mount/vrs-temp/shard-{version}.vcf.bgz/{vcf_name}'
+        vcf_input = f'gs://{working_bucket}/vrs-temp/shard-{version}.vcf.bgz/{vcf_name}'
+        # vcf_input = f'/local-vrs-mount/vrs-temp/shard-{version}.vcf.bgz/{vcf_name}'
         vcf_output = f'/temp-vcf-annotated/annotated-{vcf_name.split(".")[0]}.vcf'
+        # seqrepo_path = "/local-vrs-mount/seqrepo/2018-11-26/"
 
         # Perform VRS annotation on vcf_input and store output in /temp-vcf-annotated
         new_job.command("mkdir /temp-vcf-annotated/")
         new_job.command(
-            f"python3 {vrs_script_path} --vcf_in {vcf_input} --vcf_out {vcf_output} --seqrepo_root_dir /local-vrs-mount/seqrepo/2018-11-26/"
+            f"python3 {vrs_script_path} --vcf_in {batch_vrs.read_input(vcf_input)} --vcf_out {vcf_output} --seqrepo_root_dir {seqrepo_obj}"
         )
 
         # Copy annotated shard to its appropriate place in Google Bucket
@@ -315,6 +324,18 @@ if __name__ == "__main__":
         help="Proportion to which to downsample the original Hail Table input.",
         default=1.00,
         type=float,
+    )
+    parser.add_argument(
+        "--disk-size",
+        help="Amount of disk (GB) to allocate to each Hail Batch job.",
+        type=float,
+        default=6 
+    )
+    parser.add_argument(
+        "--memory",
+        help="Amount of memory (GB) to allocate to each Hail Batch job.",
+        type=float,
+        default=15
     )
     parser.add_argument(
         "--overwrite",
