@@ -167,6 +167,18 @@ def main(args):
     # Create a list of all file names to later annotate in parallel
     file_list = [file_item["path"].split("/")[-1] for file_item in file_dict]
 
+    # Query-On-Batch produces duplicate shards (same number, same content, different name) for v3.1.2 Release Table
+    # This block removes duplicates from the list of files to be annotated
+    to_exclude = []
+    for file_idx in range(len(file_list)): 
+        file_name = file_list[file_idx].split("-")
+        file_num = file_name[1]
+        if file_list[file_idx-1].split("-")[1] == file_num:
+            to_exclude.append(file_list[file_idx-1])
+
+    file_list = sorted(list(set(file_list) - set(to_exclude)))
+    logger.info(f"Number of duplicates to be excluded: {len(to_exclude)}")
+
     logger.info("File list created... getting ready to start Batch Jobs")
 
     # Create backend and batch for coming annotation batch jobs
