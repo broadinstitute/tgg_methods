@@ -177,7 +177,7 @@ def main(args):
             to_exclude.append(file_list[file_idx-1])
 
     file_list = sorted(list(set(file_list) - set(to_exclude)))
-    logger.info(f"Number of duplicates to be exluced: {len(to_exclude)}")
+    logger.info(f"Number of duplicates to be excluded: {len(to_exclude)}")
 
     logger.info("File list created... getting ready to start Batch Jobs")
 
