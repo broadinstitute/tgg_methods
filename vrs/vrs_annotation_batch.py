@@ -243,7 +243,7 @@ def main(args):
         logger.info("Annotated table constructed")
 
         # When you select something, even in the 'info' field, it is no longer in that struct!
-        ht_annotated = ht_annotated.select(ht_annotated.info.VRS_Allele)
+        ht_annotated = ht_annotated.select(ht_annotated.info.VRS_Allele,ht_annotated.info.VRS_Start,ht_annotated.info.VRS_End,ht_annotated.info.VRS_Alt)
 
         # Checkpoint (write) resulting annotated table
         ht_annotated = ht_annotated.checkpoint(
