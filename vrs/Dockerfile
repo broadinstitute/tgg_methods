@@ -71,8 +71,7 @@ RUN python3 -m pip install --upgrade pip
 
 # Install hail and other python libraries
 # Including packages needed for VRS annotation functionality
-# 04-16 Edits: includes Hail 0.2.113 
-# Also include path for ga4gh.vrs-python since their current pip version doesn't include new schema 
+# Also include version for ga4gh.vrs-python to be most recent and supporting their new variant schema  
 ENV HAIL_VERSION="0.2.113" 
 RUN python3 --version
 RUN python3 -m pip install \

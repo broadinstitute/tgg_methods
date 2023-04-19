@@ -10,7 +10,7 @@ usage: python3 vrs_annotation_batch.py \
     --partitions-for-vcf-export 20 \
     --downsample 0.1 \
     --header-path gs://gnomad-vrs-io-finals/header-fix.txt \ 
-    --run-vrs
+    --run-vrs \
     --annotate-original
 """
 
@@ -116,7 +116,7 @@ def main(args):
     )
 
     # Create backend and batch for coming annotation batch jobs
-    backend = hb.ServiceBackend(args.billing_project, working_bucket)
+    backend = hb.ServiceBackend(billing_project=args.billing_project, bucket=working_bucket)
 
     batch_vrs = hb.Batch(name="vrs-annotation", backend=backend)
 
@@ -127,24 +127,22 @@ def main(args):
     if args.downsample < 1.00:
         logger.info("Downsampling Table...")
         ht_original = ht_original.sample(args.downsample)
+        ht_original = ht_original.annotate_globals(vrs_downsample=args.downsample)
+        
 
     if args.run_vrs:
-
+check_resource_existence(
+        output_step_resources={
+            "--run-vrs": [
+                f"gs://gnomad-vrs-io-finals/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"],   
+        },
+        overwrite=args.overwrite,
+    )
         # Use 'select' to remove all non-key rows - VRS-Allele is added back to original table based on just locus and allele
         ht = ht_original.select()
 
         logger.info("Table read in and selected")
 
-        """
-        # Delete this block comment before merging - I do want to leave it in for now (as of 03/29) to keep track of progress at least
-        # NOTE: REPARTITION DOES NOT OUTPUT EVENLY? LAST SHARD IS 5-TIMES THE SIZE OF OTHERS (STORAGE) AND MANY TIMES THE NUMBER OF VARIANTS
-        # REACHED OUT TO HAIL TEAM ABOUT ISSUE, IN PROGRESS
-        # 03-21 Response from Tim Poterba: an issue since the TESTING TABLES were sampled and subsetted randomly
-        # --> Release Data is not affected in the same way
-        # UPDATE: Tim has diagnosed problem, not yet fixed it yet on Query-On-Batch
-        # UPDATE 03-28: All I had to do is Repartition them in a separate Notebook running Spark and re-output them
-        # It's fine AND everything matches the trush set from the VRS team!!! woo!!!
-        """
 
         # Repartition the Hail Table if requested. In the following step, the Hail Table is exported to a sharded VCF with one shard per partition
         if args.partitions_for_vcf_export:
@@ -178,7 +176,7 @@ def main(args):
         # Create a list of all file names to later annotate in parallel
         file_list = [file_item["path"].split("/")[-1] for file_item in file_dict]
 
-        # Query-On-Batch produces duplicate shards (same number, same content, different name) for v3.1.2 Release Table
+        # Query-On-Batch sometimes produces duplicate shards (same number, same content, different name) for v3.1.2 Release Table
         # This block removes duplicates from the list of files to be annotated
         to_exclude = []
         for file_idx in range(len(file_list)): 
@@ -196,7 +194,6 @@ def main(args):
         seqrepo_path = '/tmp/local-seqrepo'
         if args.seqrepo_mount:
             seqrepo_path='/local-vrs-mount/seqrepo/2018-11-26/'
-        # seqrepo_obj = batch_vrs.read_input(seqrepo_path)
 
         for vcf_name in file_list:
 
@@ -253,36 +250,38 @@ def main(args):
         logger.info(f"Annotated Hail Table checkpointed to: gs://{working_bucket}/vrs-temp/outputs/annotated-checkpoint-VRS-{prefix}.ht")
 
     if args.annotate_original:
+        check_resource_existence(
+             input_step_resources={
+                "--run-vrs": [f"gs://gnomad-vrs-io-finals/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"],
+            },
+             output_step_resources={
+                "--annotate-original": [output_paths_dict[version]],
+            },
+            overwrite=args.overwrite,
+        )
         # NOTE: how to generalize this when we're not working on v3.1.2?
         # Output final Hail Tables with VRS annotations
-        # 04-17 UPDATE: does adding the vrs_struct work how we'd expect ? 
-        if args.run_vrs:
-            pass # ht_annotated has already been defined
-        else:
-            ht_annotated = hl.read_table(f"gs://{working_bucket}/vrs-temp/outputs/annotated-checkpoint-VRS-{prefix}.ht")
+ht_annotated = hl.read_table(f"gs://gnomad-vrs-io-finals/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht")
 
+        vrs_struct = hl.struct(
+                    VRS_Allele=ht_annotated[ht_original.key].VRS_Allele,
+                    VRS_Start=ht_annotated[ht_original.key].VRS_Start,
+                    VRS_End=ht_annotated[ht_original.key].VRS_End,
+                    VRS_Alt=ht_annotated[ht_original.key].VRS_Alt,
+                )
+            
         if "3.1.2" in version:
             # NOTE: could performance be improved?
             logger.info("Adding VRS IDs to original Table")
             ht_final = ht_original.annotate(
                 info=ht_original.info.annotate(
-                    vrs = hl.struct(
-                        VRS_Allele=ht_annotated[ht_original.locus, ht_original.alleles].VRS_Allele,
-                        VRS_Start=ht_annotated[ht_original.locus, ht_original.alleles].VRS_Start,
-                        VRS_End=ht_annotated[ht_original.locus, ht_original.alleles].VRS_End,
-                        VRS_Alt=ht_annotated[ht_original.locus, ht_original.alleles].VRS_Alt,
-                    )
+                    vrs = vrs_struct
                 )
             )
         else:
             logger.info("Constructing a test Table")
             ht_final = ht_original.annotate(
-                vrs = hl.struct(
-                    VRS_Allele=ht_annotated[ht_original.locus, ht_original.alleles].VRS_Allele,
-                    VRS_Start=ht_annotated[ht_original.locus, ht_original.alleles].VRS_Start,
-                    VRS_End=ht_annotated[ht_original.locus, ht_original.alleles].VRS_End,
-                    VRS_Alt=ht_annotated[ht_original.locus, ht_original.alleles].VRS_Alt,
-                )
+                vrs = vrs_struct
             )
 
         logger.info(f"Outputting final table at: {output_paths_dict[version]}")
@@ -359,7 +358,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--seqrepo-mount",
-        help="Bucket to mount and read from using Hail Batch's CloudFuse: PLEAS note this DOES have performance implications",
+        help="Bucket to mount and read from using Hail Batch's CloudFuse: PLEASE note this DOES have performance implications.",
         type=str,
         default=None
     )
@@ -370,12 +369,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--run-vrs",
-        help="Pass argument to run VRS Annotation on dataset of choice, but not to add back",
+        help="Pass argument to run VRS Annotation on dataset of choice.",
         action="store_true"
     )
     parser.add_argument(
         "--annotate-original",
-        help="Pass argument to add VRS Annotations back to original dataset",
+        help="Pass argument to add VRS Annotations back to original dataset.",
         action="store_true"
     )
     parser.add_argument(
