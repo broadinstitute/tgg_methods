@@ -81,7 +81,7 @@ def main(args):
 
     # Example schema
     logger.info("Example VRS schema for 2 variants:")
-    ht_example = hl.read_table("gs://gnomad-vrs-io-finals/ht-inputs/two-snps.ht")
+    ht_example = hl.read_table("gs://gnomad-vrs-io-finals/ht-inputs/two-snps-schema.ht")
     ht_example.show()
 
     working_bucket = args.working_bucket
@@ -100,21 +100,11 @@ def main(args):
 
     output_paths_dict = {
         "v3.1.2": v3_vrs_annotations.path,
-        "test_v3.1.2": f"gs://{working_bucket}/ht-outputs/{prefix}-Full-ht-release-output.ht",
+        "test_v3.1.2": f"gs://gnomad-vrs-io-finals/ht-outputs/{prefix}-Full-ht-release-output.ht",
         "test_v3_1k": f"gs://{working_bucket}/ht-outputs/{prefix}-Full-ht-1k-output.ht",
         "test_v3_10k": f"gs://{working_bucket}/ht-outputs/{prefix}-Full-ht-10k-output.ht",
         "test_v3_100k": f"gs://{working_bucket}/ht-outputs/{prefix}-Full-ht-100k-output.ht",
     }
-
-    check_resource_existence(
-        output_step_resources={
-            "vrs_annotation_batch.py": [
-                f"gs://{working_bucket}/outputs/annotated-checkpoint-VRS-{prefix}.ht",
-                output_paths_dict[version],
-            ]
-        },
-        overwrite=args.overwrite,
-    )
 
     # Create backend and batch for coming annotation batch jobs
     backend = hb.ServiceBackend(
@@ -134,11 +124,11 @@ def main(args):
         ht_original = ht_original.annotate_globals(vrs_downsample=args.downsample)
 
     if args.run_vrs:
-        # Check that we can write to the location where the VRS Annotated HT will go
+        # Check that we can write to the location where the checkpoint for the VRS Annotated HT will go
         check_resource_existence(
             output_step_resources={
                 "--run-vrs": [
-                    f"gs://gnomad-vrs-io-finals/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
+                    f"gs://{working_bucket}/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
                 ],
             },
             overwrite=args.overwrite,
@@ -266,19 +256,17 @@ def main(args):
         d1 = init_job_with_gcloud(
             batch=delete_temps,
             name=f"del_files",
-            image = args.image, # really need to consider replacing this with something more lightweight
+            image=args.image,
             mount=working_bucket,
         )
-        # NOTE: Can we just do this is like an OS or SYS command? 
         d1.command(f"gsutil -m -q rm -r gs://{working_bucket}/vrs-temp/")
         delete_temps.run()
 
     if args.annotate_original:
         check_resource_existence(
             input_step_resources={
-                # NOTE: what is the --run-vrs flag doing here? I'm not exactly sure 
                 "--run-vrs": [
-                    f"gs://gnomad-vrs-io-finals/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
+                    f"gs://{working_bucket}/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
                 ],
             },
             output_step_resources={
@@ -286,10 +274,9 @@ def main(args):
             },
             overwrite=args.overwrite,
         )
-        # NOTE: how to generalize this when we're not working on v3.1.2?
         # Output final Hail Tables with VRS annotations
         ht_annotated = hl.read_table(
-            f"gs://gnomad-vrs-io-finals/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
+            f"gs://{working_bucket}/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
         )
 
         if "3.1.2" in version:
@@ -303,10 +290,6 @@ def main(args):
             ht_final.write(output_paths_dict[version], overwrite=args.overwrite)
 
         else:
-            # NOTE: the original output for non-release tables was just the VRS Annotations anyways
-            # Any need to include anything else , or is this okay ?
-            # Could we consider only doing the --annotate-original flag if the original is the release table?
-            # Could be a useful tweak
             logger.info(
                 "For test datasets, final output is identical to the checkpointed annotated HT"
             )
@@ -327,12 +310,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--working-bucket",
-        help="Name of GCP Bucket to mount for access.",
+        help="Name of GCP Bucket to output intermediate files (sharded VCFs and checkpointed HTs) to. Final outputs always go in gs://gnomad-vrs-io-finals/ht-outputs/ .",
         default="gnomad-vrs-io-finals",
         type=str,
     )
     parser.add_argument(
-        "--version", help="Version of HT to read in", default="test_v3_1k", type=str
+        "--version", help="Version of HT to read in. ", default="test_v3_1k", type=str
     )
     parser.add_argument(
         "--partitions-for-vcf-export",
