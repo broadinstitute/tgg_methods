@@ -69,7 +69,7 @@ def init_job_with_gcloud(
 
 def main(args):
 
-    # Initialize Hail w/ Query-On-Batch , setting Global Seed if user decides to downsample
+    # Initialize Hail w/ Query-On-Batch , setting global seed if user decides to downsample
     hl.init(
         backend="batch",
         gcs_requester_pays_configuration="gnomad-vrs",
@@ -123,18 +123,17 @@ def main(args):
 
     batch_vrs = hb.Batch(name="vrs-annotation", backend=backend)
 
-    # Read in Hail Table, partition, and export to sharded VCF within the folder to be mounted
+    # Read in Hail Table, partition, and export to sharded VCF
     ht_original = hl.read_table(input_paths_dict[version])
 
     # Option to downsample for testing, if you want to annotate part of a Hail Table but not all of it
-    # For this, is important that we have set the Hail Rand Seed!
+    # For this, is important that we have set the Hail random seed!
     if args.downsample < 1.00:
         logger.info("Downsampling Table...")
         ht_original = ht_original.sample(args.downsample)
         ht_original = ht_original.annotate_globals(vrs_downsample=args.downsample)
 
     if args.run_vrs:
-
         # Check that we can write to the location where the VRS Annotated HT will go
         check_resource_existence(
             output_step_resources={
@@ -170,7 +169,7 @@ def main(args):
         )
 
         logger.info(
-            f"Gathered list of files in gs://{working_bucket}/vrs-temp/shards/shard-{version}.vcf.bgz using Hail's Hadoop method"
+            f"Gathering list of files in gs://{working_bucket}/vrs-temp/shards/shard-{version}.vcf.bgz using Hail's Hadoop method"
         )
 
         # Create a list of all shards of VCF
@@ -181,7 +180,7 @@ def main(args):
         # Create a list of all file names to later annotate in parallel
         file_list = [file_item["path"].split("/")[-1] for file_item in file_dict]
 
-        # Query-On-Batch sometimes produces duplicate shards (same number, same content, different name) for v3.1.2 Release Table
+        # Query-On-Batch sometimes produces duplicate shards (same number, same content, different name) for v3.1.2 release Table
         # This block removes duplicates from the list of files to be annotated
         to_exclude = []
         for file_idx in range(len(file_list)):
@@ -194,14 +193,12 @@ def main(args):
         logger.info(f"Number of duplicates to be excluded: {len(to_exclude)}")
 
         logger.info("File list created... getting ready to start Batch Jobs")
-
         # Define SeqRepo path to be read in, outside of the loop, to avoid reading it in for each job
         seqrepo_path = "/tmp/local-seqrepo"
         if args.seqrepo_mount:
             seqrepo_path = "/local-vrs-mount/seqrepo/2018-11-26/"
 
         for vcf_name in file_list:
-
             # Setting up jobs
             new_job = init_job_with_gcloud(
                 batch=batch_vrs,
@@ -219,7 +216,7 @@ def main(args):
             vcf_input = f"gs://{working_bucket}/vrs-temp/shards/shard-{version}.vcf.bgz/{vcf_name}"
             vcf_output = f'/temp-vcf-annotated/annotated-{vcf_name.split(".")[0]}.vcf'
 
-            # Perform VRS annotation on vcf_input and store output in /temp-vcf-annotated
+            # Perform VRS annotation on vcf_input and store output in /vrs-temp
             new_job.command("mkdir /temp-vcf-annotated/")
             new_job.command(
                 f"python3 {vrs_script_path} --vcf_in {batch_vrs.read_input(vcf_input)} --vcf_out {vcf_output} --seqrepo_root_dir {seqrepo_path} --vrs_attributes"
@@ -234,7 +231,7 @@ def main(args):
         batch_vrs.run()
 
         logger.info(
-            "Batch Jobs executed, preparing to read in sharded VCF from prior step"
+            "Batch jobs executed, preparing to read in sharded VCF from prior step"
         )
 
         # Import all annotated shards
@@ -252,7 +249,6 @@ def main(args):
         )
 
         ht_annotated = ht_annotated.annotate(vrs=vrs_struct)
-
         ht_annotated = ht_annotated.select(ht_annotated.vrs)
 
         # Checkpoint (write) resulting annotated table
@@ -312,11 +308,10 @@ def main(args):
             # Could we consider only doing the --annotate-original flag if the original is the release table?
             # Could be a useful tweak
             logger.info(
-                "For test datasets, final output is identical to the Checkpointed Annotated HT"
+                "For test datasets, final output is identical to the checkpointed annotated HT"
             )
             logger.info(f"Outputting final table at: {output_paths_dict[version]}")
-            ht_final = ht_annotated
-            ht_final.write(output_paths_dict[version], overwrite=args.overwrite)
+            ht_annotated.write(output_paths_dict[version], overwrite=args.overwrite)
 
 
 if __name__ == "__main__":
@@ -377,7 +372,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--seqrepo-mount",
-        help="Bucket to mount and read from using Hail Batch's CloudFuse: PLEASE note this DOES have performance implications.",
+        help="Bucket to mount and read from using Hail Batch's CloudFuse for access to seqrepo: PLEASE note this DOES have performance implications.",
         type=str,
         default=None,
     )
@@ -388,12 +383,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--run-vrs",
-        help="Pass argument to run VRS Annotation on dataset of choice.",
+        help="Pass argument to run VRS annotation on dataset of choice.",
         action="store_true",
     )
     parser.add_argument(
         "--annotate-original",
-        help="Pass argument to add VRS Annotations back to original dataset.",
+        help="Pass argument to add VRS annotations back to original dataset.",
         action="store_true",
     )
     parser.add_argument(
