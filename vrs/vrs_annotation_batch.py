@@ -124,11 +124,11 @@ def main(args):
         ht_original = ht_original.annotate_globals(vrs_downsample=args.downsample)
 
     if args.run_vrs:
-        # Check that we can write to the location where the checkpoint for the VRS Annotated HT will go
+        # Check resource existence
         check_resource_existence(
             output_step_resources={
                 "--run-vrs": [
-                    f"gs://{working_bucket}/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
+                    f"gs://gnomad-vrs-io-finals/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
                 ],
             },
             overwrite=args.overwrite,
@@ -243,11 +243,11 @@ def main(args):
 
         # Checkpoint (write) resulting annotated table
         ht_annotated = ht_annotated.checkpoint(
-            f"gs://{working_bucket}/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht",
+            f"gs://gnomad-vrs-io-finals/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht",
             overwrite=args.overwrite,
         )
         logger.info(
-            f"Annotated Hail Table checkpointed to: gs://{working_bucket}/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
+            f"Annotated Hail Table checkpointed to: gs://gnomad-vrs-io-finals/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
         )
 
         # Deleting temporary files to keep clutter down, note that this does not include the annotated HT
@@ -266,7 +266,7 @@ def main(args):
         check_resource_existence(
             input_step_resources={
                 "--run-vrs": [
-                    f"gs://{working_bucket}/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
+                    f"gs://gnomad-vrs-io-finals/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
                 ],
             },
             output_step_resources={
@@ -276,7 +276,7 @@ def main(args):
         )
         # Output final Hail Tables with VRS annotations
         ht_annotated = hl.read_table(
-            f"gs://{working_bucket}/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
+            f"gs://gnomad-vrs-io-finals/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
         )
 
         if "3.1.2" in version:
@@ -310,7 +310,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--working-bucket",
-        help="Name of GCP Bucket to output intermediate files (sharded VCFs and checkpointed HTs) to. Final outputs always go in gs://gnomad-vrs-io-finals/ht-outputs/ .",
+        help="Name of GCP Bucket to output intermediate files (sharded VCFs and checkpointed HTs) to. Final outputs for test versions go to working bucket, but final outputs ran on the release HT always go in gs://gnomad-vrs-io-finals/ht-outputs/ .",
         default="gnomad-vrs-io-finals",
         type=str,
     )
