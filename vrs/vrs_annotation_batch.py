@@ -221,7 +221,7 @@ def main(args):
         batch_vrs.run()
 
         logger.info(
-            "Batch jobs executed, preparing to read in sharded VCF from prior step. Preparing list of files first using Hail's Hadoop_ls method."
+            "Batch jobs executed, preparing to read in sharded VCF from prior step. Preparing list of files first using Hail's hadoop_ls method."
         )
 
         annotated_file_dict = hl.utils.hadoop_ls(
