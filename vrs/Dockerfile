@@ -3,7 +3,7 @@
 
 FROM 'google/cloud-sdk:slim'
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get -y update && apt-get install -y --no-install-recommends \
     apt-utils \
     docker-compose \
     g++ \
@@ -71,7 +71,8 @@ RUN python3 -m pip install --upgrade pip
 
 # Install hail and other python libraries
 # Including packages needed for VRS annotation functionality
-ENV HAIL_VERSION="0.2.112"
+# Also include version for ga4gh.vrs-python to be most recent and supporting their new variant schema  
+ENV HAIL_VERSION="0.2.113" 
 RUN python3 --version
 RUN python3 -m pip install \
     wheel \
@@ -86,7 +87,7 @@ RUN python3 -m pip install \
     pybedtools \
     dill \
     psycopg2 \
-    ga4gh.vrs[extras]==0.7.8 \
+    ga4gh.vrs[extras]==0.8.1  \
     seqrepo \
     click
 
@@ -100,5 +101,7 @@ RUN export SPARK_HOME=$(find_spark_home.py) && \
         -e 's:spark\.hadoop\.google\.cloud\.auth\.service\.account\.enable.*:spark.hadoop.google.cloud.auth.service.account.enable true:' \
         -e 's:spark\.hadoop\.google\.cloud\.auth\.service\.account\.json\.keyfile.*:spark\.hadoop\.google\.cloud\.auth\.service\.account\.json\.keyfile /gsa-key/key.json:'
 
+# Copy in SeqRepo from local file structure
+COPY /usr/local/share/seqrepo/2018-11-26/ /tmp/local-seqrepo
 
 WORKDIR /home
