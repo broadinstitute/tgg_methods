@@ -1,6 +1,6 @@
 """
 This is a batch script which adds VRS IDs to a Hail Table by creating a sharded-VCF, running a vrs-annotation script on each shard, and annotating the merged results back onto the original Hail Table.
-To be run using Query-On-Batch (https://hail.is/docs/0.2/cloud/query_on_batch.html#:~:text=Hail%20Query%2Don%2DBatch%20uses,Team%20at%20our%20discussion%20forum.)
+Can be run on Spark or Query On Batch (https://hail.is/docs/0.2/cloud/query_on_batch.html#:~:text=Hail%20Query%2Don%2DBatch%20uses,Team%20at%20our%20discussion%20forum.)
 usage: python3 vrs_annotation_batch.py \
     --billing-project gnomad-vrs \
     --working-bucket gnomad-vrs-io-finals \
@@ -11,7 +11,10 @@ usage: python3 vrs_annotation_batch.py \
     --downsample 0.1 \
     --header-path gs://gnomad-vrs-io-finals/header-fix.txt \ 
     --run-vrs \
-    --annotate-original
+    --annotate-original 
+
+alt usage 05/01: run script with --run-vrs flag in Query On Batch,
+then with --annotate-original in Spark via a dataproc submit job 
 """
 
 import argparse
@@ -69,7 +72,7 @@ def init_job_with_gcloud(
 
 def main(args):
 
-    # Initialize Hail w/ Query-On-Batch , setting global seed if user decides to downsample
+    # Initialize Hail w/chosen mode (spark or batch for QoB), setting global seed for if user decides to downsample
     hl.init(
         backend=args.backend_mode,
         tmp_dir=args.tmp_dir_hail,
@@ -107,13 +110,6 @@ def main(args):
         "test_v3_100k": f"gs://{working_bucket}/ht-outputs/{prefix}-Full-ht-100k-output.ht",
     }
 
-    # Create backend and batch for coming annotation batch jobs
-    backend = hb.ServiceBackend(
-        billing_project=args.billing_project, bucket=working_bucket
-    )
-
-    batch_vrs = hb.Batch(name="vrs-annotation", backend=backend)
-
     # Read in Hail Table, partition, and export to sharded VCF
     ht_original = hl.read_table(input_paths_dict[version])
 
@@ -125,6 +121,19 @@ def main(args):
         ht_original = ht_original.annotate_globals(vrs_downsample=args.downsample)
 
     if args.run_vrs:
+
+        if args.backend_mode == "spark":
+            raise ValueError(
+                'Annotation step --run-vrs can only be run with "batch" setting for backend-mode'
+            )
+
+        # Create backend and batch for coming annotation batch jobs
+        backend = hb.ServiceBackend(
+            billing_project=args.billing_project, bucket=working_bucket
+        )
+
+        batch_vrs = hb.Batch(name="vrs-annotation", backend=backend)
+
         # Check resource existence
         check_resource_existence(
             output_step_resources={
@@ -218,7 +227,7 @@ def main(args):
                 f"gsutil cp {vcf_output} gs://{working_bucket}/vrs-temp/annotated-shards/annotated-{version}.vcf/"
             )
 
-        # Execute all jobs in Batch
+        # Execute all jobs in the batch_vrs Batch
         batch_vrs.run()
 
         logger.info(
@@ -268,7 +277,7 @@ def main(args):
             batch=delete_temps,
             name=f"del_files",
             image=args.image,
-            mount=working_bucket,
+            mount=args.seqrepo_mount,
         )
         d1.command(f"gsutil -m -q rm -r gs://{working_bucket}/vrs-temp/")
         delete_temps.run()
@@ -393,16 +402,16 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--backend-mode",
-        help="Mode in which to run Hail - either Spark or Batch (for QoB).",
-        choices=['Spark','Batch'],
+        help="Mode in which to run Hail - either Spark or Batch (for QoB)",
+        choices=["spark", "batch"],
         type=str,
-        default='Batch'
+        default="Batch",
     )
     parser.add_argument(
         "--tmp-dir-hail",
         help="Directory for temporary files to set when initializing Hail.",
         default=None,
-        type=str
+        type=str,
     )
 
     args = parser.parse_args()
