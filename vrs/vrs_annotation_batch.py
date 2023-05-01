@@ -71,7 +71,8 @@ def main(args):
 
     # Initialize Hail w/ Query-On-Batch , setting global seed if user decides to downsample
     hl.init(
-        backend="batch",
+        backend=args.backend_mode,
+        tmp_dir=args.tmp_dir_spark,
         gcs_requester_pays_configuration="gnomad-vrs",
         default_reference="GRCh38",
         global_seed=args.hail_rand_seed,
@@ -389,6 +390,19 @@ if __name__ == "__main__":
         help="Random seed for hail. Default is 5.",
         default=5,
         type=int,
+    )
+    parser.add_argument(
+        "--backend-mode",
+        help="Mode in which to run Hail - either Spark or Batch (for QoB)",
+        choices=['Spark','Batch'],
+        type=str,
+        default='Batch'
+    )
+    parser.add_argument(
+        "--tmp-dir-hail",
+        help="Directory for temporary files to set when initializing Hail.",
+        default=None,
+        type=str
     )
 
     args = parser.parse_args()
