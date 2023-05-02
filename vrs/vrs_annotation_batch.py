@@ -1,6 +1,6 @@
 """
 This is a batch script which adds VRS IDs to a Hail Table by creating a sharded-VCF, running a vrs-annotation script on each shard, and annotating the merged results back onto the original Hail Table.
-Can be run on Spark or Query On Batch (https://hail.is/docs/0.2/cloud/query_on_batch.html#:~:text=Hail%20Query%2Don%2DBatch%20uses,Team%20at%20our%20discussion%20forum.)
+The vrs-annotation script that generates the VRS IDs should be run with Query On Batch. These VRS annotations can be added back to the original Table with either Query On Batch or Spark.(https://hail.is/docs/0.2/cloud/query_on_batch.html#:~:text=Hail%20Query%2Don%2DBatch%20uses,Team%20at%20our%20discussion%20forum.)
 usage: python3 vrs_annotation_batch.py \
     --billing-project gnomad-vrs \
     --working-bucket gnomad-vrs-io-finals \
@@ -402,10 +402,10 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--backend-mode",
-        help="Mode in which to run Hail - either Spark or Batch (for QoB)",
+        help="Mode in which to run Hail - either 'spark' or 'batch' (for QoB)",
         choices=["spark", "batch"],
         type=str,
-        default="Batch",
+        default="batch",
     )
     parser.add_argument(
         "--tmp-dir-hail",
