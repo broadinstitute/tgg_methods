@@ -276,7 +276,6 @@ def main(args):
             batch=delete_temps,
             name=f"del_files",
             image=args.image,
-            mount=args.seqrepo_mount,
         )
         d1.command(f"gsutil -m -q rm -r gs://{working_bucket}/vrs-temp/")
         delete_temps.run()
