@@ -30,7 +30,7 @@ def main(args):
         )
     )
 
-    ht_reformat = ht.annotate(
+    ht = ht.annotate(
         info=ht.info.annotate(
             vrs=ht.info.vrs.annotate(
                 VRS_Allele_IDs=ht.info.vrs.VRS_Allele_IDs.split(","),
@@ -41,17 +41,17 @@ def main(args):
         )
     )
 
-    ht_reformat.info.vrs.show()
+    ht.info.vrs.show()
 
     # Code to add global annotation for which VRS Version (not GitHub Branch Number) is used
 
-    ht = ht.annotate_globals(VRS_Version="v1.3")
+    ht = ht.annotate_globals(vrs_version="v1.3")
 
     # Outputting updated table with path appended to include and state the update
 
     ht_output_path = args.export_ht
     print("Outputting to: ", ht_output_path)
-    ht_reformat.write(ht_output_path, overwrite=True)
+    ht.write(ht_output_path, overwrite=True)
 
 
 if __name__ == "__main__":
