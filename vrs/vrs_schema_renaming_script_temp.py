@@ -34,17 +34,19 @@ def main(args):
         info=ht.info.annotate(
             vrs=ht.info.vrs.annotate(
                 VRS_Allele_IDs=ht.info.vrs.VRS_Allele_IDs.split(","),
-                VRS_Starts=ht.info.vrs.VRS_Starts.split(',').map(lambda x: hl.int(x)),
-                VRS_Ends=ht.info.vrs.VRS_Ends.split(',').map(lambda x: hl.int(x)),
+                VRS_Starts=ht.info.vrs.VRS_Starts.split(",").map(lambda x: hl.int(x)),
+                VRS_Ends=ht.info.vrs.VRS_Ends.split(",").map(lambda x: hl.int(x)),
                 VRS_States=ht.info.vrs.VRS_States.split(","),
             )
         )
     )
 
     ht_reformat.info.vrs.show()
-     # Code to add global annotation for which VRS Version (not GitHub Branch Number) is used
 
-     ht = ht.annotate_globals(VRS_Version='v1.3')
+    # Code to add global annotation for which VRS Version (not GitHub Branch Number) is used
+
+    ht = ht.annotate_globals(VRS_Version="v1.3")
+
     # Outputting updated table with path appended to include and state the update
 
     ht_output_path = args.export_ht
