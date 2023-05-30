@@ -26,6 +26,7 @@ import sys
 import hail as hl
 import hailtop.batch as hb
 from gnomad.resources.grch38.gnomad import public_release
+from gnomad.utils.reference_genome import get_reference_genome
 from gnomad_qc.resource_utils import check_resource_existence
 from gnomad_qc.v3.resources.annotations import vrs_annotations as v3_vrs_annotations
 from tgg.batch.batch_utils import init_job
@@ -99,6 +100,7 @@ def main(args):
         "test_v3_1k": "gs://gnomad-vrs-io-finals/ht-inputs/ht-1k-TESTING-ONLY-repartition-10p.ht",
         "test_v3_10k": "gs://gnomad-vrs-io-finals/ht-inputs/ht-10k-TESTING-ONLY-repartition-50p.ht",
         "test_v3_100k": "gs://gnomad-vrs-io-finals/ht-inputs/ht-100k-TESTING-ONLY-repartition-100p.ht",
+        "test_grch37":"gs://gnomad-vrs-io-finals/working-notebooks/scratch/downsample_and_downpart_with_ychr_grch37.ht"
     }
 
     output_paths_dict = {
@@ -107,10 +109,12 @@ def main(args):
         "test_v3_1k": f"gs://{working_bucket}/ht-outputs/{prefix}-Full-ht-1k-output.ht",
         "test_v3_10k": f"gs://{working_bucket}/ht-outputs/{prefix}-Full-ht-10k-output.ht",
         "test_v3_100k": f"gs://{working_bucket}/ht-outputs/{prefix}-Full-ht-100k-output.ht",
+        "test_grch37":"'gs://gnomad-vrs-io-finals/working-notebooks/scratch/grch37_final_output.ht"
     }
 
     # Read in Hail Table, partition, and export to sharded VCF
     ht_original = hl.read_table(input_paths_dict[version])
+    assembly = get_reference_genome(ht_original.locus).name
 
     # Option to downsample for testing, if you want to annotate part of a Hail Table but not all of it
     # For this, is important that we have set the Hail random seed!
@@ -218,7 +222,7 @@ def main(args):
             # Perform VRS annotation on vcf_input and store output in /vrs-temp
             new_job.command("mkdir /temp-vcf-annotated/")
             new_job.command(
-                f"python3 {vrs_script_path} --vcf_in {batch_vrs.read_input(vcf_input)} --vcf_out {vcf_output} --seqrepo_root_dir {seqrepo_path} --vrs_attributes"
+                f"python3 {vrs_script_path} --vcf_in {batch_vrs.read_input(vcf_input)} --vcf_out {vcf_output} --seqrepo_root_dir {seqrepo_path} --assembly {assembly} --vrs_attributes"
             )
 
             # Copy annotated shard to its appropriate place in Google Bucket
@@ -246,15 +250,15 @@ def main(args):
         # Import all annotated shards
         ht_annotated = hl.import_vcf(
             annotated_file_list,
-            reference_genome="GRCh38",
+            reference_genome=assembly,
         ).make_table()
         logger.info("Annotated table constructed")
 
         vrs_struct = hl.struct(
-            VRS_Allele=ht_annotated.info.VRS_Allele,
-            VRS_Start=ht_annotated.info.VRS_Start,
-            VRS_End=ht_annotated.info.VRS_End,
-            VRS_Alt=ht_annotated.info.VRS_Alt,
+            VRS_Allele_IDs=ht_annotated.info.VRS_Allele.split(","),
+            VRS_Starts=ht_annotated.info.VRS_Start.split(",").map(lambda x: hl.int(x)),
+            VRS_Ends=ht_annotated.info.VRS_End.split(",").map(lambda x: hl.int(x)),
+            VRS_States=ht_annotated.info.VRS_Alt.split(","),
         )
 
         ht_annotated = ht_annotated.annotate(vrs=vrs_struct)
