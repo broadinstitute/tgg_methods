@@ -4,7 +4,7 @@ The vrs-annotation script that generates the VRS IDs needs to be run with Query 
 usage: python3 vrs_annotation_batch.py \
     --billing-project gnomad-vrs \
     --working-bucket gnomad-vrs-io-finals \
-    --image us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten_vrs_041823_updates \
+    --image us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten_0615_vrs0_8_4 \
     --version test_v3_1k \
     --prefix marten_prelim_test \
     --partitions-for-vcf-export 20 \
@@ -55,7 +55,7 @@ def init_job_with_gcloud(
     Parameters passed through to init_job:
         :param batch: Batch object.
         :param name: Job label which will show up in the Batch web UI.
-        :param image: Docker image name (eg. "us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten-vrs-image-v2-031323").
+        :param image: Docker image name (eg. "us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten_0615_vrs0_8_4").
         :param cpu: Number of CPUs (between 0.25 to 16).
         :param memory: Amount of RAM in Gb (eg. 3.75).
         :param disk_size: Amount of disk in Gb (eg. 50).
@@ -255,10 +255,10 @@ def main(args):
         logger.info("Annotated table constructed")
 
         vrs_struct = hl.struct(
-            VRS_Allele_IDs=ht_annotated.info.VRS_Allele.split(","),
-            VRS_Starts=ht_annotated.info.VRS_Start.split(",").map(lambda x: hl.int(x)),
-            VRS_Ends=ht_annotated.info.VRS_End.split(",").map(lambda x: hl.int(x)),
-            VRS_States=ht_annotated.info.VRS_Alt.split(","),
+            VRS_Allele_IDs=ht_annotated.info.VRS_Allele_IDs.split(","),
+            VRS_Starts=ht_annotated.info.VRS_Starts.split(",").map(lambda x: hl.int(x)),
+            VRS_Ends=ht_annotated.info.VRS_Ends.split(",").map(lambda x: hl.int(x)),
+            VRS_States=ht_annotated.info.VRS_States.split(","),
         )
 
         ht_annotated = ht_annotated.annotate(vrs=vrs_struct)
@@ -326,7 +326,7 @@ if __name__ == "__main__":
     parser.add_argument("--billing-project", help="Project to bill.", type=str)
     parser.add_argument(
         "--image",
-        default="us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten_vrs_041823_updates",
+        default="us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten_0615_vrs0_8_4",
         help="Image in a GCP Artifact Registry repository.",
         type=str,
     )
