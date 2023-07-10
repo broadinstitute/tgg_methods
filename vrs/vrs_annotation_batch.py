@@ -25,6 +25,7 @@ import sys
 
 import hail as hl
 import hailtop.batch as hb
+import ga4gh.vrs
 from gnomad.resources.grch38.gnomad import public_release
 from gnomad.utils.reference_genome import get_reference_genome
 from gnomad_qc.resource_utils import check_resource_existence
@@ -71,7 +72,6 @@ def init_job_with_gcloud(
 
 
 def main(args):
-
     # Initialize Hail w/chosen mode (spark or batch for QoB), setting global seed for if user decides to downsample
     hl.init(
         backend=args.backend_mode,
@@ -100,7 +100,7 @@ def main(args):
         "test_v3_1k": "gs://gnomad-vrs-io-finals/ht-inputs/ht-1k-TESTING-ONLY-repartition-10p.ht",
         "test_v3_10k": "gs://gnomad-vrs-io-finals/ht-inputs/ht-10k-TESTING-ONLY-repartition-50p.ht",
         "test_v3_100k": "gs://gnomad-vrs-io-finals/ht-inputs/ht-100k-TESTING-ONLY-repartition-100p.ht",
-        "test_grch37":"gs://gnomad-vrs-io-finals/working-notebooks/scratch/downsample_and_downpart_with_ychr_grch37.ht"
+        "test_grch37": "gs://gnomad-vrs-io-finals/working-notebooks/scratch/downsample_and_downpart_with_ychr_grch37.ht",
     }
 
     output_paths_dict = {
@@ -109,7 +109,7 @@ def main(args):
         "test_v3_1k": f"gs://{working_bucket}/ht-outputs/{prefix}-Full-ht-1k-output.ht",
         "test_v3_10k": f"gs://{working_bucket}/ht-outputs/{prefix}-Full-ht-10k-output.ht",
         "test_v3_100k": f"gs://{working_bucket}/ht-outputs/{prefix}-Full-ht-100k-output.ht",
-        "test_grch37":"'gs://gnomad-vrs-io-finals/working-notebooks/scratch/grch37_final_output.ht"
+        "test_grch37": "'gs://gnomad-vrs-io-finals/working-notebooks/scratch/grch37_final_output.ht",
     }
 
     # Read in Hail Table, partition, and export to sharded VCF
@@ -124,7 +124,6 @@ def main(args):
         ht_original = ht_original.annotate_globals(vrs_downsample=args.downsample)
 
     if args.run_vrs:
-
         if args.backend_mode == "spark":
             raise ValueError(
                 'Annotation step --run-vrs can only be run with "batch" setting for backend-mode'
@@ -301,6 +300,11 @@ def main(args):
             f"gs://gnomad-vrs-io-finals/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
         )
 
+        # Annotate final Hail Table with GA4GH version
+        ht_annotated = ht_annotated.annotate_globals(
+            ga4gh_vrs_version=ga4gh.vrs.__version__
+        )
+
         if "3.1.2" in version:
             logger.info("Adding VRS IDs to original Table")
             ht_final = ht_original.annotate(
@@ -320,7 +324,6 @@ def main(args):
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--billing-project", help="Project to bill.", type=str)
