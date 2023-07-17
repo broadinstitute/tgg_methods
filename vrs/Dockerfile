@@ -72,7 +72,9 @@ RUN python3 -m pip install --upgrade pip
 # Install hail and other python libraries
 # Including packages needed for VRS annotation functionality
 # Also include version for ga4gh.vrs-python to be most recent and supporting their new variant schema  
+# Please update the constant VRS_VERSION in vrs_annotation_batch.py accordingly when GA4GH_VRS_VERSION is changed
 ENV HAIL_VERSION="0.2.113" 
+ENV GA4GH_VRS_VERSION="0.8.4"
 RUN python3 --version
 RUN python3 -m pip install \
     wheel \
@@ -87,7 +89,7 @@ RUN python3 -m pip install \
     pybedtools \
     dill \
     psycopg2 \
-    ga4gh.vrs[extras]==0.8.1  \
+    ga4gh.vrs[extras]==${GA4GH_VRS_VERSION}  \
     seqrepo \
     click
 

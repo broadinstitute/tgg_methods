@@ -4,7 +4,7 @@ The vrs-annotation script that generates the VRS IDs needs to be run with Query 
 usage: python3 vrs_annotation_batch.py \
     --billing-project gnomad-vrs \
     --working-bucket gnomad-vrs-io-finals \
-    --image us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten_vrs_041823_updates \
+    --image us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten_0615_vrs0_8_4 \
     --version test_v3_1k \
     --prefix marten_prelim_test \
     --partitions-for-vcf-export 20 \
@@ -26,6 +26,7 @@ import sys
 import hail as hl
 import hailtop.batch as hb
 from gnomad.resources.grch38.gnomad import public_release
+from gnomad.utils.reference_genome import get_reference_genome
 from gnomad_qc.resource_utils import check_resource_existence
 from gnomad_qc.v3.resources.annotations import vrs_annotations as v3_vrs_annotations
 from tgg.batch.batch_utils import init_job
@@ -54,7 +55,7 @@ def init_job_with_gcloud(
     Parameters passed through to init_job:
         :param batch: Batch object.
         :param name: Job label which will show up in the Batch web UI.
-        :param image: Docker image name (eg. "us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten-vrs-image-v2-031323").
+        :param image: Docker image name (eg. "us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten_0615_vrs0_8_4").
         :param cpu: Number of CPUs (between 0.25 to 16).
         :param memory: Amount of RAM in Gb (eg. 3.75).
         :param disk_size: Amount of disk in Gb (eg. 50).
@@ -70,7 +71,6 @@ def init_job_with_gcloud(
 
 
 def main(args):
-
     # Initialize Hail w/chosen mode (spark or batch for QoB), setting global seed for if user decides to downsample
     hl.init(
         backend=args.backend_mode,
@@ -99,6 +99,7 @@ def main(args):
         "test_v3_1k": "gs://gnomad-vrs-io-finals/ht-inputs/ht-1k-TESTING-ONLY-repartition-10p.ht",
         "test_v3_10k": "gs://gnomad-vrs-io-finals/ht-inputs/ht-10k-TESTING-ONLY-repartition-50p.ht",
         "test_v3_100k": "gs://gnomad-vrs-io-finals/ht-inputs/ht-100k-TESTING-ONLY-repartition-100p.ht",
+        "test_grch37": "gs://gnomad-vrs-io-finals/working-notebooks/scratch/downsample_and_downpart_with_ychr_grch37.ht",
     }
 
     output_paths_dict = {
@@ -107,10 +108,12 @@ def main(args):
         "test_v3_1k": f"gs://{working_bucket}/ht-outputs/{prefix}-Full-ht-1k-output.ht",
         "test_v3_10k": f"gs://{working_bucket}/ht-outputs/{prefix}-Full-ht-10k-output.ht",
         "test_v3_100k": f"gs://{working_bucket}/ht-outputs/{prefix}-Full-ht-100k-output.ht",
+        "test_grch37": "'gs://gnomad-vrs-io-finals/working-notebooks/scratch/grch37_final_output.ht",
     }
 
     # Read in Hail Table, partition, and export to sharded VCF
     ht_original = hl.read_table(input_paths_dict[version])
+    assembly = get_reference_genome(ht_original.locus).name
 
     # Option to downsample for testing, if you want to annotate part of a Hail Table but not all of it
     # For this, is important that we have set the Hail random seed!
@@ -120,7 +123,6 @@ def main(args):
         ht_original = ht_original.annotate_globals(vrs_downsample=args.downsample)
 
     if args.run_vrs:
-
         if args.backend_mode == "spark":
             raise ValueError(
                 'Annotation step --run-vrs can only be run with "batch" setting for backend-mode'
@@ -218,7 +220,7 @@ def main(args):
             # Perform VRS annotation on vcf_input and store output in /vrs-temp
             new_job.command("mkdir /temp-vcf-annotated/")
             new_job.command(
-                f"python3 {vrs_script_path} --vcf_in {batch_vrs.read_input(vcf_input)} --vcf_out {vcf_output} --seqrepo_root_dir {seqrepo_path} --vrs_attributes"
+                f"python3 {vrs_script_path} --vcf_in {batch_vrs.read_input(vcf_input)} --vcf_out {vcf_output} --seqrepo_root_dir {seqrepo_path} --assembly {assembly} --vrs_attributes"
             )
 
             # Copy annotated shard to its appropriate place in Google Bucket
@@ -246,15 +248,15 @@ def main(args):
         # Import all annotated shards
         ht_annotated = hl.import_vcf(
             annotated_file_list,
-            reference_genome="GRCh38",
+            reference_genome=assembly,
         ).make_table()
         logger.info("Annotated table constructed")
 
         vrs_struct = hl.struct(
-            VRS_Allele=ht_annotated.info.VRS_Allele,
-            VRS_Start=ht_annotated.info.VRS_Start,
-            VRS_End=ht_annotated.info.VRS_End,
-            VRS_Alt=ht_annotated.info.VRS_Alt,
+            VRS_Allele_IDs=ht_annotated.info.VRS_Allele_IDs.split(","),
+            VRS_Starts=ht_annotated.info.VRS_Starts.split(",").map(lambda x: hl.int(x)),
+            VRS_Ends=ht_annotated.info.VRS_Ends.split(",").map(lambda x: hl.int(x)),
+            VRS_States=ht_annotated.info.VRS_States.split(","),
         )
 
         ht_annotated = ht_annotated.annotate(vrs=vrs_struct)
@@ -281,6 +283,10 @@ def main(args):
         delete_temps.run()
 
     if args.annotate_original:
+        # Define the version of ga4gh.vrs code this was run on, as present in the Dockerfile
+        # Please change this when the Dockerfile is updated
+        VRS_VERSION = "0.8.4"
+
         check_resource_existence(
             input_step_resources={
                 "--run-vrs": [
@@ -297,13 +303,16 @@ def main(args):
             f"gs://gnomad-vrs-io-finals/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
         )
 
-        if "3.1.2" in version:
-            logger.info("Adding VRS IDs to original Table")
+        if "test_" not in version:
+            logger.info("Adding VRS IDs and GA4GH.VRS version to original Table")
             ht_final = ht_original.annotate(
                 info=ht_original.info.annotate(
                     vrs=ht_annotated[ht_original.locus, ht_original.alleles].vrs
                 )
             )
+
+            ht_final = ht_final.annotate_globals(vrs_version=VRS_VERSION)
+
             logger.info(f"Outputting final table at: {output_paths_dict[version]}")
             ht_final.write(output_paths_dict[version], overwrite=args.overwrite)
 
@@ -316,13 +325,12 @@ def main(args):
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--billing-project", help="Project to bill.", type=str)
     parser.add_argument(
         "--image",
-        default="us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten_vrs_041823_updates",
+        default="us-central1-docker.pkg.dev/broad-mpg-gnomad/ga4gh-vrs/marten_0615_vrs0_8_4",
         help="Image in a GCP Artifact Registry repository.",
         type=str,
     )
