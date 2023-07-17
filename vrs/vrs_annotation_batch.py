@@ -25,7 +25,6 @@ import sys
 
 import hail as hl
 import hailtop.batch as hb
-import ga4gh.vrs
 from gnomad.resources.grch38.gnomad import public_release
 from gnomad.utils.reference_genome import get_reference_genome
 from gnomad_qc.resource_utils import check_resource_existence
@@ -284,6 +283,10 @@ def main(args):
         delete_temps.run()
 
     if args.annotate_original:
+        # Define the version of ga4gh.vrs code this was run on, as present in the Dockerfile
+        # Please change this when the Dockerfile is updated
+        VRS_VERSION = "0.8.4"
+
         check_resource_existence(
             input_step_resources={
                 "--run-vrs": [
@@ -300,18 +303,16 @@ def main(args):
             f"gs://gnomad-vrs-io-finals/ht-outputs/annotated-checkpoint-VRS-{prefix}.ht"
         )
 
-        # Annotate final Hail Table with GA4GH version
-        ht_annotated = ht_annotated.annotate_globals(
-            ga4gh_vrs_version=ga4gh.vrs.__version__
-        )
-
-        if "3.1.2" in version:
-            logger.info("Adding VRS IDs to original Table")
+        if "test_" not in version:
+            logger.info("Adding VRS IDs and GA4GH.VRS version to original Table")
             ht_final = ht_original.annotate(
                 info=ht_original.info.annotate(
                     vrs=ht_annotated[ht_original.locus, ht_original.alleles].vrs
                 )
             )
+
+            ht_final = ht_final.annotate_globals(vrs_version=VRS_VERSION)
+
             logger.info(f"Outputting final table at: {output_paths_dict[version]}")
             ht_final.write(output_paths_dict[version], overwrite=args.overwrite)
 
