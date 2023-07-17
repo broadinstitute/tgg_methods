@@ -39,6 +39,10 @@ logging.basicConfig(
 logger = logging.getLogger("annotate_vrs_ids")
 logger.setLevel(logging.INFO)
 
+# Define the version of ga4gh.vrs code this was run on, as present in the Dockerfile
+# Please change this when the Dockerfile is updated
+VRS_VERSION = "0.8.4"
+
 
 def init_job_with_gcloud(
     batch,
@@ -283,9 +287,6 @@ def main(args):
         delete_temps.run()
 
     if args.annotate_original:
-        # Define the version of ga4gh.vrs code this was run on, as present in the Dockerfile
-        # Please change this when the Dockerfile is updated
-        VRS_VERSION = "0.8.4"
 
         check_resource_existence(
             input_step_resources={
