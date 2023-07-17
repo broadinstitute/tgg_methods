@@ -287,7 +287,6 @@ def main(args):
         delete_temps.run()
 
     if args.annotate_original:
-
         check_resource_existence(
             input_step_resources={
                 "--run-vrs": [
