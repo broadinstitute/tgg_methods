@@ -44,17 +44,18 @@ from gnomad_qc.v3.resources.basics import get_gnomad_v3_vds
 from gnomad_qc.v3.resources.meta import meta
 from gnomad_qc.v3.resources.release import release_sites
 
-NUM_OF_GNOMAD_SAMPLES = 76156
 """
 The number of samples included in gnomAD v3.
 See: https://gnomad.broadinstitute.org/help/what-populations-are-represented-in-the-
 gnomad-data
 """
+NUM_OF_GNOMAD_SAMPLES = 76156
 
-NUM_OF_PARTITIONS = 10000
 """
 The number of partitions to read checkpointed files.
 """
+NUM_OF_PARTITIONS = 10000
+
 HGDP_SUBSET_MT = (
     "gs://gcp-public-data--gnomad/release/3.1.2/mt/genomes/"
     "gnomad.genomes.v3.1.2.hgdp_1kg_subset_sparse.mt"
