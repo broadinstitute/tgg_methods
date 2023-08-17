@@ -1,5 +1,5 @@
-"""This script checks the number of common (AF > 1%) variants per gnomAD sample. The
-gnomAD samples used are not present in the pangenome reference samples.
+"""
+This script checks the number of common (AF > 1%) variants per gnomAD sample.
 
 Eimear Kenny (one of the co-chairs of the Human Pangenome Reference Consortium; HPRC)
 requested that we compute the number of common variants in v3 samples that aren't
@@ -30,18 +30,28 @@ labs. Ideally, we would like to run the analysis on individual-level data in gno
 and I’m reaching out to see if you would be willing to collaborate with us on this
 analysis. The script is a very simple variant count algorithm, so hopefully very
 straightforward to run. We are currently writing up this work, and of course,
-anybody who participates in this analysis would be included as a co-author."""
+anybody who participates in this analysis would be included as a co-author.
+"""
 
-import hail as hl
-from gnomad_qc.v3.resources.basics import get_gnomad_v3_vds
-from gnomad_qc.v3.resources.release import release_sites
-from gnomad_qc.v3.resources.meta import meta
-import hailtop.fs as hfs
+
 import argparse
 import logging
 
+import hail as hl
+import hailtop.fs as hfs
+from gnomad.resources.resource_utils import DataException
+from gnomad_qc.v3.resources.basics import get_gnomad_v3_vds
+from gnomad_qc.v3.resources.meta import meta
+from gnomad_qc.v3.resources.release import release_sites
+
 NUM_OF_GNOMAD_SAMPLES = 76156
-OUTPUT_FILENAME = "pangemoe_assessment_stats.txt"
+NUM_OF_PARTITIONS = 10000
+HGDP_SUBSET_MT = "gs://gcp-public-data--gnomad/release/3.1.2/mt/genomes/" \
+                 "gnomad.genomes.v3.1.2.hgdp_1kg_subset_sparse.mt"
+OUTPUT_FILENAME = "pangenome_assessment_stats.txt"
+PANGENOME_CHECKPOINT_FILEPATH = "gs://gnomad-tmp-4day/pangenome/pangenome_checkpoint.ht"
+NOT_IN_PANGENOME_CHECKPOINT_FILEPATH = \
+    "gs://gnomad-tmp-4day/pangenome/not_in_pangenome_checkpoint.ht"
 
 logging.basicConfig(
     format="%(asctime)s (%(name)s %(lineno)s): %(message)s",
@@ -52,111 +62,125 @@ logger.setLevel(logging.INFO)
 
 
 def get_pangenome_ids(
-        id_path: str,
-) -> hl.expr.expressions.typed_expressions.SetExpression:
+    id_path: str,
+) -> hl.expr.SetExpression:
     """
-    Generate a Hail set of sample IDs in the pangenome.
+    Import Hail set of pangenome sample IDs from specified file path.
 
-    :param str id_path: Cloud path to read in the .txt file containing pangenome sample
-    IDs.
-    :return: A set of sample IDs as hl.expr.expressions.typed_expressions.SetExpression.
+    :param str id_path: Path to text file (stored in Google bucket) containing
+    pangenome sample IDs.
+    :return: SetExpression of pangenome sample IDs.
     """
     ids = []
-    with hfs.open(id_path, 'r') as file:
+    with hfs.open(id_path, "r") as file:
         for line in file:
-            sid = line.split(' ')[1].strip()
+            sid = line.split(" ")[1].strip()
             ids.append(sid)
-    ids = hl.set(ids)
-    return ids
+    return hl.set(ids)
 
 
 def write_output(
-        dat: hl.utils.struct.Struct,
-        file_dir: str,
-        filename: str,
+    var_stats: hl.expr.StructExpression,
+    file_dir: str,
+    filename: str,
 ) -> None:
     """
     Write the output Struct containing computed stats to a .txt file.
 
-    :param hl.utils.struct.Struct dat: Data containing computed stats.
-    :param str file_dir: Output directory.
+    :param hl.expr.StructExpression var_stats: Data containing computed variant stats.
+    :param str file_dir: Path to a Google bucket for output file.
     :param str filename: Output filename.
     :return: None; function writes output to the output path.
     """
-    with hfs.open(f'{file_dir}/{filename}', 'w') as f:
-        print(dat, file=f)
+    with hfs.open(f"{file_dir}/{filename}", "w") as f:
+        print(var_stats, file=f)
 
 
 def compute_stats(
-        pangenome_ids_path: str,
-        output_dir: str,
+    pangenome_ids_path: str,
+    output_dir: str,
 ) -> None:
     """
-    Compute the stats of variants per gnomAD sample for gnomAD samples not in the
-    pangenome.
+    Count the number of common (AF > 1%) variants per gnomAD sample.
 
-    :param str pangenome_ids_path: Cloud path for the text file containing pangenome
-    sample IDs.
-    :param str output_dir: Cloud path to output the result file.
-    :return: None; function writes .txt file to output directory.
+    Function produces counts only for gnomAD samples that are not part of the pangenome.
+
+    :param str pangenome_ids_path: Path to text file (stored in Google bucket)
+    containing pangenome sample IDs.
+    :param str output_dir: Path to a Google bucket for output file.
+    :return: None; function writes a text file to output bucket.
     """
-    # Get variant site frequency table.
+    # Get public gnomAD release sites HT.
     gnomad_freq_ht = release_sites().ht()
-
-    # Get gnomAD v3 data in split form.
-    mt = get_gnomad_v3_vds().variant_data
-    mt = hl.experimental.sparse_split_multi(mt)
 
     # Get gnomAD v3 metadata and filter to released samples.
     meta_ht = meta.ht()
     meta_ht = meta_ht.filter(meta_ht.release == True)
 
+    # Read gnomAD v3 raw data and split multi-allelics.
+    mt = get_gnomad_v3_vds().variant_data
+    mt = hl.experimental.sparse_split_multi(mt)
+
     # Use the filtered metadata to filter gnomAD v3 data.
     mt = mt.filter_cols(hl.is_defined(meta_ht[mt.col_key]))
     num_of_v3_samples = mt.count_cols()
-    logger.info("The number of samples in gnomAD v3 is: ", num_of_v3_samples)
+    logger.info("The number of samples in gnomAD v3 is: %i", num_of_v3_samples)
+    if num_of_v3_samples != NUM_OF_GNOMAD_SAMPLES:
+        raise DataException(
+            f"Found {num_of_v3_samples} samples in VDS but was expecting"
+            f" {NUM_OF_GNOMAD_SAMPLES} samples; please double check!"
+        )
 
     # Get pangenome sample IDs.
     pangenome_ids = get_pangenome_ids(pangenome_ids_path)
-    logger.info("The total number of samples in pangenome is ", hl.eval(hl.len(
+    logger.info("The total number of samples in pangenome is %i", hl.eval(hl.len(
         pangenome_ids)))
 
-    # Filter mt to two new matrix tables: one containing gnomAD samples not in
-    # pangenome, and one containing samples in pangenome.
+    # Filter mt to contain gnomAD samples not in pangenome.
     mt = mt.annotate_cols(s_in_pangenome=pangenome_ids.contains(mt.s))
-    pg_mt = mt.filter_cols(mt.s_in_pangenome)
     mt = mt.filter_cols(~mt.s_in_pangenome)
+
+    # Annotate mt with allele frequencies and filter out rare SNVs (AF lower than 1%).
+    # Also filter out sites where no samples had a variant call.
+    mt = mt.annotate_rows(freq=gnomad_freq_ht[mt.row_key].freq)
+    mt = mt.filter_rows(mt.freq.AF[0] > 0.01)
+    mt = mt.filter_rows(hl.agg.any(mt.GT.is_non_ref()))
+
+    # Read the HGDP+1KG subset matrix table and split multi-allelics.
+    pg_mt = hl.read_matrix_table(HGDP_SUBSET_MT)
+    pg_mt = hl.experimental.sparse_split_multi(pg_mt)
+
+    # Filter pg_mt to only contain gnomAD samples in pangenome.
+    # Also filter out sites where no samples had a variant call.
+    pg_mt = pg_mt.filter_cols(hl.is_defined(meta_ht[pg_mt.col_key]))
+    pg_mt = pg_mt.filter_cols(pangenome_ids.contains(pg_mt.s))
+    pg_mt = pg_mt.filter_rows(hl.agg.any(pg_mt.GT.is_non_ref()))
 
     # Log the numbers of gnomAD samples not in and in the pangenome reference.
     num_in_samples = pg_mt.count_cols()
     num_out_of_samples = mt.count_cols()
-    logger.info("The number of samples both in pangenome and gnomAD v3 is: ",
+    logger.info("The number of samples both in pangenome and gnomAD v3 is: %i",
                 num_in_samples)
-    logger.info("The number of samples only in gnomAD v3 is: ", num_out_of_samples)
+    logger.info("The number of samples only in gnomAD v3 is: %i", num_out_of_samples)
 
-    # Annotate the gnomAD matrix table with allele frequencies and
-    # filter out SNVs with minor allele frequencies lower than 1% and
-    # filter out samples with no variant call.
-    mt = mt.annotate_rows(freq=gnomad_freq_ht[mt.row_key].freq)
-    mt = mt.filter_rows(mt.freq.AF[1] > 0.01)  # ##why AF[1]?
-    mt = mt.filter_rows(hl.agg.any(mt.GT.is_non_ref()))
+    # Checkpoint the rows from the pangenome MT if no checkpoint file exists.
+    pg_ht = pg_mt.rows()
+    if not hfs.is_file(PANGENOME_CHECKPOINT_FILEPATH):
+        pg_ht.checkpoint(PANGENOME_CHECKPOINT_FILEPATH)
 
-    # Filter out samples with no variant call in the pangenome matrix table.
-    pg_mt = pg_mt.filter_rows(hl.agg.any(pg_mt.GT.is_non_ref()))
-
-    # Checkpoint the rows from the pangenome MT.
-    # Issue: the job is still quite large with 115376 partitions.
-    # logger.info("The number of variants for the pangenome data set is ",
-    # pg_mt.count_rows())
+    logger.info("The number of variants for the pangenome data set is %i",
+                pg_ht.count())
 
     # Annotate the gnomAD matrix table to count the number of minor alleles carried
     # by each participant.
     mt = mt.annotate_cols(total_var_per_sample=hl.agg.count_where(mt.GT.is_non_ref()))
 
     # Filter out SNVs that are in the reference group.
-    mt_filtered = mt.anti_join_rows(pg_mt.rows())
+    pg_ht = hl.read_table(PANGENOME_CHECKPOINT_FILEPATH,
+                          _n_partitions=NUM_OF_PARTITIONS)
+    mt_filtered = mt.anti_join_rows(pg_ht)
 
-    # Annotate the SNV filtred gnomAD dataset to count the number of minor alleles
+    # Annotate the SNV filtered gnomAD dataset to count the number of minor alleles
     # carried by each participant.
     mt_filtered = mt_filtered.annotate_cols(
         n_var_per_sample=hl.agg.count_where(mt_filtered.GT.is_non_ref())
@@ -167,26 +191,35 @@ def compute_stats(
     ht = mt_filtered.cols()
     ht = ht.annotate(population=meta_ht[ht.key].population_inference.pop)
 
+    # Checkpoint the ht to perform the computation if no checkpoint file exists.
+    if not hfs.is_file(NOT_IN_PANGENOME_CHECKPOINT_FILEPATH):
+        ht.checkpoint(NOT_IN_PANGENOME_CHECKPOINT_FILEPATH)
+
+    # Read the computed ht.
+    ht = hl.read_table(NOT_IN_PANGENOME_CHECKPOINT_FILEPATH,
+                       _n_partitions=NUM_OF_PARTITIONS)
+
     # Annotate with fraction of variants carried by each sample that is not included
     # in the pangenome.
-    ht = ht.annotate(fraction=ht.n_var_per_sample / ht.total_var_per_sample)
+    ht = ht.annotate(fraction_not_in_pangenome=ht.n_var_per_sample /
+                                               ht.total_var_per_sample)
 
     # Compute aggregation stats.
     res = ht.aggregate(
-            hl.struct(
-                ght=hl.agg.group_by(ht.population,
-                                    hl.agg.mean(ht.n_var_per_sample)),
-                ghtt=hl.agg.group_by(ht.population,
-                                     hl.agg.mean(ht.tn_var_per_sample)),
-                ghtf=hl.agg.group_by(ht.population,
-                                     hl.agg.mean(ht.fraction)),
-                ght_stats=hl.agg.group_by(ht.population,
-                                          hl.agg.stats(ht.n_var_per_sample)),
-                ghtt_stats=hl.agg.group_by(ht.population,
-                                           hl.agg.stats(ht.fraction)),
-                ghtf_stats=hl.agg.group_by(ht.population,
-                                           hl.agg.stats(ht.tn_var_per_sample))
-            )
+        hl.struct(
+            mean_var_per_sample_excluding_pangenome_var=
+            hl.agg.group_by(ht.population, hl.agg.mean(ht.n_var_per_sample)),
+            mean_var_per_sample=
+            hl.agg.group_by(ht.population, hl.agg.mean(ht.tn_var_per_sample)),
+            mean_fraction_of_var_not_in_pangenome=
+            hl.agg.group_by(ht.population, hl.agg.mean(ht.fraction_not_in_pangenome)),
+            stats_var_per_sample_excluding_pangenome_var=
+            hl.agg.group_by(ht.population, hl.agg.stats(ht.n_var_per_sample)),
+            stats_var_per_sample=
+            hl.agg.group_by(ht.population, hl.agg.stats(ht.tn_var_per_sample)),
+            stats_fraction_of_var_not_in_pangenome=
+            hl.agg.group_by(ht.population, hl.agg.stats(ht.fraction_not_in_pangenome))
+        )
     )
 
     # Write to output.
@@ -212,7 +245,7 @@ def main(args):
         hl.copy_log(logging_path)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Parse input arguments.
     parser = argparse.ArgumentParser(
         "This script calculates the number of common variants per gnomAD sample "
