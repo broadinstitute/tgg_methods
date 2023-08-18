@@ -44,6 +44,7 @@ from gnomad_qc.v3.resources.basics import get_gnomad_v3_vds
 from gnomad_qc.v3.resources.meta import meta
 from gnomad_qc.v3.resources.release import release_sites
 
+
 """
 The number of samples included in gnomAD v3.
 See: https://gnomad.broadinstitute.org/help/what-populations-are-represented-in-the-
