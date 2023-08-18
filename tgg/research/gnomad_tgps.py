@@ -44,11 +44,7 @@ from gnomad_qc.v3.resources.basics import get_gnomad_v3_vds
 from gnomad_qc.v3.resources.meta import meta
 from gnomad_qc.v3.resources.release import release_sites
 
-<<<<<<< HEAD
 NUM_OF_GNOMAD_SAMPLES = 76156
-=======
-
->>>>>>> 44baac990d603c9f2079a7edf53eb957aab033b1
 """
 The number of samples included in gnomAD v3.
 
