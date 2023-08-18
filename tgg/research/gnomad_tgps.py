@@ -44,27 +44,58 @@ from gnomad_qc.v3.resources.basics import get_gnomad_v3_vds
 from gnomad_qc.v3.resources.meta import meta
 from gnomad_qc.v3.resources.release import release_sites
 
+NUM_OF_GNOMAD_SAMPLES = 76156
 """
 The number of samples included in gnomAD v3.
+
 See: https://gnomad.broadinstitute.org/help/what-populations-are-represented-in-the-
 gnomad-data
 """
-NUM_OF_GNOMAD_SAMPLES = 76156
 
-"""
-The number of partitions to read checkpointed files.
-"""
 NUM_OF_PARTITIONS = 10000
+"""
+The number of partitions desired for temporary files.
+
+Will repartition these temporary files on read.
+"""
+
+PANGENOME_ID_DELIM = " "
+"""
+The delimiter used in the provided text file containing pangenome IDs.
+"""
+
+PAGENOME_ID_COL_NUM = 1
+"""
+The column number of the sample IDs in the provided text file containing pangenome IDs.
+"""
 
 HGDP_SUBSET_MT = (
     "gs://gcp-public-data--gnomad/release/3.1.2/mt/genomes/"
     "gnomad.genomes.v3.1.2.hgdp_1kg_subset_sparse.mt"
 )
+"""
+Public Hail matrix table for the HGDP+1KG subset data.
+"""
+
 OUTPUT_FILENAME = "pangenome_assessment_stats.txt"
+"""
+The filename of the output file, which contains the computed statistics for the 
+number of common variants per gnomAD sample.
+"""
+
 PANGENOME_CHECKPOINT_FILEPATH = "gs://gnomad-tmp-4day/pangenome/pangenome_checkpoint.ht"
+"""
+The Google Cloud path to the pangenome Hail table, 
+which contains common SNVs that are present in the pangenome. 
+"""
+
 NOT_IN_PANGENOME_CHECKPOINT_FILEPATH = (
     "gs://gnomad-tmp-4day/pangenome/not_in_pangenome_checkpoint.ht"
 )
+"""
+The Google Cloud path to the gnomAD matrix table, 
+which contains common variants excluding SNVs present in the pangenome. 
+"""
 
 logging.basicConfig(
     format="%(asctime)s (%(name)s %(lineno)s): %(message)s",
@@ -87,7 +118,7 @@ def get_pangenome_ids(
     ids = []
     with hfs.open(id_path, "r") as file:
         for line in file:
-            sid = line.split(" ")[1].strip()
+            sid = line.split(PANGENOME_ID_DELIM)[PAGENOME_ID_COL_NUM].strip()
             ids.append(sid)
     return hl.set(ids)
 
@@ -112,6 +143,7 @@ def write_output(
 def compute_stats(
     pangenome_ids_path: str,
     output_dir: str,
+    overwrite: bool,
 ) -> None:
     """
     Count the number of common (AF > 1%) variants per gnomAD sample.
@@ -121,17 +153,23 @@ def compute_stats(
     :param pangenome_ids_path: Path to text file (stored in Google bucket)
     containing pangenome sample IDs.
     :param output_dir: Path to a Google bucket for output file.
+    :param overwrite: A Boolean variable to specify whether or not to overwrite an
+    existing file.
     :return: None; function writes a text file to output bucket.
     """
     # Get public gnomAD release sites HT.
-    gnomad_freq_ht = release_sites().ht()
+    gnomad_freq_ht = release_sites().ht().select_globals().select("freq")
 
-    # Get gnomAD v3 metadata and filter to released samples.
-    meta_ht = meta.ht()
+    # Get gnomAD v3 metadata and select two entry fields:
+    # release: indicates if the samples are released;
+    # population_inference: genetic ancestry information.
+    meta_ht = meta.ht().select_globals().select("release", "population_inference")
     meta_ht = meta_ht.filter(meta_ht.release == True)
 
-    # Read gnomAD v3 raw data and split multi-allelics.
+    # Read gnomAD v3 variant dataset, select genotype entry field, and split
+    # multi-allelics.
     mt = get_gnomad_v3_vds().variant_data
+    mt = mt.select_rows().select_entries("LA", "LGT")
     mt = hl.experimental.sparse_split_multi(mt)
 
     # Use the filtered metadata to filter gnomAD v3 data.
@@ -147,24 +185,27 @@ def compute_stats(
     # Get pangenome sample IDs.
     pangenome_ids = get_pangenome_ids(pangenome_ids_path)
     logger.info(
-        "The total number of samples in pangenome is %i", hl.eval(hl.len(pangenome_ids))
+        "The total number of provided pangenome IDs is %i",
+        hl.eval(hl.len(pangenome_ids)),
     )
 
     # Filter mt to contain gnomAD samples not in pangenome.
     mt = mt.filter_cols(~pangenome_ids.contains(mt.s))
 
     # Annotate mt with allele frequencies and filter out rare SNVs (AF lower than 1%).
-    # Also filter out sites where no samples had a variant call.
+    # Also filter out sites where no gnomAD samples had a variant call.
     mt = mt.annotate_rows(freq=gnomad_freq_ht[mt.row_key].freq)
     mt = mt.filter_rows(mt.freq.AF[0] > 0.01)
     mt = mt.filter_rows(hl.agg.any(mt.GT.is_non_ref()))
 
-    # Read the HGDP+1KG subset matrix table and split multi-allelics.
+    # Read the HGDP+1KG subset matrix table, select the genotype entry field, split
+    # multi-allelics, and select SNVs.
     pg_mt = hl.read_matrix_table(HGDP_SUBSET_MT)
+    pg_mt = pg_mt.select_rows().select_entries("LA", "LGT")
     pg_mt = hl.experimental.sparse_split_multi(pg_mt)
     pg_mt = pg_mt.filter_rows(hl.len(pg_mt.alleles) == 1)
 
-    # Filter out sites where no samples had a variant call.
+    # Filter out sites where no pangenome samples had a variant call.
     pg_mt = pg_mt.filter_cols(pangenome_ids.contains(pg_mt.s))
     pg_mt = pg_mt.filter_rows(hl.agg.any(pg_mt.GT.is_non_ref()))
 
@@ -178,14 +219,18 @@ def compute_stats(
 
     # Checkpoint the rows from the pangenome MT if no checkpoint file exists.
     pg_ht = pg_mt.rows()
-    if not hfs.is_file(PANGENOME_CHECKPOINT_FILEPATH):
-        pg_ht.checkpoint(PANGENOME_CHECKPOINT_FILEPATH)
+    pg_ht = pg_ht.naive_coalesce(NUM_OF_PARTITIONS)
+    pg_ht.checkpoint(
+        PANGENOME_CHECKPOINT_FILEPATH,
+        _read_if_exists=not overwrite,
+        overwrite=overwrite,
+    )
 
-    # Annotate the gnomAD matrix table to count the number of minor alleles carried
+    # Annotate the gnomAD matrix table to count the number of common variants carried
     # by each participant.
     mt = mt.annotate_cols(total_var_per_sample=hl.agg.count_where(mt.GT.is_non_ref()))
 
-    # Filter out SNVs that are in the reference group.
+    # Filter out SNVs that are in the pangenome.
     pg_ht = hl.read_table(
         PANGENOME_CHECKPOINT_FILEPATH, _n_partitions=NUM_OF_PARTITIONS
     )
@@ -194,28 +239,33 @@ def compute_stats(
     )
     mt_filtered = mt.anti_join_rows(pg_ht)
 
-    # Annotate the SNV filtered gnomAD dataset to count the number of minor alleles
+    # Annotate the SNV filtered gnomAD dataset to count the number of common variants
     # carried by each participant.
     mt_filtered = mt_filtered.annotate_cols(
         n_var_per_sample=hl.agg.count_where(mt_filtered.GT.is_non_ref())
     )
 
-    # Keep only the columns and annotate with population data, both continental and
-    # subcontinental ancestry.
+    # Keep only the columns and annotate with genetic ancestry group labels.
     ht = mt_filtered.cols()
-    ht = ht.annotate(population=meta_ht[ht.key].population_inference.pop)
+    ht = ht.annotate(genetic_ancestry=meta_ht[ht.key].population_inference.pop)
+    # ##? naive_coalesce does not seem to reduce the number of partitions here.
+    # The checkpoint still uses over 115,000 partitions.
+    ht = ht.naive_coalesce(NUM_OF_PARTITIONS)
 
     # Checkpoint the ht to perform the computation if no checkpoint file exists.
-    if not hfs.is_file(NOT_IN_PANGENOME_CHECKPOINT_FILEPATH):
-        ht.checkpoint(NOT_IN_PANGENOME_CHECKPOINT_FILEPATH)
+    ht.checkpoint(
+        NOT_IN_PANGENOME_CHECKPOINT_FILEPATH,
+        _read_if_exists=not overwrite,
+        overwrite=overwrite,
+    )
 
     # Read the computed ht.
     ht = hl.read_table(
         NOT_IN_PANGENOME_CHECKPOINT_FILEPATH, _n_partitions=NUM_OF_PARTITIONS
     )
 
-    # Annotate with fraction of variants carried by each sample that is not included
-    # in the pangenome.
+    # Annotate with fraction of common variants carried by each sample that is not
+    # included in the pangenome.
     ht = ht.annotate(
         fraction_not_in_pangenome=ht.n_var_per_sample / ht.total_var_per_sample
     )
@@ -224,22 +274,22 @@ def compute_stats(
     res = ht.aggregate(
         hl.struct(
             mean_var_per_sample_excluding_pangenome_var=hl.agg.group_by(
-                ht.population, hl.agg.mean(ht.n_var_per_sample)
+                ht.genetic_ancestry, hl.agg.mean(ht.n_var_per_sample)
             ),
             mean_var_per_sample=hl.agg.group_by(
-                ht.population, hl.agg.mean(ht.tn_var_per_sample)
+                ht.genetic_ancestry, hl.agg.mean(ht.tn_var_per_sample)
             ),
             mean_fraction_of_var_not_in_pangenome=hl.agg.group_by(
-                ht.population, hl.agg.mean(ht.fraction_not_in_pangenome)
+                ht.genetic_ancestry, hl.agg.mean(ht.fraction_not_in_pangenome)
             ),
             stats_var_per_sample_excluding_pangenome_var=hl.agg.group_by(
-                ht.population, hl.agg.stats(ht.n_var_per_sample)
+                ht.genetic_ancestry, hl.agg.stats(ht.n_var_per_sample)
             ),
             stats_var_per_sample=hl.agg.group_by(
-                ht.population, hl.agg.stats(ht.tn_var_per_sample)
+                ht.genetic_ancestry, hl.agg.stats(ht.tn_var_per_sample)
             ),
             stats_fraction_of_var_not_in_pangenome=hl.agg.group_by(
-                ht.population, hl.agg.stats(ht.fraction_not_in_pangenome)
+                ht.genetic_ancestry, hl.agg.stats(ht.fraction_not_in_pangenome)
             ),
         )
     )
@@ -262,7 +312,7 @@ def main(args):
             default_reference="GRCh38",
             backend="spark",
         )
-        compute_stats(args.pangenome_ids, args.out_dir)
+        compute_stats(args.pangenome_ids, args.out_dir, args.overwrite)
 
     finally:
         logger.info("Copying hail log to logging bucket...")
@@ -272,8 +322,8 @@ def main(args):
 if __name__ == "__main__":
     # Parse input arguments.
     parser = argparse.ArgumentParser(
-        "This script calculates the number of common variants per gnomAD sample "
-        "excluding pangenom samples."
+        "This script calculates the number of common variants not found in the "
+        "pangenome per gnomAD sample."
     )
     parser.add_argument(
         "--tmp-dir",
@@ -289,6 +339,14 @@ if __name__ == "__main__":
         "--out-dir",
         help="Output directory.",
         default="gs://gnomad-tmp-4day/pangenome",
+    )
+    parser.add_argument(
+        "--overwrite",
+        help="""
+            Overwrite existing output data.
+            Applies to all outputs except OE-annotated context table (created in `finalize`).
+            """,
+        action="store_true",
     )
     args = parser.parse_args()
 
