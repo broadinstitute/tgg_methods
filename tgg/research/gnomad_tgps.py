@@ -85,7 +85,7 @@ number of common variants per gnomAD sample.
 PANGENOME_CHECKPOINT_FILEPATH = "gs://gnomad-tmp-4day/pangenome/pangenome_checkpoint.ht"
 """
 The Google Cloud path to the pangenome Hail table, 
-which contains common SNVs that are present in the pangenome. 
+which contains common variants that are present in the pangenome. 
 """
 
 NOT_IN_PANGENOME_CHECKPOINT_FILEPATH = (
@@ -93,7 +93,7 @@ NOT_IN_PANGENOME_CHECKPOINT_FILEPATH = (
 )
 """
 The Google Cloud path to the gnomAD matrix table, 
-which contains common variants excluding SNVs present in the pangenome. 
+which contains common variants excluding common variants present in the pangenome. 
 """
 
 logging.basicConfig(
@@ -167,13 +167,13 @@ def compute_stats(
     # Get public gnomAD release sites HT.
     gnomad_freq_ht = release_sites().ht().select_globals().select("freq")
 
-    # Get gnomAD v3 metadata and select two entry fields:
+    # Get gnomAD v3 metadata and select two fields:
     # release: indicates if the samples are released;
     # population_inference: genetic ancestry information.
     meta_ht = meta.ht().select_globals().select("release", "population_inference")
     meta_ht = meta_ht.filter(meta_ht.release == True)
 
-    # Read gnomAD v3 variant dataset, select genotype entry field, and split
+    # Read gnomAD v3 variant dataset, select LA and LGT, and split
     # multi-allelics.
     mt = get_gnomad_v3_vds().variant_data
     mt = mt.select_rows().select_entries("LA", "LGT")
@@ -199,14 +199,15 @@ def compute_stats(
     # Filter mt to contain gnomAD samples not in pangenome.
     mt = mt.filter_cols(~pangenome_ids.contains(mt.s))
 
-    # Annotate mt with allele frequencies and filter out rare SNVs (AF lower than 1%).
+    # Annotate mt with allele frequencies and filter out rare variants (AF lower than
+    # 1%).
     # Also filter out sites where no gnomAD samples had a variant call.
     mt = mt.annotate_rows(freq=gnomad_freq_ht[mt.row_key].freq)
     mt = mt.filter_rows(mt.freq.AF[0] > 0.01)
     mt = mt.filter_rows(hl.agg.any(mt.GT.is_non_ref()))
 
     # Read the HGDP+1KG subset matrix table, select the genotype entry field, split
-    # multi-allelics, and filter out SNVs.
+    # multi-allelics, and filter out reference blocks.
     pg_mt = hl.read_matrix_table(HGDP_SUBSET_MT)
     pg_mt = pg_mt.select_rows().select_entries("LA", "LGT")
     pg_mt = hl.experimental.sparse_split_multi(pg_mt)
