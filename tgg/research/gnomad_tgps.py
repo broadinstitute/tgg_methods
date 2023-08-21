@@ -33,7 +33,6 @@ straightforward to run. We are currently writing up this work, and of course,
 anybody who participates in this analysis would be included as a co-author.
 """
 
-
 import argparse
 import logging
 
@@ -64,7 +63,7 @@ PANGENOME_ID_DELIM = " "
 The delimiter used in the provided text file containing pangenome IDs.
 """
 
-PAGENOME_ID_COL_NUM = 1
+PANGENOME_ID_COL_NUM = 1
 """
 The column number of the sample IDs in the provided text file containing pangenome IDs.
 """
@@ -107,18 +106,23 @@ logger.setLevel(logging.INFO)
 
 def get_pangenome_ids(
     id_path: str,
+    delim: str = PANGENOME_ID_DELIM,
+    col_num: int = PANGENOME_ID_COL_NUM,
 ) -> hl.expr.SetExpression:
     """
     Import Hail set of pangenome sample IDs from specified file path.
 
     :param id_path: Path to text file (stored in Google bucket) containing
     pangenome sample IDs.
+    :param delim: Delimiter used in the text file containing pangenome IDs.
+    :param col_num: Column number of the sample IDs in the text file containing
+    pangenome IDs.
     :return: SetExpression of pangenome sample IDs.
     """
     ids = []
     with hfs.open(id_path, "r") as file:
         for line in file:
-            sid = line.split(PANGENOME_ID_DELIM)[PAGENOME_ID_COL_NUM].strip()
+            sid = line.split(delim)[col_num].strip()
             ids.append(sid)
     return hl.set(ids)
 
@@ -154,8 +158,11 @@ def compute_stats(
     containing pangenome sample IDs.
     :param output_dir: Path to a Google bucket for output file.
     :param overwrite: A Boolean variable to specify whether or not to overwrite an
-    existing file.
-    :return: None; function writes a text file to output bucket.
+    existing file. If True, function will overwrite `PANGENOME_CHECKPOINT_FILEPATH`
+    and `NOT_IN_PANGENOME_CHECKPOINT_FILEPATH`. If False, function will attempt to
+    read from existing file paths.
+    :return: None; function writes a text file to output
+    bucket.
     """
     # Get public gnomAD release sites HT.
     gnomad_freq_ht = release_sites().ht().select_globals().select("freq")
@@ -199,11 +206,11 @@ def compute_stats(
     mt = mt.filter_rows(hl.agg.any(mt.GT.is_non_ref()))
 
     # Read the HGDP+1KG subset matrix table, select the genotype entry field, split
-    # multi-allelics, and select SNVs.
+    # multi-allelics, and filter out SNVs.
     pg_mt = hl.read_matrix_table(HGDP_SUBSET_MT)
     pg_mt = pg_mt.select_rows().select_entries("LA", "LGT")
     pg_mt = hl.experimental.sparse_split_multi(pg_mt)
-    pg_mt = pg_mt.filter_rows(hl.len(pg_mt.alleles) == 1)
+    pg_mt = pg_mt.filter_rows(hl.len(pg_mt.alleles) == 1, keep=False)
 
     # Filter out sites where no pangenome samples had a variant call.
     pg_mt = pg_mt.filter_cols(pangenome_ids.contains(pg_mt.s))
@@ -218,9 +225,10 @@ def compute_stats(
     logger.info("The number of samples only in gnomAD v3 is: %i", num_out_of_samples)
 
     # Checkpoint the rows from the pangenome MT if no checkpoint file exists.
+    # Also set the number of partitions for pg_ht.
     pg_ht = pg_mt.rows()
     pg_ht = pg_ht.naive_coalesce(NUM_OF_PARTITIONS)
-    pg_ht.checkpoint(
+    pg_ht = pg_ht.checkpoint(
         PANGENOME_CHECKPOINT_FILEPATH,
         _read_if_exists=not overwrite,
         overwrite=overwrite,
@@ -231,9 +239,6 @@ def compute_stats(
     mt = mt.annotate_cols(total_var_per_sample=hl.agg.count_where(mt.GT.is_non_ref()))
 
     # Filter out SNVs that are in the pangenome.
-    pg_ht = hl.read_table(
-        PANGENOME_CHECKPOINT_FILEPATH, _n_partitions=NUM_OF_PARTITIONS
-    )
     logger.info(
         "The number of variants for the pangenome data set is %i", pg_ht.count()
     )
@@ -248,20 +253,14 @@ def compute_stats(
     # Keep only the columns and annotate with genetic ancestry group labels.
     ht = mt_filtered.cols()
     ht = ht.annotate(genetic_ancestry=meta_ht[ht.key].population_inference.pop)
-    # ##? naive_coalesce does not seem to reduce the number of partitions here.
-    # The checkpoint still uses over 115,000 partitions.
+    # Reduce the number of partitions for ht.
     ht = ht.naive_coalesce(NUM_OF_PARTITIONS)
 
     # Checkpoint the ht to perform the computation if no checkpoint file exists.
-    ht.checkpoint(
+    ht = ht.checkpoint(
         NOT_IN_PANGENOME_CHECKPOINT_FILEPATH,
         _read_if_exists=not overwrite,
         overwrite=overwrite,
-    )
-
-    # Read the computed ht.
-    ht = hl.read_table(
-        NOT_IN_PANGENOME_CHECKPOINT_FILEPATH, _n_partitions=NUM_OF_PARTITIONS
     )
 
     # Annotate with fraction of common variants carried by each sample that is not
@@ -343,9 +342,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--overwrite",
         help="""
-            Overwrite existing output data.
-            Applies to all outputs except OE-annotated context table (created in `finalize`).
-            """,
+        Overwrite existing temporary data (applies to 
+        `PANGENOME_CHECKPOINT_FILEPATH` and 
+        `NOT_IN_PANGENOME_CHECKPOINT_FILEPATH`).
+        """,
         action="store_true",
     )
     args = parser.parse_args()
