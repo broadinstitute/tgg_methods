@@ -103,8 +103,8 @@ RUN apt-get update \
     libsqlite3-dev \
     libssl-dev \
     openssl \
-    python-smbus \
-    python3 python-pip 
+    python3-smbus \
+    python3 python3-pip 
 
 # Upgrade pip to latest version
 RUN python3 -m pip install --upgrade pip
@@ -136,7 +136,7 @@ RUN export SPARK_HOME=$(find_spark_home.py) && \
         -e 's:spark\.hadoop\.google\.cloud\.auth\.service\.account\.json\.keyfile.*:spark\.hadoop\.google\.cloud\.auth\.service\.account\.json\.keyfile /gsa-key/key.json:'
 
 # Install bedtools
-ENV BEDTOOLS_VERSION="2.29.0"
+ENV BEDTOOLS_VERSION="2.31.0"
 RUN wget https://github.com/arq5x/bedtools2/releases/download/v${BEDTOOLS_VERSION}/bedtools-${BEDTOOLS_VERSION}.tar.gz \
 	&& tar xzf bedtools-${BEDTOOLS_VERSION}.tar.gz \
 	&& rm bedtools-${BEDTOOLS_VERSION}.tar.gz \
