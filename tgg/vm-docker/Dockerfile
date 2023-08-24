@@ -110,7 +110,7 @@ RUN apt-get update \
 RUN python3 -m pip install --upgrade pip
 
 # Install hail and other python libraries
-ENV HAIL_VERSION="0.2.108"
+ENV HAIL_VERSION="0.2.120"
 RUN python3 --version
 RUN python3 -m pip install \
     wheel \
