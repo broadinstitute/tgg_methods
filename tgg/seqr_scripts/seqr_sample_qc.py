@@ -203,11 +203,6 @@ def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
     mt = filter_to_autosomes(mt)
     mt = hl.split_multi_hts(mt)
     mt = hl.sample_qc(mt)
-    mt = mt.annotate_cols(
-        sample_qc=mt.sample_qc.annotate(
-            f_inbreeding=hl.agg.inbreeding(mt.GT, mt.info.AF[0])
-        )
-    )
     mt = mt.annotate_cols(idx=mt.qc_pop + "_" + hl.str(mt.qc_platform))
 
     sample_qc = [
