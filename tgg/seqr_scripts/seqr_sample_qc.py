@@ -12,10 +12,8 @@ from gnomad.sample_qc.filtering import compute_stratified_metrics_filter
 from gnomad.utils.filtering import filter_to_autosomes
 from gnomad.sample_qc.pipeline import filter_rows_for_qc
 from gnomad.sample_qc.ancestry import pc_project, assign_population_pcs
-from gnomad.utils import slack
 
 from resources.resources_seqr_qc import (
-    mt_path,
     missing_metrics_path,
     rdg_gnomad_pop_pca_loadings_path,
     rdg_gnomad_rf_model_path,
@@ -23,9 +21,6 @@ from resources.resources_seqr_qc import (
     sample_qc_ht_path,
     sample_qc_tsv_path,
     seq_metrics_path,
-    val_coding_ht_path,
-    val_noncoding_ht_path,
-    VCFDataTypeError,
 )
 
 logging.basicConfig(
@@ -35,80 +30,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("seqr_sample_qc")
 logger.setLevel(logging.INFO)
-
-
-def validate_mt(mt: hl.MatrixTable, build: int, data_type: str, threshold=0.3):
-    """
-    Validate the mt by checking against a list of common coding and non-coding variants given its
-    genome version. This validates genome_version, variants, and the reported sample type.
-
-    :param mt: mt to validate
-    :param build: reference build
-    :param data_type: WGS or WES
-    :param threshold: Threshold percentage of variants matching validation tables
-    :return: True or Exception
-    """
-
-    def data_type_stats(mt, build, threshold):
-        """
-        Calculate stats for data type by checking against a list of common coding and non-coding variants.
-        If the match for each respective type is over the threshold, we return a match.
-
-        :param mt: Matrix Table to check
-        :param build: reference build
-        """
-        stats = {}
-        types_to_ht_path = {
-            "noncoding": val_noncoding_ht_path(build),
-            "coding": val_coding_ht_path(build),
-        }
-        for variant_type, ht_path in types_to_ht_path.items():
-            ht = hl.read_table(ht_path)
-            stats[variant_type] = ht_stats = {
-                "matched_count": mt.semi_join_rows(ht).count_rows(),
-                "total_count": ht.count(),
-            }
-
-            ht_stats["match"] = (
-                ht_stats["matched_count"] / ht_stats["total_count"]
-            ) >= threshold
-        return stats
-
-    data_type_stats = data_type_stats(mt, build, threshold)
-
-    for name, stat in data_type_stats.items():
-        logger.info(
-            "Table contains %i out of %i common %s variants.",
-            stat["matched_count"],
-            stat["total_count"],
-            name,
-        )
-
-    has_coding = data_type_stats["coding"]["match"]
-    has_noncoding = data_type_stats["noncoding"]["match"]
-
-    if not has_coding and not has_noncoding:
-        raise VCFDataTypeError(
-            f"Genome version validation error: dataset specified as GRCh{build} but doesn't contain "
-            f"the expected number of common GRCh{build} variants"
-        )
-    elif has_noncoding and not has_coding:
-        raise VCFDataTypeError(
-            "Sample type validation error: Dataset contains noncoding variants but is missing common coding "
-            f"variants for GRCh{build}. Please verify that the dataset contains coding variants."
-        )
-    elif has_coding and not has_noncoding:
-        if data_type != "WES":
-            raise VCFDataTypeError(
-                f"Sample type validation error: dataset sample-type is specified as {data_type} but appears to be "
-                "WES because it contains many common coding variants and lacks many non-coding variants"
-            )
-    elif has_noncoding and has_coding:
-        if data_type != "WGS":
-            raise VCFDataTypeError(
-                f"Sample type validation error: dataset sample-type is specified as {data_type} but appears to be "
-                "WGS because it contains many common non-coding variants"
-            )
 
 
 def apply_filter_flags_expr(
@@ -235,7 +156,7 @@ def run_platform_imputation(
     return plat_ht
 
 
-  def run_population_pca(mt: hl.MatrixTable, build: int, num_pcs=6) -> hl.Table:
+def run_population_pca(mt: hl.MatrixTable, build: int, num_pcs=6) -> hl.Table:
     """
     Projects samples onto pre-computed gnomAD and rare disease sample principal components using PCA loadings.  A
     random forest classifier assigns gnomAD and rare disease sample population labels
@@ -269,7 +190,7 @@ def run_platform_imputation(
     return pop_pca_ht
 
 
-  def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
+def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
     """
     Runs Hail's built in sample qc function on the MatrixTable. Splits the MatrixTable in order to calculate inbreeding
     coefficient and annotates the result back onto original MatrixTable. Applies flags by population and platform groups.
@@ -322,9 +243,10 @@ def run_platform_imputation(
 
 
 def main(args):
-
     hl.init(log="/seqr_sample_qc.log")
-    hl._set_flags(no_whole_stage_codegen="1") #Flag needed for hail 0.2.93, may be able to remove in future release.
+    hl._set_flags(
+        no_whole_stage_codegen="1"
+    )  # Flag needed for hail 0.2.93, may be able to remove in future release.
     logger.info("Beginning seqr sample QC pipeline...")
 
     data_type = args.data_type
@@ -333,28 +255,34 @@ def main(args):
     version = args.callset_version
     is_test = args.is_test
     overwrite = args.overwrite
+    vcf_path = args.vcf_path
+    mt_path = args.mt_path
+
+    if vcf_path and mt_path:
+        raise ValueError("Please specify either a vcf or a mt, not both.")
+
+    if not vcf_path and not mt_path:
+        raise ValueError("Please specify either a vcf or a mt.")
 
     logger.info("Importing callset...")
-    if not args.skip_write_mt:
+    if vcf_path:
         logger.info("Converting vcf to MatrixTable...")
         mt = hl.import_vcf(
             args.vcf_path,
             force_bgz=True,
             reference_genome=f"GRCh{build}",
             min_partitions=4,
-        ).write(
-            mt_path(build, data_type, data_source, version, is_test), overwrite=True
         )
-    mt = hl.read_matrix_table(mt_path(build, data_type, data_source, version, is_test))
+    if mt_path:
+        logger.info("Reading MatrixTable...")
+        mt = hl.read_matrix_table(mt_path)
+
     mt = mt.annotate_entries(
         GT=hl.case()
         .when(mt.GT.is_diploid(), hl.call(mt.GT[0], mt.GT[1], phased=False))
         .when(mt.GT.is_haploid(), hl.call(mt.GT[0], phased=False))
         .default(hl.missing(hl.tcall))
     )
-    if not args.skip_validate_mt:
-        logger.info("Validating data type...")
-        validate_mt(mt, build, data_type)
 
     if is_test:
         logger.info("Creating test mt...")
@@ -423,13 +351,14 @@ def main(args):
     ht.flatten().export(sample_qc_tsv_path(build, data_type, data_source, version))
 
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--vcf-path", help="Path to VCF", required=True,
+        "--vcf-path",
+        help="Path to VCF",
     )
+    parser.add_argument("--mt-path", help="Path to MatrixTable")
     parser.add_argument(
         "--data-type",
         help="Sequencing data type (WES or WGS)",
@@ -505,29 +434,9 @@ if __name__ == "__main__":
         default=6,
     )
     parser.add_argument(
-        "--skip-write-mt", help="Skip writing out qc mt", action="store_true"
-    )
-    parser.add_argument(
-        "--skip-validate-mt",
-        help="Skip validating the mt against common coding and noncoding variants",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--project-list", help="List of seqr projects that are in the callset"
-    )
-    parser.add_argument(
-        "--slack-channel", help="Slack channel to post results and notifications to."
-    )
-    parser.add_argument(
         "--overwrite", help="Overwrite previous paths", action="store_true"
     )
 
     args = parser.parse_args()
 
-    if args.slack_channel:
-        from slack_creds import slack_token
-        with slack.slack_notifications(slack_token, args.slack_channel):
-
-            main(args)
-    else:
-        main(args)
+    main(args)

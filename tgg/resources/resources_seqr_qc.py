@@ -16,9 +16,9 @@ def temp_sample_qc_folder(
     :return:
     """
     if is_test:
-        return f"gs://seqr-temp/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc/test"
+        return f"gs://seqr-loading-temp/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc/test"
     else:
-        return f"gs://seqr-temp/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc"
+        return f"gs://seqr-loading-temp/GRCh{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc"
 
 
 def final_sample_qc_folder(
