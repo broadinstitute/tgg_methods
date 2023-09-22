@@ -21,6 +21,7 @@ from resources.resources_seqr_qc import (
     sample_qc_ht_path,
     sample_qc_tsv_path,
     seq_metrics_path,
+    temp_sample_qc_folder,
 )
 
 logging.basicConfig(
@@ -267,6 +268,11 @@ def main(args):
             force_bgz=True,
             reference_genome=f"GRCh{build}",
             min_partitions=4,
+        )
+        # NOTE: Without a MT, this pipeline will take three times as long and may hit memory issues.
+        mt = mt.checkpoint(
+            f"{temp_sample_qc_folder(build, data_type, data_source, version, is_test)}/callset.mt",
+            overwrite=overwrite,
         )
     if mt_path:
         logger.info("Reading MatrixTable...")
