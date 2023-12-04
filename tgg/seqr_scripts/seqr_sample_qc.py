@@ -2,6 +2,8 @@ import logging
 import argparse
 import pickle
 
+print('ugh dude why')
+
 import hail as hl
 from gnomad.sample_qc.platform import (
     compute_callrate_mt,
@@ -235,7 +237,7 @@ def run_platform_imputation(
     return plat_ht
 
 
-  def run_population_pca(mt: hl.MatrixTable, build: int, num_pcs=6) -> hl.Table:
+def run_population_pca(mt: hl.MatrixTable, build: int, num_pcs=6) -> hl.Table:
     """
     Projects samples onto pre-computed gnomAD and rare disease sample principal components using PCA loadings.  A
     random forest classifier assigns gnomAD and rare disease sample population labels
@@ -247,6 +249,7 @@ def run_platform_imputation(
     :rtype: Table
     """
     loadings = hl.read_table(rdg_gnomad_pop_pca_loadings_path(build))
+    logger.info(f'Reading from {loadings}')
     model_path = rdg_gnomad_rf_model_path()
     mt = mt.select_entries("GT")
     scores = pc_project(mt, loadings)
@@ -254,8 +257,14 @@ def run_platform_imputation(
         scores=scores.scores[:num_pcs], known_pop="Unknown"
     ).key_by("s")
 
+    scores.show()
+
     logger.info("Unpacking RF model")
     fit = None
+
+    # !pip show sklearn
+    logger.info(f'Reading from {model_path}')
+
     with hl.hadoop_open(model_path, "rb") as f:
         fit = pickle.load(f)
 
@@ -269,7 +278,7 @@ def run_platform_imputation(
     return pop_pca_ht
 
 
-  def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
+def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
     """
     Runs Hail's built in sample qc function on the MatrixTable. Splits the MatrixTable in order to calculate inbreeding
     coefficient and annotates the result back onto original MatrixTable. Applies flags by population and platform groups.
@@ -323,6 +332,8 @@ def run_platform_imputation(
 
 def main(args):
 
+    # logger.info(sklearn.__version)
+
     hl.init(log="/seqr_sample_qc.log")
     hl._set_flags(no_whole_stage_codegen="1") #Flag needed for hail 0.2.93, may be able to remove in future release.
     logger.info("Beginning seqr sample QC pipeline...")
@@ -345,7 +356,13 @@ def main(args):
         ).write(
             mt_path(build, data_type, data_source, version, is_test), overwrite=True
         )
-    mt = hl.read_matrix_table(mt_path(build, data_type, data_source, version, is_test))
+        mt = hl.read_matrix_table(mt_path(build, data_type, data_source, version, is_test))
+    elif args.custom_mt:
+        logger.info("reading from custom MatrixTable...")
+        mt = hl.read_matrix_table(args.custom_mt)
+    else:
+        logger.info("MT already generated in this script")
+        mt = hl.read_matrix_table(mt_path(build, data_type, data_source, version, is_test))
     mt = mt.annotate_entries(
         GT=hl.case()
         .when(mt.GT.is_diploid(), hl.call(mt.GT[0], mt.GT[1], phased=False))
@@ -402,7 +419,8 @@ def main(args):
 
         missing_metrics = mt.filter_cols(hl.is_defined(mt.PRODUCT), keep=False)
         missing_metrics.cols().select().export(
-            missing_metrics_path(build, data_type, data_source, version)
+            f"gs://seqr-datasets/v02/{build}/RDG_{data_type}_Broad_{data_source}/v{version}/sample_qc/resources/missing_metrics_samples_missing_metrics.tsv"
+            #missing_metrics_path(build, data_type, data_source, version)
         )  #  TODO Add logging step that prints unexpected missing samples
     else:
         mt = mt.annotate_cols(qc_platform="Unknown")
@@ -506,6 +524,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--skip-write-mt", help="Skip writing out qc mt", action="store_true"
+    )
+    parser.add_argument(
+        "--custom-mt",help="Custom path to read ht from",default=None
     )
     parser.add_argument(
         "--skip-validate-mt",
