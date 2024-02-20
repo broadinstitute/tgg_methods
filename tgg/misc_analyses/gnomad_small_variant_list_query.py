@@ -34,6 +34,7 @@ V4_VERSIONS = {"v4_exomes", "v4_genomes"}
 
 VERSION_GENOME_BUILD = {v: "GRCh37" if "v2" in v else "GRCh38" for v in VERSIONS}
 """Mapping of gnomAD versions to their respective genome builds."""
+
 GENETIC_ANCESTRY_LABEL = {
     "v2_exomes": {"gen_anc": "pop", "grpmax": "popmax"},
     "v2_genomes": {"gen_anc": "pop", "grpmax": "popmax"},
@@ -42,6 +43,8 @@ GENETIC_ANCESTRY_LABEL = {
     "v4_exomes": {"gen_anc": "gen_anc", "grpmax": "grpmax"},
     "v4_genomes": {"gen_anc": "gen_anc", "grpmax": "grpmax"},
 }
+"""Mapping of gnomAD versions to their respective genetic ancestry and grpmax labels."""
+
 VERSION_RESOURCE_MAP = {
     "v2_exomes": {"data_type": "exomes"},
     "v2_genomes": {"data_type": "genomes"},
@@ -57,7 +60,7 @@ VERSION_RESOURCE_MAP = {
         "data_type": "genomes",
     },
     "v4_exomes": {"version": "4.0", "freq_version": "4.0", "data_type": "exomes"},
-    "v4_genomes": {"version": "4.0", "data_type": "genomes"},
+    "v4_genomes": {"version": "4.0", "data_type": "genomes", "info_version": "3.1"},
 }
 """Mapping of gnomAD versions to their respective resource datatypes and versions."""
 
@@ -367,6 +370,8 @@ def get_freq_ht(gnomad_version: str, intervals: hl.tarray = None) -> hl.Table:
         )
     elif gnomad_version in V4_VERSIONS:
         freq_ht = v4.annotations.get_freq(version=version, data_type=data_type).ht()
+        if data_type == "exomes":
+            freq_ht = freq_ht.transmute(grpmax=freq_ht.grpmax.gnomad)
     else:
         raise DataException(
             f"Version {gnomad_version} is not supported for frequency HT"
@@ -431,7 +436,9 @@ def get_info_ht(gnomad_version: str, intervals: hl.tarray = None) -> hl.Table:
     :param intervals: Intervals to filter to.
     :return: Info HT.
     """
-    data_type, version = gnomad_version_to_resource_version(gnomad_version)
+    data_type, version = gnomad_version_to_resource_version(
+        gnomad_version, info_version=True
+    )
 
     if gnomad_version in {"v3", "v3.1", "v4_genomes"}:
         try:
@@ -507,7 +514,7 @@ def get_gnomad_raw_data(
         if samples is not None:
             gnomad_mt = gnomad_mt.filter_cols(samples.contains(gnomad_mt.s))
 
-    elif version in V3_VERSIONS:
+    elif version in V3_VERSIONS or version == "v4_genomes":
         vds = v3.basics.get_gnomad_v3_vds(remove_hard_filtered_samples=False)
     elif version in V4_VERSIONS:
         vds = v4.basics.get_gnomad_v4_vds(
@@ -529,7 +536,7 @@ def get_gnomad_raw_data(
 
         # If requested, densify the MT, otherwise use only the variant data.
         if ref or densify:
-            gnomad_mt = hl.vds.densify(vds)
+            gnomad_mt = hl.vds.to_dense_mt(vds)
         else:
             gnomad_mt = vds.variant_data
             # This filter is required to filter refs resulting from the split.
@@ -538,6 +545,8 @@ def get_gnomad_raw_data(
         # Annotate adj.
         # TODO: DO WE NEED TO adjust ploidy?
         gnomad_mt = annotate_adj(gnomad_mt)
+        gnomad_mt = gnomad_mt.checkpoint(hl.utils.new_temp_file("gnomad_mt", "mt"))
+        gnomad_mt.count()
 
     if ref:
         gnomad_mt = gnomad_mt.filter_entries(gnomad_mt.GT.is_hom_ref())
@@ -625,7 +634,7 @@ def get_variant_annotations_expr(
             }
         )
     if gnomad_version in V4_VERSIONS:
-        filter_info_fields = V4_FILTERS_INFO_FIELDS
+        filter_info_fields = V4_FILTERS_INFO_FIELDS[:]
         if data_type == "exomes":
             filter_info_fields += ["sibling_singleton"]
             # For more information on the selected compute_info_method, please see the
@@ -800,7 +809,7 @@ def get_gnomad_v3_regions_mt(
         meta = meta.filter(~meta.sample_filters.hard_filtered)
     elif gnomad_version == "v3":
         meta = meta.filter(hl.len(meta.hard_filters) == 0)
-        meta = meta.annotate(non_cancer=~region_ht.s.contains("TCGA"))
+        meta = meta.annotate(non_cancer=~meta.s.contains("TCGA"))
 
     if pops:
         logger.info(f"Filtering samples to {pops}")
@@ -838,15 +847,23 @@ def get_gnomad_v4_regions_mt(
     data_type, version = gnomad_version_to_resource_version(gnomad_version)
 
     meta = v4.meta(version, data_type).ht()
-    meta = meta.annotate(
-        **meta.project_meta,
+    select_expr = {
         **meta.sex_imputation,
         **meta.population_inference,
-    )
+    }
     if gnomad_version == "v4_genomes":
-        meta = meta.annotate(
+        select_expr = {
+            **meta.project_meta,
+            **select_expr,
             **meta.subsets,
-        )
+        }
+    elif gnomad_version == "v4_exomes":
+        select_expr = {
+            **meta.project_meta.drop("v2_meta", "ukb_meta"),
+            **select_expr,
+        }
+
+    meta = meta.select("sample_filters", "high_quality", "release", **select_expr)
     meta = meta.filter(~meta.sample_filters.hard_filtered)
 
     if pops:
@@ -910,7 +927,6 @@ def unify_sample_meta(ht: hl.Table, gnomad_version: str) -> hl.Table:
     :param gnomad_version: gnomAD version.
     :return: Table with unified sample meta.
     """
-    ht.describe()
     _map = {
         field: SAMPLE_META_MAPPING[field][gnomad_version]
         for field in SAMPLE_META_MAPPING
@@ -924,18 +940,18 @@ def unify_sample_meta(ht: hl.Table, gnomad_version: str) -> hl.Table:
     return ht.rename({"meta": f"meta_{gnomad_version}"})
 
 
-def export_to_tsv(ht: hl.Table, out_file: str) -> None:
+def export_to_tsv(ht: hl.Table, out_file: str, builds: List[str]) -> None:
     """
     Export the table to TSV.
 
     :param ht: Table to export.
     :param out_file: Output file.
+    :param builds: Builds in export.
     :return: None.
     """
-
     def get_variant_flattened_expr(v: str) -> Dict[str, hl.expr.Expression]:
         flatten_expr = {}
-        for build in ["GRCh37", "GRCh38"]:
+        for build in builds:
             flatten_expr.update(
                 {
                     f"{v}_{build}_chrom": ht[f"{v}_{build}_locus"].contig,
@@ -1000,7 +1016,7 @@ def export_to_tsv(ht: hl.Table, out_file: str) -> None:
     # Order columns a little nicer.
     ht = ht.select(
         # First get all the columns for which order was specified.
-        *TSV_COLUMN_ORDER,
+        *[col for col in TSV_COLUMN_ORDER if col in ht.row],
         # Then get all the other ones.
         *[col for col in ht.row if col not in TSV_COLUMN_ORDER],
     )
@@ -1035,6 +1051,7 @@ def gnomad_version_to_resource_version(
     release_version=False,
     freq_version=False,
     vep_version=False,
+    info_version=False,
 ):
     """
     Get the resource version for the given gnomAD version.
@@ -1043,23 +1060,25 @@ def gnomad_version_to_resource_version(
     :param release_version: Whether to get the release version.
     :param freq_version: Whether to get the frequency version.
     :param vep_version: Whether to get the VEP version.
+    :param info_version: Whether to get the info version.
     :return: Resource version.
     """
     version_types = {
         "release_version": release_version,
         "freq_version": freq_version,
         "vep_version": vep_version,
+        "info_version": info_version,
     }
     if sum(version_types.values()) > 1:
         raise ValueError(
             "Only one of release_version and freq_version can be set to True"
         )
 
-    version = VERSION_RESOURCE_MAP[gnomad_version]
+    version = VERSION_RESOURCE_MAP.get(gnomad_version)
     data_type = version["data_type"]
 
     default_version = version.get("version", gnomad_version)
-    version_type = [(k, v) for k, v in version_types.items() if v]
+    version_type = [k for k, v in version_types.items() if v]
 
     if version_type:
         version = version.get(version_type[0], default_version)
@@ -1213,6 +1232,7 @@ def create_regions_ht(
     row: hl.struct,
     gnomad_version: str,
     af_max: float = None,
+    needs_liftover: bool = False,
 ):
     """
     Create a regions HT for the given variant HT.
@@ -1223,18 +1243,28 @@ def create_regions_ht(
     :param row: Row to annotate.
     :param gnomad_version: gnomAD version.
     :param af_max: Maximum allele frequency.
+    :param needs_liftover: Whether the variants need liftover.
     :return: Regions HT.
     """
     # Select only entry fields to keep.
     gnomad_mt = gnomad_mt.select_entries(*ENTRY_FIELDS_TO_KEEP)
 
-    # Add the lifted-over variants for v2 and annotate the lifted-over variants.
-    _, destination_ref = get_liftover_genome(get_reference_genome(gnomad_mt.locus))
-    gnomad_mt = gnomad_mt.annotate_rows(
-        **get_liftover_variants_expr(
-            gnomad_mt.locus, gnomad_mt.alleles, destination_ref
+    if needs_liftover:
+        # Add the lifted-over variants for v2 and annotate the lifted-over variants.
+        _, destination_ref = get_liftover_genome(get_reference_genome(gnomad_mt.locus))
+        gnomad_mt = gnomad_mt.annotate_rows(
+            **get_liftover_variants_expr(
+                gnomad_mt.locus, gnomad_mt.alleles, destination_ref
+            )
         )
-    )
+    else:
+        gnomad_mt = gnomad_mt.annotate_rows(
+            **{
+                f"{gnomad_mt.locus.dtype.reference_genome.name}_locus": gnomad_mt.locus,
+                f"{gnomad_mt.locus.dtype.reference_genome.name}_alleles": gnomad_mt.alleles,
+            }
+        )
+
     # Prefix all variants and genotype fields with 'v2'.
     gnomad_mt = gnomad_mt.rename({x: f"v2_{x}" for x in gnomad_mt.row})
     gnomad_mt = gnomad_mt.rename({x: f"v2_{x}" for x in gnomad_mt.entry})
@@ -1257,6 +1287,7 @@ def create_regions_ht(
             )
         )
     )
+
     gnomad_mt = gnomad_mt.transmute_rows(
         **{
             f"v2_{k}": v
@@ -1268,7 +1299,6 @@ def create_regions_ht(
             ).items()
         }
     )
-    gnomad_mt = gnomad_mt.persist()
 
     # Create a table with all variants / samples in the region.
     region_ht = gnomad_mt.entries()
@@ -1371,7 +1401,15 @@ def import_variants_regions_ht(
             f"Variants in the input TSV will be lifter over from {input_genome} to"
             f" {output_genome} in order to use gnomAD {gnomad_version}."
         )
-    var_ht = add_liftover_annotations(var_ht, output_genome)
+        var_ht = add_liftover_annotations(var_ht, output_genome)
+    else:
+        var_ht = var_ht.annotate(
+            **{
+                f"{output_genome}_locus": var_ht.locus,
+                f"{output_genome}_alleles": var_ht.alleles,
+            }
+        )
+
     return var_ht.key_by("locus", "alleles")
 
 
@@ -1386,6 +1424,9 @@ def main(args):
         v2_rel_ht, v3_rel_ht = get_v2_exomes_v3_rel_ht()
     if "v4_exomes" in args.gnomad or "v4_genomes" in args.gnomad:
         v4_exomes_rel_ht, v4_genomes_rel_ht = get_v4_rel_ht()
+
+    all_builds = [VERSION_GENOME_BUILD[b] for b in args.gnomad] + [args.input_genome]
+    needs_liftover = len(set(all_builds)) > 1
 
     # Loop through all the desired gnomAD versions.
     for gnomad_version in args.gnomad:
@@ -1467,7 +1508,7 @@ def main(args):
                 # Get the variants in the region of interest.
                 gnomad_mt = get_gnomad_regions_ht(
                     v_samples, row.regions, gnomad_ref, gnomad_version, pops=args.pops
-                )
+                ).checkpoint(hl.utils.new_temp_file("gnomad_mt", "mt"))
                 if gnomad_version == "v3":
                     # Add ID / relationship to sample in v2 if any.
                     gnomad_mt = gnomad_mt.annotate_cols(
@@ -1479,10 +1520,12 @@ def main(args):
                         v3_rel=v2_rel_ht[gnomad_mt.s].v3_rel
                     )
                 elif gnomad_version == "v4_exomes":
+                    print("Adding relationships to v4 genomes")
                     gnomad_mt = gnomad_mt.annotate_cols(
                         v4_genomes_rel=v4_exomes_rel_ht[gnomad_mt.s].v4_genomes_rel
                     )
                 elif gnomad_version == "v4_genomes":
+                    print("Added relationships to v4 exomes")
                     gnomad_mt = gnomad_mt.annotate_cols(
                         v4_exomes_rel=v4_genomes_rel_ht[gnomad_mt.s].v4_exomes_rel
                     )
@@ -1494,6 +1537,7 @@ def main(args):
                     row=row,
                     gnomad_version=gnomad_version,
                     af_max=args.af_max,
+                    needs_liftover=needs_liftover,
                 )
                 region_ht = region_ht.annotate(type=data_type)
 
@@ -1519,7 +1563,7 @@ def main(args):
         if args.out_ht:
             final_result_ht = final_result_ht.checkpoint(args.out_ht, overwrite=True)
         if args.out_tsv:
-            export_to_tsv(final_result_ht, args.out_tsv)
+            export_to_tsv(final_result_ht, args.out_tsv, list(all_builds))
 
 
 # This part of python handling of script arguments.
