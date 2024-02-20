@@ -1521,12 +1521,10 @@ def main(args):
                         v3_rel=v2_rel_ht[gnomad_mt.s].v3_rel
                     )
                 elif gnomad_version == "v4_exomes":
-                    print("Adding relationships to v4 genomes")
                     gnomad_mt = gnomad_mt.annotate_cols(
                         v4_genomes_rel=v4_exomes_rel_ht[gnomad_mt.s].v4_genomes_rel
                     )
                 elif gnomad_version == "v4_genomes":
-                    print("Added relationships to v4 exomes")
                     gnomad_mt = gnomad_mt.annotate_cols(
                         v4_exomes_rel=v4_genomes_rel_ht[gnomad_mt.s].v4_exomes_rel
                     )
