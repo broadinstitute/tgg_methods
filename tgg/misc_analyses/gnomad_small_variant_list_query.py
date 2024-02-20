@@ -949,6 +949,7 @@ def export_to_tsv(ht: hl.Table, out_file: str, builds: List[str]) -> None:
     :param builds: Builds in export.
     :return: None.
     """
+
     def get_variant_flattened_expr(v: str) -> Dict[str, hl.expr.Expression]:
         flatten_expr = {}
         for build in builds:
