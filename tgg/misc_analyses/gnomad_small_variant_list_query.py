@@ -1,6 +1,7 @@
 import argparse
 import logging
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
+from copy import deepcopy
 
 import hail as hl
 from gnomad.resources.grch37.gnomad import public_release as v2_public_release
@@ -9,6 +10,7 @@ from gnomad.resources.resource_utils import DataException
 from gnomad.sample_qc.relatedness import UNRELATED, get_relationship_expr
 from gnomad.utils.annotations import annotate_adj
 from gnomad.utils.reference_genome import get_reference_genome
+from gnomad.utils.vep import CSQ_ORDER
 
 import gnomad_qc.v2.resources as v2
 import gnomad_qc.v2.resources.annotations as v2_annotations
@@ -59,10 +61,24 @@ VERSION_RESOURCE_MAP = {
         "vep_version": "3.1.1",
         "data_type": "genomes",
     },
-    "v4_exomes": {"version": "4.0", "freq_version": "4.0", "data_type": "exomes"},
+    "v4_exomes": {
+        "version": "4.0",
+        "freq_version": "4.1",
+        "data_type": "exomes",
+        "filter_version": "4.1",
+    },
     "v4_genomes": {"version": "4.0", "data_type": "genomes", "info_version": "3.1"},
 }
 """Mapping of gnomAD versions to their respective resource datatypes and versions."""
+
+GENE_REGION_GTF_MAP = {
+    "v2_exomes": "gs://gcp-public-data--gnomad/resources/grch37/gencode/gencode.v19.annotation.gtf.gz",
+    "v2_genomes": "gs://gcp-public-data--gnomad/resources/grch37/gencode/gencode.v19.annotation.gtf.gz",
+    "v3": "gs://hail-common/references/gencode/gencode.v29.annotation.gtf.bgz",
+    "v3.1": "gs://gnomad/resources/gencode/gencode.v35.annotation.gtf.gz",
+    "v4_exomes": "gs://gcp-public-data--gnomad/resources/grch38/gencode/gencode.v39.annotation.gtf.gz",
+    "v4_genomes": "gs://gcp-public-data--gnomad/resources/grch38/gencode/gencode.v39.annotation.gtf.gz",
+}
 
 SAMPLE_META_MAPPING = {
     "pop": {
@@ -390,7 +406,9 @@ def get_filter_ht(gnomad_version: str, intervals: hl.tarray = None) -> hl.Table:
     :param intervals: Intervals to filter to.
     :return: Filter HT.
     """
-    data_type, version = gnomad_version_to_resource_version(gnomad_version)
+    data_type, version = gnomad_version_to_resource_version(
+        gnomad_version, filter_version=True
+    )
 
     if gnomad_version in V3_VERSIONS:
         try:
@@ -495,6 +513,9 @@ def get_gnomad_raw_data(
     if isinstance(samples, list):
         samples = hl.literal(samples)
 
+    if isinstance(intervals, list):
+        intervals = hl.literal(intervals)
+
     gnomad_mt = None
     vds = None
     if version in V2_VERSIONS:
@@ -545,8 +566,6 @@ def get_gnomad_raw_data(
         # Annotate adj.
         # TODO: DO WE NEED TO adjust ploidy?
         gnomad_mt = annotate_adj(gnomad_mt)
-        gnomad_mt = gnomad_mt.checkpoint(hl.utils.new_temp_file("gnomad_mt", "mt"))
-        gnomad_mt.count()
 
     if ref:
         gnomad_mt = gnomad_mt.filter_entries(gnomad_mt.GT.is_hom_ref())
@@ -561,30 +580,68 @@ def get_gnomad_raw_data(
     return gnomad_mt
 
 
-def get_gnomad_regions_ht(samples, row_regions, ref, gnomad_version, pops=[]):
+def get_gnomad_regions_mt(
+    gnomad_version: str,
+    samples: Optional[Union[List[str], hl.ArrayExpression]] = None,
+    row_regions: Optional[Union[List[hl.Interval], hl.tarray]] = None,
+    variant_ht: Optional[hl.Table] = None,
+    ref: bool = False,
+    pops: List[str] = None,
+    least_consequence: str = None,
+    max_af: float = None,
+) -> hl.MatrixTable:
     """
-    Get the gnomAD regions HT for the given version.
+    Get the gnomAD regions MT for the given version.
 
-    :param samples: List of samples to filter to.
-    :param row_regions: List of regions to filter to.
-    :param ref: Whether to include reference genotypes.
     :param gnomad_version: gnomAD version.
+    :param samples: Optional list of samples to filter to.
+    :param row_regions: Optional list of regions to filter to.
+    :param variant_ht: Optional variant HT to use for filtering.
+    :param ref: Whether to include reference genotypes. Default is False.
     :param pops: List of populations to filter to.
-    :return: gnomAD regions HT.
+    :return: gnomAD regions MT.
     """
+    if variant_ht is not None and row_regions is not None:
+        raise DataException("Only one of variant_ht and row_regions can be provided.")
+
+    if variant_ht is not None:
+        # Get the intervals for the variants.
+        row_regions = variant_ht.aggregate(
+            hl.agg.collect(
+                hl.interval(
+                    start=variant_ht.locus, end=variant_ht.locus, includes_end=True
+                )
+            )
+        )
+        print("Number of input variants: ", len(row_regions))
+        for region in variant_ht.regions.collect():
+            row_regions.extend(region)
+
+        print("Number of total intervals to filter to: ", len(row_regions))
+
     if gnomad_version in V3_VERSIONS:
         gnomad_mt = get_gnomad_v3_regions_mt(
-            samples, row_regions, ref, gnomad_version, pops
+            gnomad_version, samples, row_regions, ref, pops
         )
     elif gnomad_version in V2_VERSIONS:
-        gnomad_mt = get_gnomad_v2_regions_mt(samples, row_regions, ref, gnomad_version)
+        gnomad_mt = get_gnomad_v2_regions_mt(gnomad_version, samples, row_regions, ref)
     elif gnomad_version in V4_VERSIONS:
         gnomad_mt = get_gnomad_v4_regions_mt(
-            samples, row_regions, ref, gnomad_version, pops
+            gnomad_version, samples, row_regions, ref, pops
         )
     else:
         raise DataException(
             f"Version {gnomad_version} is not supported for gnomAD regions HT"
+        )
+
+    if least_consequence is not None or max_af is not None:
+        gnomad_mt = filter_freq_and_csq(
+            gnomad_mt,
+            get_vep_ht(gnomad_version, row_regions),
+            get_freq_ht(gnomad_version, row_regions),
+            max_af,
+            least_consequence,
+            variant_ht,
         )
 
     return gnomad_mt
@@ -780,19 +837,19 @@ def get_v4_rel_ht() -> hl.Table:
 
 
 def get_gnomad_v3_regions_mt(
-    v_samples: Union[List[str], hl.ArrayExpression],
-    regions: Union[List[hl.Interval], hl.tarray],
-    ref: bool,
     gnomad_version: str,
-    pops: List[str],
+    samples: Optional[Union[List[str], hl.ArrayExpression]] = None,
+    regions: Optional[Union[List[hl.Interval], hl.tarray]] = None,
+    ref: bool = False,
+    pops: List[str] = None,
 ) -> hl.MatrixTable:
     """
     Get the gnomAD v3 regions MT for the given version.
 
-    :param v_samples: List of samples to filter to.
-    :param regions: List of regions to filter to.
-    :param ref: Whether to include reference genotypes.
     :param gnomad_version: gnomAD version.
+    :param samples: Optional list of samples to filter to.
+    :param regions: Optional list of regions to filter to.
+    :param ref: Whether to include reference genotypes. Default is False.
     :param pops: List of populations to filter to.
     :return: gnomAD v3 regions MT.
     """
@@ -816,7 +873,10 @@ def get_gnomad_v3_regions_mt(
         meta = meta.filter(hl.set(pops).contains(meta.pop))
 
     logger.info("Loading gnomAD MT")
-    v_samples = hl.array(hl.set(v_samples) & hl.set(meta.s.collect(_localize=False)))
+    v_samples = meta.s.collect(_localize=False)
+    if samples is not None:
+        v_samples = hl.array(hl.set(samples) & hl.set(v_samples))
+
     gnomad_mt = get_gnomad_raw_data(
         gnomad_version, intervals=regions, samples=v_samples, densify=ref
     )
@@ -828,19 +888,19 @@ def get_gnomad_v3_regions_mt(
 
 
 def get_gnomad_v4_regions_mt(
-    v_samples: Union[List[str], hl.ArrayExpression],
-    regions: Union[List[hl.Interval], hl.tarray],
-    ref: bool,
     gnomad_version: str,
-    pops: List[str],
+    samples: Optional[Union[List[str], hl.ArrayExpression]] = None,
+    regions: Optional[Union[List[hl.Interval], hl.tarray]] = None,
+    ref: bool = False,
+    pops: List[str] = None,
 ) -> hl.MatrixTable:
     """
     Get the gnomAD v3 regions MT for the given version.
 
-    :param v_samples: List of samples to filter to.
+    :param gnomad_version: gnomAD version.
+    :param samples: List of samples to filter to.
     :param regions: List of regions to filter to.
     :param ref: Whether to include reference genotypes.
-    :param gnomad_version: gnomAD version.
     :param pops: List of populations to filter to.
     :return: gnomAD v3 regions MT.
     """
@@ -871,7 +931,10 @@ def get_gnomad_v4_regions_mt(
         meta = meta.filter(hl.set(pops).contains(meta.pop))
 
     logger.info("Loading gnomAD MT")
-    v_samples = hl.array(hl.set(v_samples) & hl.set(meta.s.collect(_localize=False)))
+    v_samples = meta.s.collect(_localize=False)
+    if samples is not None:
+        v_samples = hl.array(hl.set(samples) & hl.set(v_samples))
+
     gnomad_mt = get_gnomad_raw_data(
         gnomad_version, intervals=regions, samples=v_samples, densify=ref
     )
@@ -883,15 +946,18 @@ def get_gnomad_v4_regions_mt(
 
 
 def get_gnomad_v2_regions_mt(
-    v_samples: List[str], regions: List[hl.Interval], ref: bool, gnomad_version: str
+    gnomad_version: str,
+    samples: Optional[Union[List[str], hl.ArrayExpression]] = None,
+    regions: Optional[Union[List[hl.Interval], hl.tarray]] = None,
+    ref: bool = False,
 ) -> hl.MatrixTable:
     """
     Get the gnomAD v2 regions MT for the given version.
 
-    :param v_samples: List of samples to filter to.
+    :param gnomad_version: gnomAD version.
+    :param samples: List of samples to filter to.
     :param regions: List of regions to filter to.
     :param ref: Whether to include reference genotypes.
-    :param gnomad_version: gnomAD version.
     :return: gnomAD v2 regions MT.
     """
     data_type, version = gnomad_version_to_resource_version(gnomad_version)
@@ -905,7 +971,10 @@ def get_gnomad_v2_regions_mt(
     meta_ht = meta_ht.filter((hl.len(meta_ht.hard_filters) == 0))
 
     logger.info("Loading gnomAD MT")
-    v_samples = hl.array(hl.set(v_samples) & hl.set(meta_ht.s.collect(_localize=False)))
+    v_samples = meta_ht.s.collect(_localize=False)
+    if samples is not None:
+        v_samples = hl.array(hl.set(samples) & hl.set(v_samples))
+
     gnomad_mt = get_gnomad_raw_data(
         gnomad_version, intervals=regions, samples=v_samples, ref=ref
     )
@@ -919,6 +988,90 @@ def get_gnomad_v2_regions_mt(
 ########################################################################################
 # Functions that shouldn't need to be updated with version additions.
 ########################################################################################
+def split_interval_ht(ht: hl.Table, interval_field="regions") -> hl.Table:
+    ht = ht.explode(ht[interval_field])
+    interval_type = ht[interval_field].dtype
+    intervals = ht.aggregate(
+        hl.agg.collect(
+            (ht[interval_field], hl.struct(locus=ht.locus, alleles=ht.alleles))
+        )
+    )
+
+    rg = intervals[0][0].start.reference_genome
+    contigs = rg.contigs
+    sorted_intervals = sorted(
+        intervals,
+        key=lambda i: (
+            contigs.index(i[0].start.contig),
+            i[0].start.position,
+            contigs.index(i[0].end.contig),
+            i[0].end.position,
+        ),
+    )
+
+    sorted_intervals = [[i, [s]] for i, s in sorted_intervals]
+    split_intervals = deepcopy(sorted_intervals[:1])
+
+    for interval, i in sorted_intervals[1:10]:
+        previous_interval = split_intervals[-1][0]
+        previous_i = split_intervals[-1][1][:]
+        if previous_interval.start.contig == interval.start.contig:
+            if previous_interval.end.position < interval.end.position:
+                if interval.start.position < previous_interval.end.position:
+                    if interval.start.position != previous_interval.start.position:
+                        split_intervals[-1][0] = hl.Interval(
+                            previous_interval.start, interval.start
+                        )
+                        split_intervals.append(
+                            [
+                                hl.Interval(interval.start, previous_interval.end),
+                                previous_i + i
+                            ]
+                        )
+                    else:
+                        split_intervals[-1][1].extend(i)
+
+                    split_intervals.append(
+                        [hl.Interval(previous_interval.end, interval.end), i[:]]
+                    )
+                else:
+                    split_intervals.append(
+                        [hl.Interval(interval.start, interval.end), i[:]])
+            elif interval.start.position > previous_interval.end.position:
+                if interval.start.position != previous_interval.start.position:
+                    split_intervals[-1][0] = hl.Interval(
+                        previous_interval.start, interval.start
+                    )
+                split_intervals.append(
+                    [
+                        hl.Interval(interval.start, interval.end),
+                        previous_i + i
+                    ]
+                )
+                split_intervals.append(
+                    [hl.Interval(interval.end, previous_interval.end), previous_i]
+                )
+            else:
+                if interval.start.position == previous_interval.start.position:
+                    split_intervals[-1][1].extend(i)
+
+        else:
+            split_intervals.append([hl.Interval(interval.start, interval.end), i[:]])
+
+    ht = hl.Table.parallelize(
+        [hl.struct(region=r, variants=v) for r, v in split_intervals],
+        schema=hl.tstruct(
+            region=interval_type,
+            variants=hl.tarray(
+                hl.tstruct(locus=interval_type.point_type, alleles=hl.tarray(hl.tstr))
+            ),
+        ),
+        key=["region"],
+    )
+
+    return ht
+
+
 def unify_sample_meta(ht: hl.Table, gnomad_version: str) -> hl.Table:
     """
     Unify the sample meta for the given gnomAD version.
@@ -970,10 +1123,10 @@ def export_to_tsv(ht: hl.Table, out_file: str, builds: List[str]) -> None:
                     ht[f"{v}_vep"].motif_feature_consequences
                 ),
                 f"{v}_regulatory_feature_consequences": hl.json(
-                    ht[f"{v}_vep"].motif_feature_consequences
+                    ht[f"{v}_vep"].regulatory_feature_consequences
                 ),
                 f"{v}_transcript_consequences": hl.json(
-                    ht[f"{v}_vep"].motif_feature_consequences
+                    ht[f"{v}_vep"].transcript_consequences
                 ),
             }
         )
@@ -1053,6 +1206,7 @@ def gnomad_version_to_resource_version(
     freq_version=False,
     vep_version=False,
     info_version=False,
+    filter_version=False,
 ):
     """
     Get the resource version for the given gnomAD version.
@@ -1062,6 +1216,7 @@ def gnomad_version_to_resource_version(
     :param freq_version: Whether to get the frequency version.
     :param vep_version: Whether to get the VEP version.
     :param info_version: Whether to get the info version.
+    :param filter_version: Whether to get the filter version.
     :return: Resource version.
     """
     version_types = {
@@ -1069,6 +1224,7 @@ def gnomad_version_to_resource_version(
         "freq_version": freq_version,
         "vep_version": vep_version,
         "info_version": info_version,
+        "filter_version": filter_version,
     }
     if sum(version_types.values()) > 1:
         raise ValueError(
@@ -1226,46 +1382,45 @@ def get_variants_samples(version: str, var_ht: hl.Table) -> hl.Table:
     return mt.filter_entries(mt.GT.is_non_ref()).entries()
 
 
-def create_regions_ht(
+def get_samples_ht_from_gnomad_mt(
+    gnomad_mt: hl.MatrixTable,
+    var_ht: hl.Table
+) -> hl.Table:
+    """
+    Get a Table of sample non ref genotypes per variant from a gnomAD MT.
+
+    :param gnomad_mt: gnomAD MT.
+    :param var_ht: Variant HT.
+    :return: Table of sample non ref genotypes per variant.
+    """
+    gnomad_mt = gnomad_mt.select_cols()
+
+    variant_mt = gnomad_mt.semi_join_rows(var_ht.key_by("locus", "alleles"))
+    sample_mt = variant_mt.filter_entries(variant_mt.GT.is_non_ref())
+    sample_ht = sample_mt.annotate_rows(
+        samples=hl.agg.collect(hl.struct(**sample_mt.col, **sample_mt.entry))
+    ).rows()
+
+    return sample_ht
+
+
+def get_regions_ht_for_one_variant(
     var_ht: hl.Table,
     variant_samples_ht: hl.Table,
     gnomad_mt: hl.MatrixTable,
     row: hl.struct,
     gnomad_version: str,
-    af_max: float = None,
-    needs_liftover: bool = False,
 ):
     """
-    Create a regions HT for the given variant HT.
+    Get the regions HT for one variant.
 
     :param var_ht: Variant HT.
     :param variant_samples_ht: Variant samples HT.
     :param gnomad_mt: gnomAD MT.
-    :param row: Row to annotate.
+    :param row: Row to get regions HT for.
     :param gnomad_version: gnomAD version.
-    :param af_max: Maximum allele frequency.
-    :param needs_liftover: Whether the variants need liftover.
-    :return: Regions HT.
+    :return: Regions HT for one variant.
     """
-    # Select only entry fields to keep.
-    gnomad_mt = gnomad_mt.select_entries(*ENTRY_FIELDS_TO_KEEP)
-
-    if needs_liftover:
-        # Add the lifted-over variants for v2 and annotate the lifted-over variants.
-        _, destination_ref = get_liftover_genome(get_reference_genome(gnomad_mt.locus))
-        gnomad_mt = gnomad_mt.annotate_rows(
-            **get_liftover_variants_expr(
-                gnomad_mt.locus, gnomad_mt.alleles, destination_ref
-            )
-        )
-    else:
-        gnomad_mt = gnomad_mt.annotate_rows(
-            **{
-                f"{gnomad_mt.locus.dtype.reference_genome.name}_locus": gnomad_mt.locus,
-                f"{gnomad_mt.locus.dtype.reference_genome.name}_alleles": gnomad_mt.alleles,
-            }
-        )
-
     # Prefix all variants and genotype fields with 'v2'.
     gnomad_mt = gnomad_mt.rename({x: f"v2_{x}" for x in gnomad_mt.row})
     gnomad_mt = gnomad_mt.rename({x: f"v2_{x}" for x in gnomad_mt.entry})
@@ -1314,6 +1469,163 @@ def create_regions_ht(
         **{f"v1_{f}": keyed_variant_samples[f] for f in keyed_variant_samples}
     )
 
+    return region_ht
+
+
+def get_regions_ht_for_all_variants(
+    var_ht: hl.Table,
+    variant_samples_ht: hl.Table,
+    gnomad_mt: hl.MatrixTable,
+    gnomad_version: str,
+    gnomad_meta_ht: hl.Table,
+):
+    """
+    Get the regions HT for all variants.
+
+    :param var_ht: Variant HT.
+    :param variant_samples_ht: Variant samples HT.
+    :param gnomad_mt: gnomAD MT.
+    :param gnomad_version: gnomAD version.
+    :param gnomad_meta_ht: gnomAD meta HT.
+    :return: Regions HT for all variants.
+    """
+    gnomad_mt = gnomad_mt.rename({x: f"v2_{x}" for x in gnomad_mt.row})
+
+    variant_ht = split_interval_ht(var_ht)
+    variant_keyed = variant_ht[gnomad_mt.v2_locus]
+    region_mt = gnomad_mt.annotate_rows(v1_variants=variant_keyed.variants)
+    region_mt = region_mt.filter_entries(region_mt.GT.is_non_ref()).select_cols()
+    region_mt = region_mt.explode_rows(region_mt.v1_variants)
+    region_mt = region_mt.annotate_rows(
+        **{f"v1_{k}": region_mt.v1_variants[k] for k in region_mt.v1_variants}
+    ).drop("v1_variants")
+
+    region_keyed = variant_samples_ht[region_mt.v1_locus, region_mt.v1_alleles]
+    region_ht = region_mt.annotate_rows(
+        **{f"v1_{k}": region_keyed[k] for k in region_keyed if k != "samples"},
+        v1_entries=region_keyed.samples,
+        v2_entries=hl.agg.collect(
+            hl.struct(**region_mt.col, **region_mt.entry)
+        ),
+    ).rows()
+    region_ht = region_ht.annotate(
+        samples=hl.set(region_ht.v1_entries.map(lambda x: x.s)).intersection(
+            hl.set(region_ht.v2_entries.map(lambda x: x.s))
+        )
+    )
+    region_ht = region_ht.filter(hl.len(region_ht.samples) > 0)
+    region_ht = region_ht.annotate(
+        v1_entries=region_ht.v1_entries.filter(
+            lambda x: region_ht.samples.contains(x.s)
+        ),
+        v2_entries=region_ht.v2_entries.filter(
+            lambda x: region_ht.samples.contains(x.s)
+        )
+    ).drop("samples")
+    region_ht = region_ht.annotate(
+        **{
+            f"v1_{k}": v
+            for k, v in get_variant_annotations_expr(
+                hl.struct(v1_locus=region_ht.v1_locus, v1_alleles=region_ht.v1_alleles),
+                gnomad_version,
+            ).items()
+        },
+        **{
+            f"v2_{k}": v
+            for k, v in get_variant_annotations_expr(
+                region_ht.key,
+                gnomad_version,
+            ).items()
+        }
+    )
+    region_ht = region_ht.checkpoint(hl.utils.new_temp_file("region_ht", "ht"))
+    region_ht = region_ht.explode(region_ht.v1_entries)
+    region_ht = region_ht.transmute(
+        v1_sample=region_ht.v1_entries,
+        v2_sample=region_ht.v2_entries.filter(
+            lambda x: x.s == region_ht.v1_entries.s
+        )[0],
+        **gnomad_meta_ht[region_ht.v1_entries.s],
+    )
+    # Add 'v1' and 'v2' prefixes.
+    # Add the variants annotations. Prefix the fields with "v2_".
+    region_ht = region_ht.transmute(
+        **region_ht.v1_sample.rename(
+            {x: f"v1_{x}" for x in region_ht.v1_sample}
+        ),
+        **region_ht.v2_sample.rename(
+            {x: f"v2_{x}" for x in region_ht.v2_sample}
+        ),
+    )
+
+    return region_ht
+
+
+def create_regions_ht(
+    var_ht: hl.Table,
+    gnomad_mt: hl.MatrixTable,
+    gnomad_version: str,
+    variant_samples_ht: hl.Table = None,
+    row: hl.struct = None,
+    af_max: float = None,
+    needs_liftover: bool = False,
+):
+    """
+    Create a regions HT for the given variant HT.
+
+    :param var_ht: Variant HT.
+    :param gnomad_mt: gnomAD MT.
+    :param gnomad_version: gnomAD version.
+    :param variant_samples_ht: Variant samples HT.
+    :param row: Row to annotate.
+    :param af_max: Maximum allele frequency.
+    :param needs_liftover: Whether the variants need liftover.
+    :return: Regions HT.
+    """
+    gnomad_meta_ht = gnomad_mt.cols().checkpoint(
+        hl.utils.new_temp_file("gnomad_meta_ht", "ht")
+    )
+    # Select only entry fields to keep.
+    gnomad_mt = gnomad_mt.select_entries(*ENTRY_FIELDS_TO_KEEP)
+
+    if needs_liftover:
+        # Add the lifted-over variants for v2 and annotate the lifted-over variants.
+        _, destination_ref = get_liftover_genome(get_reference_genome(gnomad_mt.locus))
+        gnomad_mt = gnomad_mt.annotate_rows(
+            **get_liftover_variants_expr(
+                gnomad_mt.locus, gnomad_mt.alleles, destination_ref
+            )
+        )
+    else:
+        gnomad_mt = gnomad_mt.annotate_rows(
+            **{
+                f"{gnomad_mt.locus.dtype.reference_genome.name}_locus": gnomad_mt.locus,
+                f"{gnomad_mt.locus.dtype.reference_genome.name}_alleles": gnomad_mt.alleles,
+            }
+        )
+
+    if row is not None:
+        region_ht = get_regions_ht_for_one_variant(
+            var_ht=var_ht,
+            variant_samples_ht=variant_samples_ht,
+            gnomad_mt=gnomad_mt,
+            row=row,
+            gnomad_version=gnomad_version,
+        )
+    else:
+        if variant_samples_ht is None:
+            variant_samples_ht = get_samples_ht_from_gnomad_mt(
+                gnomad_mt, var_ht
+            ).checkpoint(hl.utils.new_temp_file("sample_ht", "ht"))
+
+        region_ht = get_regions_ht_for_all_variants(
+            var_ht=var_ht,
+            variant_samples_ht=variant_samples_ht,
+            gnomad_mt=gnomad_mt,
+            gnomad_version=gnomad_version,
+            gnomad_meta_ht=gnomad_meta_ht,
+        )
+
     # Add the gnomad version.
     region_ht = region_ht.annotate(gnomad_version=gnomad_version)
 
@@ -1350,7 +1662,10 @@ def create_regions_ht(
 
 
 def import_variants_regions_ht(
-    input_tsv: str, input_genome: str, gnomad_version: str
+    input_tsv: str,
+    input_genome: str,
+    gnomad_version: str,
+    use_genes_as_regions: bool = False,
 ) -> hl.Table:
     """
     This function imports the variants and regions from a TSV file.
@@ -1358,6 +1673,7 @@ def import_variants_regions_ht(
     :param input_tsv: Input TSV file.
     :param input_genome: Input genome.
     :param gnomad_version: gnomAD version.
+    :param use_genes_as_regions: Whether to use genes as regions.
     :return: Variants and regions HT.
     """
     logger.info("Importing variant table...")
@@ -1394,6 +1710,53 @@ def import_variants_regions_ht(
         ),
     )
 
+    if use_genes_as_regions:
+        intervals = var_ht.aggregate(
+            hl.agg.collect(
+                hl.interval(start=var_ht.locus, end=var_ht.locus, includes_end=True)
+            )
+        )
+
+        vep_ht = get_vep_ht(gnomad_version, intervals)
+        vep_ht = vep_ht.select(
+            gene_ids=hl.set(vep_ht.vep.transcript_consequences.map(lambda x: x.gene_id))
+        )
+        var_ht = var_ht.annotate(gene_id=vep_ht[var_ht.locus, var_ht.alleles].gene_ids)
+        var_ht = var_ht.explode(var_ht.gene_id)
+        gene_ids = var_ht.aggregate(hl.agg.collect_as_set(var_ht.gene_id))
+        print(gene_ids)
+        gencode_ht = hl.experimental.import_gtf(
+            GENE_REGION_GTF_MAP[gnomad_version],
+            reference_genome=input_genome,
+            skip_invalid_contigs=True,
+            min_partitions=12,
+            force_bgz=True,
+        )
+        gencode_ht = gencode_ht.annotate(
+            gene_id=gencode_ht.gene_id.split('\\.')[0],
+            transcript_id=gencode_ht.transcript_id.split('\\.')[0]
+        )
+        gencode_ht = gencode_ht.filter(
+            hl.any(
+                lambda y: (gencode_ht.feature == 'gene') & (gencode_ht.gene_id == y.split('\\.')[0]),
+                gene_ids,
+            )
+        )
+        gencode_ht = gencode_ht.group_by(gencode_ht.gene_id).aggregate(
+            intervals=hl.agg.collect(gencode_ht.interval),
+            gene_symbols=hl.agg.collect_as_set(gencode_ht.gene_name),
+        )
+        var_ht = var_ht.annotate(
+            regions=gencode_ht[var_ht.gene_id].intervals,
+            gene_symbols=gencode_ht[var_ht.gene_id].gene_symbols,
+        )
+        var_ht = var_ht.group_by(var_ht.locus, var_ht.alleles).aggregate(
+            regions=hl.agg.explode(lambda x: hl.agg.collect_as_set(x), var_ht.regions),
+            gene_symbols=hl.agg.explode(lambda x: hl.agg.collect_as_set(x), var_ht.gene_symbols),
+            gene_ids=hl.agg.collect_as_set(var_ht.gene_id),
+        )
+
+
     # Add lifted over variants and set locus, alleles and regions to match the gnomAD
     # build.
     output_genome = VERSION_GENOME_BUILD[gnomad_version]
@@ -1412,6 +1775,67 @@ def import_variants_regions_ht(
         )
 
     return var_ht.key_by("locus", "alleles")
+
+
+def vep_genes_expr(
+    vep_expr: hl.expr.StructExpression,
+    least_consequence: str
+) -> hl.expr.SetExpression:
+    vep_consequences = hl.literal(
+        set(CSQ_ORDER[0:CSQ_ORDER.index(least_consequence) + 1])
+    )
+    return (
+                hl.set(
+                    vep_expr.transcript_consequences
+                        .filter(
+                        lambda tc: (tc.biotype == 'protein_coding') &
+                                   (tc.consequence_terms.any(lambda c: vep_consequences.contains(c)))
+                    )
+                        .map(lambda x: x.gene_id)
+                )
+            )
+
+
+def filter_freq_and_csq(
+    mt: hl.MatrixTable,
+    vep_ht: hl.Table = None,
+    freq_ht: hl.Table = None,
+    max_freq: float = None,
+    least_consequence: str = None,
+    variant_ht: hl.Table = None,
+) -> hl.MatrixTable:
+    """
+    Filters MatrixTable to include variants that:
+    1. Have a global AF <= `max_freq`
+    2. Have a consequence at least as severe as `least_consequence` (based on ordering from CSQ_ORDER)
+
+    :param mt: Input MT
+    :param max_freq: Max. AF to keep
+    :param least_consequence: Least consequence to keep.
+    :return: Filtered MT
+    """
+    vep_filter = vep_ht is not None and least_consequence is not None
+    freq_filter = freq_ht is not None and max_freq is not None
+    if not vep_filter and not freq_filter:
+        logger.info(
+            "No VEP HT and least_consequence or Freq HT and max_freq were provided, "
+            "so no filtering will be done."
+        )
+        return mt
+
+    filter_expr = True
+
+    if vep_filter:
+        filter_expr &= hl.len(vep_genes_expr(vep_ht[mt.row_key].vep, least_consequence)) > 0
+
+    if freq_filter:
+        af_expr = freq_ht[mt.row_key].freq[0].AF
+        filter_expr &= hl.is_missing(af_expr) | (af_expr <= max_freq)
+
+    if variant_ht is not None:
+        filter_expr |= hl.is_defined(variant_ht[mt.row_key])
+
+    return mt.filter_rows(filter_expr)
 
 
 def main(args):
@@ -1439,42 +1863,15 @@ def main(args):
             input_tsv=args.input_tsv,
             input_genome=args.input_genome,
             gnomad_version=gnomad_version,
+            use_genes_as_regions=args.use_genes_as_regions,
         )
-        var_ht = var_ht.repartition(var_ht.count())
-
-        # Get the intervals for the variants.
-        intervals = var_ht.aggregate(
-            hl.agg.collect(
-                hl.interval(start=var_ht.locus, end=var_ht.locus, includes_end=True)
-            )
+        var_ht = var_ht.repartition(var_ht.count()).checkpoint(
+            hl.utils.new_temp_file("input_var_ht", "ht")
         )
-        # Add variants annotations.
-        var_ht = var_ht.annotate(
-            **get_variant_annotations_expr(
-                var_ht.key, gnomad_version, intervals=intervals
-            )
-        ).checkpoint(hl.utils.new_temp_file("variant", "ht"))
+        var_ht.show(50)
 
-        variants = var_ht.count()
-        logger.warning(
-            "Found %s variants/regions. Note that this script is not optimized"
-            " for querying large number of candidates.",
-            variants,
-        )
-        if variants > 10:
-            logger.warning(
-                "This script loops over each variant/region separately and isn't"
-                " optimized for querying large variant batches."
-            )
-
-        # Compute the list of variants -> samples.
-        variant_samples_ht = get_variants_samples(gnomad_version, var_ht).checkpoint(
-            hl.utils.new_temp_file("variant_samples", "ht")
-        )
-
-        # Loop over each of the variants, filter to samples of interest and get other
-        # variants they carry.
-        var_regions = var_ht.collect()
+        variant_samples_ht = None
+        row = None
 
         # Because we store refs only in the hardcalls for v2 (which doesn't have all
         # genotype quality info). We'll get the non-ref genotypes from the non-ref
@@ -1491,65 +1888,57 @@ def main(args):
         else:
             gnomad_refs = [args.ref]
 
-        for row in var_regions:
-            # Get the list of sample IDs for this variant.
-            v_samples = variant_samples_ht.aggregate(
-                # Filter to the variant of interest.
-                hl.agg.filter(
-                    (variant_samples_ht.locus == row.locus)
-                    & (variant_samples_ht.alleles == row.alleles),
-                    # Get the IDs.
-                    hl.agg.collect(variant_samples_ht.s),
-                ),
-                # This flag keeps this information in Hail rather than converting it to
-                # python.
-                _localize=False,
-            )
-            for gnomad_ref in gnomad_refs:
-                # Get the variants in the region of interest.
-                gnomad_mt = get_gnomad_regions_ht(
-                    v_samples, row.regions, gnomad_ref, gnomad_version, pops=args.pops
-                ).checkpoint(hl.utils.new_temp_file("gnomad_mt", "mt"))
-                if gnomad_version == "v3":
-                    # Add ID / relationship to sample in v2 if any.
-                    gnomad_mt = gnomad_mt.annotate_cols(
-                        v2_exomes_rel=v3_rel_ht[gnomad_mt.s].v2_exomes_rel,
-                    )
-                # If exomes: add ID / relationship to sample in v3 if any.
-                elif gnomad_version == "v2_exomes":
-                    gnomad_mt = gnomad_mt.annotate_cols(
-                        v3_rel=v2_rel_ht[gnomad_mt.s].v3_rel
-                    )
-                elif gnomad_version == "v4_exomes":
-                    gnomad_mt = gnomad_mt.annotate_cols(
-                        v4_genomes_rel=v4_exomes_rel_ht[gnomad_mt.s].v4_genomes_rel
-                    )
-                elif gnomad_version == "v4_genomes":
-                    gnomad_mt = gnomad_mt.annotate_cols(
-                        v4_exomes_rel=v4_genomes_rel_ht[gnomad_mt.s].v4_exomes_rel
-                    )
+        for gnomad_ref in gnomad_refs:
+            # Get the variants in the region of interest.
+            gnomad_mt = get_gnomad_regions_mt(
+                gnomad_version,
+                variant_ht=var_ht,
+                ref=gnomad_ref,
+                pops=args.pops,
+                least_consequence=args.least_consequence,
+                max_af=args.af_max,
+            ).checkpoint(hl.utils.new_temp_file("gnomad_mt", "mt"))
 
-                region_ht = create_regions_ht(
-                    var_ht=var_ht,
-                    variant_samples_ht=variant_samples_ht,
-                    gnomad_mt=gnomad_mt,
-                    row=row,
-                    gnomad_version=gnomad_version,
-                    af_max=args.af_max,
-                    needs_liftover=needs_liftover,
+            if gnomad_version == "v3":
+                # Add ID / relationship to sample in v2 if any.
+                gnomad_mt = gnomad_mt.annotate_cols(
+                    v2_exomes_rel=v3_rel_ht[gnomad_mt.s].v2_exomes_rel,
                 )
-                region_ht = region_ht.annotate(type=data_type)
+            # If exomes: add ID / relationship to sample in v3 if any.
+            elif gnomad_version == "v2_exomes":
+                gnomad_mt = gnomad_mt.annotate_cols(
+                    v3_rel=v2_rel_ht[gnomad_mt.s].v3_rel
+                )
+            elif gnomad_version == "v4_exomes":
+                gnomad_mt = gnomad_mt.annotate_cols(
+                    v4_genomes_rel=v4_exomes_rel_ht[gnomad_mt.s].v4_genomes_rel
+                )
+            elif gnomad_version == "v4_genomes":
+                gnomad_mt = gnomad_mt.annotate_cols(
+                    v4_exomes_rel=v4_genomes_rel_ht[gnomad_mt.s].v4_exomes_rel
+                )
 
-                logger.info(
+            region_ht = create_regions_ht(
+                var_ht=var_ht,
+                gnomad_mt=gnomad_mt,
+                gnomad_version=gnomad_version,
+                variant_samples_ht=variant_samples_ht,
+                row=row,
+                af_max=args.af_max,
+                needs_liftover=needs_liftover,
+            )
+            region_ht = region_ht.annotate(type=data_type)
+
+            logger.info(
                     "Checkpointing variant table and appending to final result table"
                     " list"
+            )
+            result_tables.append(
+                region_ht.checkpoint(
+                    f"{args.checkpoint_dir}/part_{len(result_tables)}.ht",
+                    overwrite=True,
                 )
-                result_tables.append(
-                    region_ht.checkpoint(
-                        f"{args.checkpoint_dir}/part_{len(result_tables)}.ht",
-                        overwrite=True,
-                    )
-                )
+            )
 
     # Concatenate all the variants / regions /gnomAD builds and export.
     if len(result_tables) < 1:
@@ -1584,6 +1973,14 @@ if __name__ == "__main__":
             ' using GRCh37, contigs should NOT start with "chr" or "chrom". When using'
             ' GRCh38, they NEED to start with "chr"'
         ),
+    )
+    parser.add_argument(
+        "--use_genes_as_regions",
+        help=(
+            "If specified, the regions examined for each variant will be the gene "
+            "interval(s) associated with the variant."
+        ),
+        action="store_true",
     )
     parser.add_argument(
         "--gnomad",
@@ -1624,6 +2021,12 @@ if __name__ == "__main__":
             "If specified, results are filtered to variants with a global AF less than"
             " or equal to the passed value."
         ),
+    )
+    parser.add_argument(
+        '--least_consequence',
+        help=f'Least consequence for the second variant to be included in the output.',
+        default=None,
+        choices=CSQ_ORDER,
     )
     parser.add_argument(
         "--pops",
