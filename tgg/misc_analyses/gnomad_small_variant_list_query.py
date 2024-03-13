@@ -68,7 +68,8 @@ VERSION_RESOURCE_MAP = {
         "filter_version": v4.constants.CURRENT_VARIANT_QC_RESULT_VERSION["exomes"],
         "release_version": v4.constants.CURRENT_RELEASE,
         "vep_version": v4.constants.CURRENT_ANNOTATION_VERSION,
-        "info_version":v4.constants.CURRENT_ANNOTATION_VERSION,
+        "info_version": v4.constants.CURRENT_ANNOTATION_VERSION,
+        "meta_version": v4.constants.CURRENT_ANNOTATION_VERSION,
     },
     "v4_genomes": {
         "version": v4.constants.CURRENT_VERSION,
@@ -78,6 +79,7 @@ VERSION_RESOURCE_MAP = {
         "filter_version": v4.constants.CURRENT_VARIANT_QC_RESULT_VERSION["genomes"],
         "release_version": v4.constants.CURRENT_RELEASE,
         "vep_version": v4.constants.CURRENT_ANNOTATION_VERSION,
+        "meta_version": v4.constants.CURRENT_ANNOTATION_VERSION,
     },
 }
 """Mapping of gnomAD versions to their respective resource datatypes and versions."""
@@ -933,9 +935,11 @@ def get_gnomad_v4_regions_mt(
     :param pops: List of populations to filter to.
     :return: gnomAD v3 regions MT.
     """
-    data_type, version = gnomad_version_to_resource_version(gnomad_version)
+    data_type, meta_version = gnomad_version_to_resource_version(
+        gnomad_version, meta_version=True
+    )
 
-    meta = v4.meta(version, data_type).ht()
+    meta = v4.meta(meta_version, data_type).ht()
     select_expr = {
         **meta.sex_imputation,
         **meta.population_inference,
@@ -1236,6 +1240,7 @@ def gnomad_version_to_resource_version(
     vep_version=False,
     info_version=False,
     filter_version=False,
+    meta_version=False,
 ):
     """
     Get the resource version for the given gnomAD version.
@@ -1246,6 +1251,7 @@ def gnomad_version_to_resource_version(
     :param vep_version: Whether to get the VEP version.
     :param info_version: Whether to get the info version.
     :param filter_version: Whether to get the filter version.
+    :param meta_version: Whether to get the meta version.
     :return: Resource version.
     """
     version_types = {
@@ -1254,6 +1260,7 @@ def gnomad_version_to_resource_version(
         "vep_version": vep_version,
         "info_version": info_version,
         "filter_version": filter_version,
+        "meta_version": meta_version,
     }
     if sum(version_types.values()) > 1:
         raise ValueError(
