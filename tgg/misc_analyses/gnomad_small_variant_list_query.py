@@ -62,7 +62,7 @@ VERSION_RESOURCE_MAP = {
         "data_type": "genomes",
     },
     "v4_exomes": {
-        "version": v4.constants.CURRENT_VERSION["exomes"],
+        "version": v4.constants.CURRENT_VERSION,
         "freq_version": v4.constants.CURRENT_FREQ_VERSION["exomes"],
         "data_type": "exomes",
         "filter_version": v4.constants.CURRENT_VARIANT_QC_RESULT_VERSION["exomes"],
@@ -71,7 +71,7 @@ VERSION_RESOURCE_MAP = {
         "info_version":v4.constants.CURRENT_ANNOTATION_VERSION,
     },
     "v4_genomes": {
-        "version": v4.constants.CURRENT_VERSION["genomes"],
+        "version": v4.constants.CURRENT_VERSION,
         "freq_version": v4.constants.CURRENT_FREQ_VERSION["genomes"],
         "data_type": "genomes",
         "info_version": "3.1",
