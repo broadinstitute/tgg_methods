@@ -62,12 +62,23 @@ VERSION_RESOURCE_MAP = {
         "data_type": "genomes",
     },
     "v4_exomes": {
-        "version": "4.0",
-        "freq_version": "4.1",
+        "version": v4.constants.CURRENT_VERSION["exomes"],
+        "freq_version": v4.constants.CURRENT_FREQ_VERSION["exomes"],
         "data_type": "exomes",
-        "filter_version": "4.1",
+        "filter_version": v4.constants.CURRENT_VARIANT_QC_RESULT_VERSION["exomes"],
+        "release_version": v4.constants.CURRENT_RELEASE["exomes"],
+        "vep_version": v4.constants.CURRENT_ANNOTATION_VERSION,
+        "info_version":v4.constants.CURRENT_ANNOTATION_VERSION,
     },
-    "v4_genomes": {"version": "4.0", "data_type": "genomes", "info_version": "3.1"},
+    "v4_genomes": {
+        "version": v4.constants.CURRENT_VERSION["genomes"],
+        "freq_version": v4.constants.CURRENT_FREQ_VERSION["genomes"],
+        "data_type": "genomes",
+        "info_version": "3.1",
+        "filter_version": v4.constants.CURRENT_VARIANT_QC_RESULT_VERSION["genomes"],
+        "release_version": v4.constants.CURRENT_RELEASE["genomes"],
+        "vep_version": v4.constants.CURRENT_ANNOTATION_VERSION,
+    },
 }
 """Mapping of gnomAD versions to their respective resource datatypes and versions."""
 
@@ -545,21 +556,39 @@ def get_gnomad_raw_data(
         raise DataException(f"Version {version} is not supported for variants samples")
 
     if gnomad_mt is None and vds is not None:
-        # Filter to intervals.
-        if intervals is not None:
-            vds = hl.vds.filter_intervals(vds, intervals)
-
-        if samples is not None:
-            vds = hl.vds.filter_samples(vds, samples, keep=True)
-
-        # Split multi-allelics.
-        vds = hl.vds.split_multi(vds)
-
         # If requested, densify the MT, otherwise use only the variant data.
         if ref or densify:
+            # Filter to intervals.
+            if intervals is not None:
+                vds = hl.vds.filter_intervals(vds, intervals)
+
+            if samples is not None:
+                vds = hl.vds.filter_samples(vds, samples, keep=True)
+
+            # Split multi-allelics.
+            vds = hl.vds.split_multi(vds)
+
             gnomad_mt = hl.vds.to_dense_mt(vds)
         else:
             gnomad_mt = vds.variant_data
+
+            if intervals is not None:
+                gnomad_mt = hl.filter_intervals(gnomad_mt, intervals)
+
+            if samples is not None:
+                gnomad_mt = gnomad_mt.filter_cols(samples.contains(gnomad_mt.s))
+
+            gnomad_mt = gnomad_mt.checkpoint(
+                hl.utils.new_temp_file("mt_before_split", ".mt")
+            )
+
+            gnomad_mt = hl.experimental.sparse_split_multi(
+                gnomad_mt, filter_changed_loci=True
+            )
+            gnomad_mt = gnomad_mt.checkpoint(
+                hl.utils.new_temp_file("mt_after_split", ".mt")
+            )
+
             # This filter is required to filter refs resulting from the split.
             gnomad_mt = gnomad_mt.filter_entries(gnomad_mt.GT.is_non_ref())
 
@@ -1756,7 +1785,6 @@ def import_variants_regions_ht(
             gene_ids=hl.agg.collect_as_set(var_ht.gene_id),
         )
 
-
     # Add lifted over variants and set locus, alleles and regions to match the gnomAD
     # build.
     output_genome = VERSION_GENOME_BUILD[gnomad_version]
@@ -1868,7 +1896,7 @@ def main(args):
         var_ht = var_ht.repartition(var_ht.count()).checkpoint(
             hl.utils.new_temp_file("input_var_ht", "ht")
         )
-        var_ht.show(50)
+        var_ht.show(200)
 
         variant_samples_ht = None
         row = None
