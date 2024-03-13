@@ -53,6 +53,7 @@ VERSION_RESOURCE_MAP = {
     "v3": {
         "version": "3",
         "release_version": "3.0",
+        "freq_version": "3.0",
         "vep_version": "3.1.1",
         "data_type": "genomes",
     },
@@ -382,7 +383,7 @@ def get_freq_ht(gnomad_version: str, intervals: hl.tarray = None) -> hl.Table:
     :return: Frequency HT.
     """
     data_type, version = gnomad_version_to_resource_version(
-        gnomad_version, release_version=True
+        gnomad_version, freq_version=True
     )
 
     if gnomad_version in V3_VERSIONS:
