@@ -498,9 +498,10 @@ def get_info_ht(gnomad_version: str, intervals: hl.tarray = None) -> hl.Table:
 def get_gnomad_raw_data(
     version: str,
     intervals: Union[List[hl.Interval], hl.tarray] = None,
-    samples: Union[List[str], hl.ArrayExpression] = None,
+    samples_ht: Optional[hl.Table] = None,
     ref: bool = False,
     densify: bool = False,
+    loci_filter_ht: Optional[hl.Table] = None,
 ) -> hl.MatrixTable:
     """
     Get the raw gnomAD data for the given version.
@@ -524,9 +525,6 @@ def get_gnomad_raw_data(
     """
     data_type, _ = gnomad_version_to_resource_version(version)
 
-    if isinstance(samples, list):
-        samples = hl.literal(samples)
-
     if isinstance(intervals, list):
         intervals = hl.literal(intervals)
 
@@ -546,8 +544,13 @@ def get_gnomad_raw_data(
         if intervals is not None:
             gnomad_mt = hl.filter_intervals(gnomad_mt, intervals)
 
-        if samples is not None:
-            gnomad_mt = gnomad_mt.filter_cols(samples.contains(gnomad_mt.s))
+        if samples_ht is not None:
+            gnomad_mt = gnomad_mt.semi_join_cols(samples_ht)
+
+        if loci_filter_ht is not None:
+            gnomad_mt = gnomad_mt.filter_rows(
+                hl.is_defined(loci_filter_ht[gnomad_mt.locus])
+            )
 
     elif version in V3_VERSIONS or version == "v4_genomes":
         vds = v3.basics.get_gnomad_v3_vds(remove_hard_filtered_samples=False)
@@ -565,8 +568,17 @@ def get_gnomad_raw_data(
             if intervals is not None:
                 vds = hl.vds.filter_intervals(vds, intervals)
 
-            if samples is not None:
-                vds = hl.vds.filter_samples(vds, samples, keep=True)
+            if samples_ht is not None:
+                vds = hl.vds.filter_samples(vds, samples_ht, keep=True)
+
+            if loci_filter_ht is not None:
+                vmt = vds.variant_data
+                vds = hl.vds.VariantDataset(
+                    vds.reference_data,
+                    vmt.filter_rows(
+                        hl.is_defined(loci_filter_ht[vmt.locus])
+                    )
+                )
 
             # Split multi-allelics.
             vds = hl.vds.split_multi(vds)
@@ -578,8 +590,13 @@ def get_gnomad_raw_data(
             if intervals is not None:
                 gnomad_mt = hl.filter_intervals(gnomad_mt, intervals)
 
-            if samples is not None:
-                gnomad_mt = gnomad_mt.filter_cols(samples.contains(gnomad_mt.s))
+            if samples_ht is not None:
+                gnomad_mt = gnomad_mt.semi_join_cols(samples_ht)
+
+            if loci_filter_ht is not None:
+                gnomad_mt = gnomad_mt.filter_rows(
+                    hl.is_defined(loci_filter_ht[gnomad_mt.locus])
+                )
 
             gnomad_mt = gnomad_mt.checkpoint(
                 hl.utils.new_temp_file("mt_before_split", ".mt")
@@ -614,7 +631,7 @@ def get_gnomad_raw_data(
 
 def get_gnomad_regions_mt(
     gnomad_version: str,
-    samples: Optional[Union[List[str], hl.ArrayExpression]] = None,
+    samples_ht: Optional[hl.Table] = None,
     row_regions: Optional[Union[List[hl.Interval], hl.tarray]] = None,
     variant_ht: Optional[hl.Table] = None,
     ref: bool = False,
@@ -651,30 +668,39 @@ def get_gnomad_regions_mt(
 
         print("Number of total intervals to filter to: ", len(row_regions))
 
+    filter_ht = None
+    loci_filter_ht = None
+    if least_consequence is not None or max_af is not None:
+        filter_ht = get_freq_ht(gnomad_version, row_regions)
+        filter_ht = filter_freq_and_csq(
+            filter_ht,
+            get_vep_ht(gnomad_version, row_regions),
+            filter_ht,
+            max_af,
+            least_consequence,
+            variant_ht,
+        )
+        loci_filter_ht = filter_ht.key_by("locus")
+
     if gnomad_version in V3_VERSIONS:
         gnomad_mt = get_gnomad_v3_regions_mt(
-            gnomad_version, samples, row_regions, ref, pops
+            gnomad_version, samples_ht, row_regions, ref, pops, loci_filter_ht=loci_filter_ht
         )
     elif gnomad_version in V2_VERSIONS:
-        gnomad_mt = get_gnomad_v2_regions_mt(gnomad_version, samples, row_regions, ref)
+        gnomad_mt = get_gnomad_v2_regions_mt(
+            gnomad_version, samples_ht, row_regions, ref, loci_filter_ht=loci_filter_ht
+        )
     elif gnomad_version in V4_VERSIONS:
         gnomad_mt = get_gnomad_v4_regions_mt(
-            gnomad_version, samples, row_regions, ref, pops
+            gnomad_version, samples_ht, row_regions, ref, pops, loci_filter_ht=loci_filter_ht
         )
     else:
         raise DataException(
             f"Version {gnomad_version} is not supported for gnomAD regions HT"
         )
 
-    if least_consequence is not None or max_af is not None:
-        gnomad_mt = filter_freq_and_csq(
-            gnomad_mt,
-            get_vep_ht(gnomad_version, row_regions),
-            get_freq_ht(gnomad_version, row_regions),
-            max_af,
-            least_consequence,
-            variant_ht,
-        )
+    if filter_ht is not None:
+        gnomad_mt = gnomad_mt.semi_join_rows(filter_ht)
 
     return gnomad_mt
 
@@ -870,10 +896,11 @@ def get_v4_rel_ht() -> hl.Table:
 
 def get_gnomad_v3_regions_mt(
     gnomad_version: str,
-    samples: Optional[Union[List[str], hl.ArrayExpression]] = None,
+    samples_ht: Optional[hl.Table] = None,
     regions: Optional[Union[List[hl.Interval], hl.tarray]] = None,
     ref: bool = False,
     pops: List[str] = None,
+    loci_filter_ht: Optional[hl.Table] = None,
 ) -> hl.MatrixTable:
     """
     Get the gnomAD v3 regions MT for the given version.
@@ -905,12 +932,16 @@ def get_gnomad_v3_regions_mt(
         meta = meta.filter(hl.set(pops).contains(meta.pop))
 
     logger.info("Loading gnomAD MT")
-    v_samples = meta.s.collect(_localize=False)
-    if samples is not None:
-        v_samples = hl.array(hl.set(samples) & hl.set(v_samples))
+    samples_keep_ht = meta.select()
+    if samples_ht is not None:
+        samples_keep_ht = samples_keep_ht.semi_join(samples_ht)
 
     gnomad_mt = get_gnomad_raw_data(
-        gnomad_version, intervals=regions, samples=v_samples, densify=ref
+        gnomad_version,
+        intervals=regions,
+        samples_ht=samples_keep_ht,
+        densify=ref,
+        loci_filter_ht=loci_filter_ht,
     )
 
     logger.info("Adding sample metadata to MT")
@@ -921,10 +952,11 @@ def get_gnomad_v3_regions_mt(
 
 def get_gnomad_v4_regions_mt(
     gnomad_version: str,
-    samples: Optional[Union[List[str], hl.ArrayExpression]] = None,
+    samples_ht: Optional[hl.Table] = None,
     regions: Optional[Union[List[hl.Interval], hl.tarray]] = None,
     ref: bool = False,
     pops: List[str] = None,
+    loci_filter_ht: Optional[hl.Table] = None,
 ) -> hl.MatrixTable:
     """
     Get the gnomAD v3 regions MT for the given version.
@@ -965,12 +997,16 @@ def get_gnomad_v4_regions_mt(
         meta = meta.filter(hl.set(pops).contains(meta.pop))
 
     logger.info("Loading gnomAD MT")
-    v_samples = meta.s.collect(_localize=False)
-    if samples is not None:
-        v_samples = hl.array(hl.set(samples) & hl.set(v_samples))
+    samples_keep_ht = meta.select()
+    if samples_ht is not None:
+        samples_keep_ht = samples_keep_ht.semi_join(samples_ht)
 
     gnomad_mt = get_gnomad_raw_data(
-        gnomad_version, intervals=regions, samples=v_samples, densify=ref
+        gnomad_version,
+        intervals=regions,
+        samples_ht=samples_keep_ht,
+        densify=ref,
+        loci_filter_ht=loci_filter_ht,
     )
 
     logger.info("Adding sample metadata to MT")
@@ -981,9 +1017,10 @@ def get_gnomad_v4_regions_mt(
 
 def get_gnomad_v2_regions_mt(
     gnomad_version: str,
-    samples: Optional[Union[List[str], hl.ArrayExpression]] = None,
+    samples_ht: Optional[hl.Table] = None,
     regions: Optional[Union[List[hl.Interval], hl.tarray]] = None,
     ref: bool = False,
+    loci_filter_ht: Optional[hl.Table] = None,
 ) -> hl.MatrixTable:
     """
     Get the gnomAD v2 regions MT for the given version.
@@ -1005,12 +1042,16 @@ def get_gnomad_v2_regions_mt(
     meta_ht = meta_ht.filter((hl.len(meta_ht.hard_filters) == 0))
 
     logger.info("Loading gnomAD MT")
-    v_samples = meta_ht.s.collect(_localize=False)
-    if samples is not None:
-        v_samples = hl.array(hl.set(samples) & hl.set(v_samples))
+    samples_keep_ht = meta_ht.select()
+    if samples_ht is not None:
+        samples_keep_ht = samples_keep_ht.semi_join(samples_ht)
 
     gnomad_mt = get_gnomad_raw_data(
-        gnomad_version, intervals=regions, samples=v_samples, ref=ref
+        gnomad_version,
+        intervals=regions,
+        samples_ht=samples_keep_ht,
+        ref=ref,
+        loci_filter_ht=loci_filter_ht,
     )
 
     logger.info("Adding sample metadata to MT")
@@ -1833,7 +1874,7 @@ def vep_genes_expr(
 
 
 def filter_freq_and_csq(
-    mt: hl.MatrixTable,
+    t: Union[hl.Table, hl.MatrixTable],
     vep_ht: hl.Table = None,
     freq_ht: hl.Table = None,
     max_freq: float = None,
@@ -1845,7 +1886,7 @@ def filter_freq_and_csq(
     1. Have a global AF <= `max_freq`
     2. Have a consequence at least as severe as `least_consequence` (based on ordering from CSQ_ORDER)
 
-    :param mt: Input MT
+    :param t: Input HT/MT
     :param max_freq: Max. AF to keep
     :param least_consequence: Least consequence to keep.
     :return: Filtered MT
@@ -1857,21 +1898,29 @@ def filter_freq_and_csq(
             "No VEP HT and least_consequence or Freq HT and max_freq were provided, "
             "so no filtering will be done."
         )
-        return mt
+        return t
 
     filter_expr = True
 
+    if isinstance(t, hl.MatrixTable):
+        t_key = t.row_key
+    else:
+        t_key = t.key
+
     if vep_filter:
-        filter_expr &= hl.len(vep_genes_expr(vep_ht[mt.row_key].vep, least_consequence)) > 0
+        filter_expr &= hl.len(vep_genes_expr(vep_ht[t_key].vep, least_consequence)) > 0
 
     if freq_filter:
-        af_expr = freq_ht[mt.row_key].freq[0].AF
+        af_expr = freq_ht[t_key].freq[0].AF
         filter_expr &= hl.is_missing(af_expr) | (af_expr <= max_freq)
 
     if variant_ht is not None:
-        filter_expr |= hl.is_defined(variant_ht[mt.row_key])
+        filter_expr |= hl.is_defined(variant_ht[t_key])
 
-    return mt.filter_rows(filter_expr)
+    if isinstance(t, hl.MatrixTable):
+        return t.filter_rows(filter_expr)
+    else:
+        return t.filter(filter_expr)
 
 
 def main(args):
