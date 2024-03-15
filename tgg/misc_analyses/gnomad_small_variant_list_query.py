@@ -598,15 +598,11 @@ def get_gnomad_raw_data(
                     hl.is_defined(loci_filter_ht[gnomad_mt.locus])
                 )
 
-            gnomad_mt = gnomad_mt.checkpoint(
-                hl.utils.new_temp_file("mt_before_split", ".mt")
-            )
-
             gnomad_mt = hl.experimental.sparse_split_multi(
                 gnomad_mt, filter_changed_loci=True
             )
             gnomad_mt = gnomad_mt.checkpoint(
-                hl.utils.new_temp_file("mt_after_split", ".mt")
+                hl.utils.new_temp_file("mt_after_split", "mt")
             )
 
             # This filter is required to filter refs resulting from the split.
