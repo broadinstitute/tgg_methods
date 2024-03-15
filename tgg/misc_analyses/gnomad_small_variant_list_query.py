@@ -1222,8 +1222,12 @@ def export_to_tsv(ht: hl.Table, out_file: str, builds: List[str]) -> None:
     )
 
     # Convert the samples meta to json and into a single column.
-    meta_cols = [ht[col] for col in ht.row if col.startswith("meta_")]
-    ht = ht.transmute(meta=hl.json(hl.coalesce(*meta_cols)))
+    meta_cols = [col for col in ht.row if col.startswith("meta_")]
+    ht = ht.transmute(
+        meta=hl.coalesce(
+            *[hl.or_missing(hl.is_defined(ht[x]), hl.json(ht[x])) for x in meta_cols]
+        )
+    )
 
     # Drop some annotations that aren't useful.
     ht = ht.drop(*[f"{v}_a_index" for v in ["v1", "v2"] if f"{v}_a_index" in ht.row])
