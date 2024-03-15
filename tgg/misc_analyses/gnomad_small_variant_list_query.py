@@ -1222,18 +1222,8 @@ def export_to_tsv(ht: hl.Table, out_file: str, builds: List[str]) -> None:
     )
 
     # Convert the samples meta to json and into a single column.
-    ht = ht.transmute(
-        meta=hl.array(
-            # Take all the gnomad meta versions and convert to a json string.
-            [hl.json(ht[col]) for col in ht.row if col.startswith("meta_")]
-        ).filter(
-            # Remove those that are empty.
-            lambda x: (x != "null")
-            | (hl.len(x) > 0)
-        )[
-            0
-        ]  # Since there is only one per line, take the only remaining element.
-    )
+    meta_cols = [ht[col] for col in ht.row if col.startswith("meta_")]
+    ht = ht.transmute(meta=hl.json(hl.coalesce(*meta_cols)))
 
     # Drop some annotations that aren't useful.
     ht = ht.drop(*[f"{v}_a_index" for v in ["v1", "v2"] if f"{v}_a_index" in ht.row])
@@ -1798,7 +1788,6 @@ def import_variants_regions_ht(
         var_ht = var_ht.annotate(gene_id=vep_ht[var_ht.locus, var_ht.alleles].gene_ids)
         var_ht = var_ht.explode(var_ht.gene_id)
         gene_ids = var_ht.aggregate(hl.agg.collect_as_set(var_ht.gene_id))
-        print(gene_ids)
         gencode_ht = hl.experimental.import_gtf(
             GENE_REGION_GTF_MAP[gnomad_version],
             reference_genome=input_genome,
