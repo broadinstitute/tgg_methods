@@ -1579,6 +1579,7 @@ def get_regions_ht_for_all_variants(
             hl.struct(**region_mt.col, **region_mt.entry)
         ),
     ).rows()
+    region_ht = region_ht.checkpoint(hl.utils.new_temp_file("int_region_ht", "ht"))
     region_ht = region_ht.annotate(
         samples=hl.set(region_ht.v1_entries.map(lambda x: x.s)).intersection(
             hl.set(region_ht.v2_entries.map(lambda x: x.s))
