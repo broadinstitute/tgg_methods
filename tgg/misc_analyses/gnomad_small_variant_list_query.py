@@ -1748,7 +1748,7 @@ def import_variants_regions_ht(
     :return: Variants and regions HT.
     """
     logger.info("Importing variant table...")
-    var_ht = hl.import_table(input_tsv, no_header=True)
+    var_ht = hl.import_table(input_tsv, no_header=True, min_partitions=12)
 
     # Make sure that the dimensions are what is expected: chrom, pos, ref, alt, regions.
     if len(var_ht.row) != 5:
@@ -1942,7 +1942,7 @@ def main(args):
             gnomad_version=gnomad_version,
             use_genes_as_regions=args.use_genes_as_regions,
         )
-        var_ht = var_ht.repartition(max(var_ht.count(), 5000)).checkpoint(
+        var_ht = var_ht.repartition(min(var_ht.count(), 5000)).checkpoint(
             hl.utils.new_temp_file("input_var_ht", "ht")
         )
         var_ht.show(200)
