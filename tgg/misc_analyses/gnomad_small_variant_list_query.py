@@ -1083,7 +1083,7 @@ def split_interval_ht(ht: hl.Table, interval_field="regions") -> hl.Table:
     sorted_intervals = [[i, [s]] for i, s in sorted_intervals]
     split_intervals = deepcopy(sorted_intervals[:1])
 
-    for interval, i in sorted_intervals[1:10]:
+    for interval, i in sorted_intervals:
         previous_interval = split_intervals[-1][0]
         previous_i = split_intervals[-1][1][:]
         if previous_interval.start.contig == interval.start.contig:
@@ -1138,6 +1138,9 @@ def split_interval_ht(ht: hl.Table, interval_field="regions") -> hl.Table:
             ),
         ),
         key=["region"],
+    )
+    ht = ht.checkpoint(
+        hl.utils.new_temp_file("split_intervals", "ht"), overwrite=True
     )
 
     return ht
@@ -1796,7 +1799,7 @@ def import_variants_regions_ht(
             GENE_REGION_GTF_MAP[gnomad_version],
             reference_genome=input_genome,
             skip_invalid_contigs=True,
-            min_partitions=12,
+            min_partitions=500,
             force_bgz=True,
         )
         gencode_ht = gencode_ht.annotate(
@@ -1939,7 +1942,7 @@ def main(args):
             gnomad_version=gnomad_version,
             use_genes_as_regions=args.use_genes_as_regions,
         )
-        var_ht = var_ht.repartition(var_ht.count()).checkpoint(
+        var_ht = var_ht.repartition(max(var_ht.count(), 5000)).checkpoint(
             hl.utils.new_temp_file("input_var_ht", "ht")
         )
         var_ht.show(200)
