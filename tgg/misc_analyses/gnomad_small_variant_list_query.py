@@ -670,11 +670,11 @@ def get_gnomad_regions_mt(
         filter_ht = get_freq_ht(gnomad_version, row_regions)
         filter_ht = filter_freq_and_csq(
             filter_ht,
-            get_vep_ht(gnomad_version, row_regions),
-            filter_ht,
-            max_af,
-            least_consequence,
-            variant_ht,
+            vep=get_vep_ht(gnomad_version, row_regions),
+            freq=filter_ht,
+            max_freq=max_af,
+            least_consequence=least_consequence,
+            variant_ht=variant_ht,
         )
         loci_filter_ht = filter_ht.key_by("locus")
 
@@ -1635,6 +1635,7 @@ def create_regions_ht(
     variant_samples_ht: hl.Table = None,
     row: hl.struct = None,
     af_max: float = None,
+    least_consequence: str = None,
     needs_liftover: bool = False,
 ):
     """
@@ -1646,6 +1647,7 @@ def create_regions_ht(
     :param variant_samples_ht: Variant samples HT.
     :param row: Row to annotate.
     :param af_max: Maximum allele frequency.
+    :param least_consequence: Least consequence.
     :param needs_liftover: Whether the variants need liftover.
     :return: Regions HT.
     """
@@ -1691,6 +1693,15 @@ def create_regions_ht(
             gnomad_mt=gnomad_mt,
             gnomad_version=gnomad_version,
             gnomad_meta_ht=gnomad_meta_ht,
+        )
+
+    if least_consequence is not None or af_max is not None:
+        region_ht = filter_freq_and_csq(
+            region_ht,
+            vep=region_ht.v2_vep,
+            freq=region_ht.v2_freq,
+            max_freq=af_max,
+            least_consequence=least_consequence,
         )
 
     # Add the gnomad version.
@@ -1863,8 +1874,8 @@ def vep_genes_expr(
 
 def filter_freq_and_csq(
     t: Union[hl.Table, hl.MatrixTable],
-    vep_ht: hl.Table = None,
-    freq_ht: hl.Table = None,
+    vep: Union[hl.Table, hl.expr.StructExpression] = None,
+    freq: Union[hl.Table, hl.expr.ArrayExpression] = None,
     max_freq: float = None,
     least_consequence: str = None,
     variant_ht: hl.Table = None,
@@ -1879,8 +1890,8 @@ def filter_freq_and_csq(
     :param least_consequence: Least consequence to keep.
     :return: Filtered MT
     """
-    vep_filter = vep_ht is not None and least_consequence is not None
-    freq_filter = freq_ht is not None and max_freq is not None
+    vep_filter = vep is not None and least_consequence is not None
+    freq_filter = freq is not None and max_freq is not None
     if not vep_filter and not freq_filter:
         logger.info(
             "No VEP HT and least_consequence or Freq HT and max_freq were provided, "
@@ -1896,10 +1907,17 @@ def filter_freq_and_csq(
         t_key = t.key
 
     if vep_filter:
-        filter_expr &= hl.len(vep_genes_expr(vep_ht[t_key].vep, least_consequence)) > 0
+        if isinstance(vep, hl.Table):
+            vep_expr = vep[t_key].vep
+        else:
+            vep_expr = vep
+        filter_expr &= hl.len(vep_genes_expr(vep_expr, least_consequence)) > 0
 
     if freq_filter:
-        af_expr = freq_ht[t_key].freq[0].AF
+        if isinstance(freq, hl.Table):
+            af_expr = freq[t_key].freq[0].AF
+        else:
+            af_expr = freq[0].AF
         filter_expr &= hl.is_missing(af_expr) | (af_expr <= max_freq)
 
     if variant_ht is not None:
@@ -1997,6 +2015,7 @@ def main(args):
                 gnomad_version=gnomad_version,
                 variant_samples_ht=variant_samples_ht,
                 row=row,
+                least_consequence=args.least_consequence,
                 af_max=args.af_max,
                 needs_liftover=needs_liftover,
             )
