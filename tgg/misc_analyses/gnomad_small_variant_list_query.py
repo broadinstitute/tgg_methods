@@ -1060,6 +1060,13 @@ def get_gnomad_v2_regions_mt(
 # Functions that shouldn't need to be updated with version additions.
 ########################################################################################
 def split_interval_ht(ht: hl.Table, interval_field="regions") -> hl.Table:
+    """
+    Split the intervals in the given HT.
+
+    :param ht: Table to split the intervals for.
+    :param interval_field: Field with the intervals to split.
+    :return: Table with split intervals and their corresponding variants.
+    """
     ht = ht.explode(ht[interval_field])
     interval_type = ht[interval_field].dtype
     intervals = ht.aggregate(
@@ -1080,68 +1087,56 @@ def split_interval_ht(ht: hl.Table, interval_field="regions") -> hl.Table:
         ),
     )
 
-    sorted_intervals = [[i, [s]] for i, s in sorted_intervals]
-    split_intervals = deepcopy(sorted_intervals[:1])
+    sorted_interval_loci = []
+    interval_to_variant = {}
 
-    for interval, i in sorted_intervals:
-        previous_interval = split_intervals[-1][0]
-        previous_i = split_intervals[-1][1][:]
-        if previous_interval.start.contig == interval.start.contig:
-            if previous_interval.end.position < interval.end.position:
-                if interval.start.position < previous_interval.end.position:
-                    if interval.start.position != previous_interval.start.position:
-                        split_intervals[-1][0] = hl.Interval(
-                            previous_interval.start, interval.start
-                        )
-                        split_intervals.append(
-                            [
-                                hl.Interval(interval.start, previous_interval.end),
-                                previous_i + i
-                            ]
-                        )
-                    else:
-                        split_intervals[-1][1].extend(i)
+    for i, (interval, variant) in enumerate(sorted_intervals):
+        sorted_interval_loci.append([i, [interval.start, "start"]])
+        sorted_interval_loci.append([i, [interval.end, "end"]])
+        interval_to_variant[i] = variant
 
-                    split_intervals.append(
-                        [hl.Interval(previous_interval.end, interval.end), i[:]]
-                    )
-                else:
-                    split_intervals.append(
-                        [hl.Interval(interval.start, interval.end), i[:]])
-            elif interval.start.position > previous_interval.end.position:
-                if interval.start.position != previous_interval.start.position:
-                    split_intervals[-1][0] = hl.Interval(
-                        previous_interval.start, interval.start
-                    )
+    interval_to_variant = hl.literal(interval_to_variant)
+
+    sorted_interval_loci = sorted(
+        sorted_interval_loci,
+        key=lambda i: (
+            contigs.index(i[1][0].contig),
+            i[1][0].position,
+        ),
+    )
+
+    pre_id, (pre_locus, pre_type) = deepcopy(sorted_interval_loci[0])
+    split_intervals = []
+    open_intervals = {pre_id}
+
+    for curr_id, (curr_locus, curr_type) in sorted_interval_loci[1:]:
+        if pre_locus.contig == curr_locus.contig:
+            if len(open_intervals) != 0 and (
+                    pre_locus.position != curr_locus.position or pre_type != curr_type):
                 split_intervals.append(
                     [
-                        hl.Interval(interval.start, interval.end),
-                        previous_i + i
+                        hl.Interval(pre_locus, curr_locus),
+                        set([v for v in open_intervals])
                     ]
                 )
-                split_intervals.append(
-                    [hl.Interval(interval.end, previous_interval.end), previous_i]
-                )
-            else:
-                if interval.start.position == previous_interval.start.position:
-                    split_intervals[-1][1].extend(i)
+            if curr_type == "end":
+                open_intervals.remove(curr_id)
 
-        else:
-            split_intervals.append([hl.Interval(interval.start, interval.end), i[:]])
+        if curr_type == "start":
+            open_intervals.add(curr_id)
+
+        pre_locus = curr_locus
+        pre_type = curr_type
 
     ht = hl.Table.parallelize(
         [hl.struct(region=r, variants=v) for r, v in split_intervals],
-        schema=hl.tstruct(
-            region=interval_type,
-            variants=hl.tarray(
-                hl.tstruct(locus=interval_type.point_type, alleles=hl.tarray(hl.tstr))
-            ),
-        ),
+        schema=hl.tstruct(region=interval_type, variants=hl.tset(hl.tint)),
         key=["region"],
     )
-    ht = ht.checkpoint(
-        hl.utils.new_temp_file("split_intervals", "ht"), overwrite=True
-    )
+
+    ht = ht.annotate(
+        variants=hl.set(ht.variants.map(lambda v: interval_to_variant[v]))
+    ).checkpoint(hl.utils.new_temp_file("split_intervals", "ht"))
 
     return ht
 
