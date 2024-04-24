@@ -1574,7 +1574,6 @@ def get_regions_ht_for_all_variants(
             hl.struct(**region_mt.col, **region_mt.entry)
         ),
     ).rows()
-    region_ht = region_ht.checkpoint(hl.utils.new_temp_file("int_region_ht", "ht"))
     region_ht = region_ht.annotate(
         samples=hl.set(region_ht.v1_entries.map(lambda x: x.s)).intersection(
             hl.set(region_ht.v2_entries.map(lambda x: x.s))
@@ -1589,6 +1588,8 @@ def get_regions_ht_for_all_variants(
             lambda x: region_ht.samples.contains(x.s)
         )
     ).drop("samples")
+    region_ht = region_ht.checkpoint(hl.utils.new_temp_file("int_region_ht", "ht"))
+
     region_ht = region_ht.annotate(
         **{
             f"v1_{k}": v
@@ -1702,6 +1703,7 @@ def create_regions_ht(
             freq=region_ht.v2_freq,
             max_freq=af_max,
             least_consequence=least_consequence,
+            variant_ht=var_ht,
         )
 
     # Add the gnomad version.
