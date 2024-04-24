@@ -674,7 +674,7 @@ def get_gnomad_regions_mt(
             freq=filter_ht,
             max_freq=max_af,
             least_consequence=least_consequence,
-            variant_ht=variant_ht,
+            variant=variant_ht,
         )
         loci_filter_ht = filter_ht.key_by("locus")
 
@@ -1703,7 +1703,7 @@ def create_regions_ht(
             freq=region_ht.v2_freq,
             max_freq=af_max,
             least_consequence=least_consequence,
-            variant_ht=var_ht,
+            variant=var_ht[region_ht.v2_locus, region_ht.v2_alleles],
         )
 
     # Add the gnomad version.
@@ -1880,7 +1880,7 @@ def filter_freq_and_csq(
     freq: Union[hl.Table, hl.expr.ArrayExpression] = None,
     max_freq: float = None,
     least_consequence: str = None,
-    variant_ht: hl.Table = None,
+    variant: hl.Table = None,
 ) -> hl.MatrixTable:
     """
     Filters MatrixTable to include variants that:
@@ -1922,8 +1922,12 @@ def filter_freq_and_csq(
             af_expr = freq[0].AF
         filter_expr &= hl.is_missing(af_expr) | (af_expr <= max_freq)
 
-    if variant_ht is not None:
-        filter_expr |= hl.is_defined(variant_ht[t_key])
+    if variant is not None:
+        if isinstance(freq, hl.Table):
+            variant_expr = variant[t_key]
+        else:
+            variant_expr = variant
+        filter_expr |= hl.is_defined(variant_expr)
 
     if isinstance(t, hl.MatrixTable):
         return t.filter_rows(filter_expr)
