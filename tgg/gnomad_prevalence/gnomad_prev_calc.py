@@ -31,8 +31,15 @@ MISSENSE_CONSEQUENCES = {
 SIG = {
     "Pathogenic",
     "Pathogenic/Likely_pathogenic",
+    "Pathogenic/Likely_pathogenic/Established_risk_allele",
+    "Pathogenic/Likely_pathogenic/Likely_risk_allele",
+    "Pathogenic/Likely_risk_allele",
     "Likely_pathogenic",
+    "Likely_pathogenic/Likely_risk_allele",  # Ask Moriel about likely risk allele and established risk allele
+    "Established_risk_allele",
+    "Likely_risk_allele",
     "Conflicting_interpretations_of_pathogenicity",
+    "Conflicting_classifications_of_pathogenicity",
     "DM",
 }
 
