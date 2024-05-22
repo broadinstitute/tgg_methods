@@ -35,23 +35,19 @@ SIG = {
     "Pathogenic/Likely_pathogenic/Likely_risk_allele",
     "Pathogenic/Likely_risk_allele",
     "Likely_pathogenic",
-    "Likely_pathogenic/Likely_risk_allele",  # Ask Moriel about likely risk allele and established risk allele
-    "Established_risk_allele",
-    "Likely_risk_allele",
+    "Likely_pathogenic/Likely_risk_allele",
     "Conflicting_interpretations_of_pathogenicity",
     "Conflicting_classifications_of_pathogenicity",
     "DM",
 }
 
 POPS = {
-    "exomes": deepcopy(POPS["v4"]),
-    "genomes": deepcopy(POPS["v3"]),
+    "exomes": deepcopy(POPS["v4"]["exomes"]),
+    "genomes": deepcopy(POPS["v4"]["genomes"]),
 }
 ALL_POPS = set().union(*POPS.values())
 # Insert "" to account for total dataset
 ALL_POPS.add("")
-# Drop 'oth' from genomes
-POPS["genomes"].remove("oth")
 
 TEMP_PATH = "gs://gnomad-tmp-4day/mwilson/prevalence/"
 RESULT_PATH = "gs://gnomad-mwilson/prevalence/results/"
