@@ -57,6 +57,7 @@ CLINVAR_HT_PATH = (
 CLINVAR_VAR_SUMMARY_PATH = (
     "gs://gnomad-mwilson/prevalence/clinvar_variant_summary/variant_summary.ht"
 )
+HGMD_HT_PATH = "gs://gnomad-mwilson/prevalence/hgmd/HGMD_Pro_2023.1_hg38.ht"
 
 
 def create_lof_consequence_ht(
@@ -382,9 +383,7 @@ def prep_hgmd_data(gene_interval, sig) -> hl.Table:
     :param sig: List of significance terms to filter to
     :return: Filtered HGMD Table with hgmd_url annotation
     """
-    hgmd = hl.read_table(
-        "gs://seqr-reference-data-private/GRCh38/HGMD/HGMD_Pro_2023.1_hg38.ht"
-    )
+    hgmd = hl.read_table(HGMD_HT_PATH)
     hgmd = hl.filter_intervals(hgmd, gene_interval)
     # Filter table of variants down to clinically significant using
     # a set of clinical significance terms
