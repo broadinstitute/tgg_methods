@@ -513,7 +513,9 @@ def get_gnomad_raw_data(
 
         Data after v2 is represented as a Hail VariantDataset, and by default the
         returned MT will only be the filtered variant data. Since the VariantDataset
-        in not densified, the MT will not have valid reference genotype information.
+        in not densified, unless 'ref' or 'densify' are set to True, the MT will not 
+        have valid reference genotype information.
+        
 
     :param version: gnomAD version.
     :param intervals: Intervals to filter to.
