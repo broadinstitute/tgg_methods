@@ -1,3 +1,64 @@
+"""
+Script to query gnomAD datasets for samples carrying specific genetic variants, and optionally, co-occurring variants in the same samples.
+
+This script takes a list of genetic variants, with an optional list of regions for each
+variant, and finds all samples in gnomAD datasets (v2 exomes, v2 genomes, v3 genomes,
+or v4 exomes) that carry the variant. If regions are specified for a variant, the
+script will also identify any co-occurring variants in the same samples within the
+specified regions.
+
+The script outputs a table of samples carrying the input variants, and any co-occurring
+variants, with additional metadata such as:
+    - Sample genotype information
+        - GT (genotype)
+        - GQ (genotype quality)
+        - AD (allele depth)
+        - PL (phred-scaled genotype likelihoods)
+        - DP (total read depth)
+        - adj (whether the genotype passes high-quality filters)
+    - Variant annotations
+        - filters (Variant QC filters)
+        - Several variant QC metrics (e.g., ReadPosRankSum, MQRankSum, QD, FS, SOR,...)
+        - VEP annotations
+        - gnomAD allele frequencies
+    - Sample metadata
+        - pop (population information)
+        - release (whether the sample is part of the gnomAD release)
+        - Subset-specific information (e.g., neuro, control, topmed, non_v2,...)
+        - Project information (e.g., project_id, investigator, project_name,...)
+        - Relatedness information between samples across different gnomAD versions
+          where applicable.
+            - v2_exomes_rel
+            - v3_rel
+            - v4_exomes_rel
+            - v4_genomes_rel
+    - Optionally includes reference genotypes (NOT RECOMMENDED for large lists)
+
+Outputs the annotated variants table as a Hail Table (.ht) and/or a tab-separated
+values file (.tsv or .tsv.gz).
+
+Usage:
+    - Specify the input TSV file containing variants and regions.
+    - Define the input genome build (GRCh37 or GRCh38). Uses liftover to align variants
+      to different genome builds.
+    - Choose the gnomAD versions to search (e.g., v2_exomes, v2_genomes, v3,
+      v4_exomes, v4_genomes).
+    - Optionally:
+        - include reference genotypes.
+        - set filtering criteria such as maximum allele frequency and least consequence.
+        - use the gene interval(s) associated with the variant as the region(s) for
+          co-occurring variants.
+    - Provide the output paths for the Hail Table and/or TSV file.
+
+Example command:
+    python script.py \
+        --input_tsv input_variants.tsv \
+        --input_genome GRCh38 \
+        --gnomad v4_genomes v4_exomes \
+        --out_ht output.ht \
+        --out_tsv output.tsv
+"""
+
 import argparse
 import logging
 from typing import Dict, List, Optional, Union
@@ -1487,7 +1548,8 @@ def get_regions_ht_for_one_variant(
     :param gnomad_version: gnomAD version.
     :return: Regions HT for one variant.
     """
-    # Prefix all variants and genotype fields with 'v2'.
+    # Prefix all variants and genotype fields with "v2_", where "v2" stands for
+    # variant 2 (the target variant is prefixed with "v1_") not gnomAD v2.
     gnomad_mt = gnomad_mt.rename({x: f"v2_{x}" for x in gnomad_mt.row})
     gnomad_mt = gnomad_mt.rename({x: f"v2_{x}" for x in gnomad_mt.entry})
 
