@@ -658,11 +658,11 @@ def get_gnomad_regions_mt(
                 )
             )
         )
-        print("Number of input variants: ", len(row_regions))
+        logger.info("Number of input variants: ", len(row_regions))
         for region in variant_ht.regions.collect():
             row_regions.extend(region)
 
-        print("Number of total intervals to filter to: ", len(row_regions))
+        logger.info("Number of total intervals to filter to: ", len(row_regions))
 
     filter_ht = None
     loci_filter_ht = None
@@ -1734,7 +1734,6 @@ def create_regions_ht(
         )
         region_ht = region_ht.filter(region_ht.v2_global_freq.AF <= af_max)
 
-    # Unify samples meta.
     logger.info("Unifying sample meta...")
     region_ht = unify_sample_meta(region_ht, gnomad_version)
 
@@ -1887,10 +1886,10 @@ def filter_freq_and_csq(
     1. Have a global AF <= `max_freq`
     2. Have a consequence at least as severe as `least_consequence` (based on ordering from CSQ_ORDER)
 
-    :param t: Input HT/MT
-    :param max_freq: Max. AF to keep
+    :param t: Input HT/MT.
+    :param max_freq: Maximum AF to keep.
     :param least_consequence: Least consequence to keep.
-    :return: Filtered MT
+    :return: Filtered MT.
     """
     vep_filter = vep is not None and least_consequence is not None
     freq_filter = freq is not None and max_freq is not None
@@ -2001,7 +2000,7 @@ def main(args):
                 gnomad_mt = gnomad_mt.annotate_cols(
                     v2_exomes_rel=v3_rel_ht[gnomad_mt.s].v2_exomes_rel,
                 )
-            # If exomes: add ID / relationship to sample in v3 if any.
+            # If v2 exomes: add ID / relationship to sample in v3 if any.
             elif gnomad_version == "v2_exomes":
                 gnomad_mt = gnomad_mt.annotate_cols(
                     v3_rel=v2_rel_ht[gnomad_mt.s].v3_rel
@@ -2052,7 +2051,6 @@ def main(args):
             export_to_tsv(final_result_ht, args.out_tsv, list(all_builds))
 
 
-# This part of python handling of script arguments.
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -2102,13 +2100,14 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--out_ht",
-        help="Output Hail Table. If specified, results are also saved as a hail table.",
+        help="Output Hail Table path. If specified, results are saved as a hail table.",
     )
     parser.add_argument(
         "--out_tsv",
         help=(
-            "If specified, results are output as TSV. Depending on the extension"
-            " provided, the result may be uncompressed (.tsv) or compressed (.tsv.gz)"
+            "Output TSV path. If specified, results are output as TSV. Depending on "
+            "the extension provided, the result may be uncompressed (.tsv) or "
+            "compressed (.tsv.gz)"
         ),
     )
     parser.add_argument(
@@ -2139,6 +2138,6 @@ if __name__ == "__main__":
     # Make sure we're outputting something.
     args = parser.parse_args()
     if not args.out_ht and not args.out_tsv:
-        logger.error("At least one of --out_ht or --out_tsv needs to be specified.")
+       raise ValueError("At least one of --out_ht or --out_tsv needs to be specified.")
     else:
         main(args)
