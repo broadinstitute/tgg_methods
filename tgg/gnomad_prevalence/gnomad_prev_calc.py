@@ -472,7 +472,7 @@ def main(args):
         tmp_dir="gs://gnomad-tmp-4day/mwilson/prevalence/tmp",
     )
     # Open genes file and iterate through each gene printing itå
-    with hl.hadoop_open(args.genes, "r") as f:
+    with hl.hadoop_open(args.genes_file, "r") as f:
         for gene in f:
             gene = gene.strip()
             gene_interval = hl.experimental.get_gene_intervals(
@@ -637,6 +637,9 @@ def main(args):
                 ht.AF_afr,
                 ht.AC_afr,
                 ht.AN_afr,
+                ht.AF_ami,
+                ht.AC_ami,
+                ht.AN_ami,
                 ht.AF_amr,
                 ht.AC_amr,
                 ht.AN_amr,
@@ -649,6 +652,9 @@ def main(args):
                 ht.AF_fin,
                 ht.AC_fin,
                 ht.AN_fin,
+                ht.AF_mid,
+                ht.AC_mid,
+                ht.AN_mid,
                 ht.AF_nfe,
                 ht.AC_nfe,
                 ht.AN_nfe,
@@ -682,7 +688,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--genes", help="Genes to run pipeline on", required=True)
+    parser.add_argument("--genes-file", help="Genes to run pipeline on", required=True)
     parser.add_argument(
         "--overwrite", help="Overwrite previous paths", action="store_true"
     )
