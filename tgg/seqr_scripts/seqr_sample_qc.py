@@ -153,7 +153,13 @@ def apply_filter_flags_expr(
 
 
 def get_all_sample_metadata(
-    mt: hl.MatrixTable, build: int, data_type: str, data_source: str, version: int, remap_path: str, sample_metadata_path: str
+    mt: hl.MatrixTable,
+    build: int,
+    data_type: str,
+    data_source: str,
+    version: int,
+    remap_path: str,
+    sample_metadata_path: str,
 ) -> hl.Table:
     """
     Annotate MatrixTable with all current metadata: sample sequencing metrics, sample ID mapping,
@@ -167,18 +173,10 @@ def get_all_sample_metadata(
     :rtype: Table
     """
     logger.info("Importing and annotating with sequencing metrics...")
-    meta_ht = (
-        hl.import_table(
-            sample_metadata_path
-        )
-        .key_by("SAMPLE")
-        .repartition(1000)
-    )
+    meta_ht = hl.import_table(sample_metadata_path).key_by("SAMPLE").repartition(1000)
 
     logger.info("Importing and annotating seqr ID names...")
-    remap_ht = hl.import_table(
-        remap_path
-    ).key_by("s")
+    remap_ht = hl.import_table(remap_path).key_by("s")
     meta_ht = meta_ht.annotate(**remap_ht[meta_ht.key])
     meta_ht = meta_ht.annotate(
         seqr_id=hl.if_else(
@@ -270,18 +268,23 @@ def run_population_pca(mt: hl.MatrixTable, build: int, num_pcs=20) -> hl.Table:
     model_path = rdg_gnomad_v4_rf_model_path()
     mt = mt.select_entries("GT")
     scores = pc_project(mt, loadings)
-    scores = scores.annotate(
-        scores=scores.scores[:num_pcs], known_pop="Unknown"
-    ).key_by("s").checkpoint(new_temp_file('scores_temp',extension="ht"))
+    scores = (
+        scores.annotate(scores=scores.scores[:num_pcs], known_pop="Unknown")
+        .key_by("s")
+        .checkpoint(new_temp_file("scores_temp", extension="ht"))
+    )
 
     logger.info("Unpacking RF model")
     fit = None
     with hl.hadoop_open(model_path, "rb") as f:
         fit = pickle.load(f)
 
-    logger.info('Running assign_population_pcs...')
+    logger.info("Running assign_population_pcs...")
     pop_pca_ht, ignore = assign_population_pcs(
-        scores, pc_cols=scores.scores, output_col="qc_pop", fit=fit,
+        scores,
+        pc_cols=scores.scores,
+        output_col="qc_pop",
+        fit=fit,
     )
     pop_pca_ht = pop_pca_ht.key_by("s")
     pop_pcs = {f"pop_PC{i+1}": scores.scores[i] for i in range(num_pcs)}
@@ -305,7 +308,7 @@ def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
     mt = hl.sample_qc(mt)
     mt = mt.annotate_cols(
         sample_qc=mt.sample_qc.annotate(
-            f_inbreeding=hl.agg.inbreeding(mt.GT, mt['info.AF'][0])
+            f_inbreeding=hl.agg.inbreeding(mt.GT, mt["info.AF"][0])
         )
     )
     mt = mt.annotate_cols(idx=mt.qc_pop + "_" + hl.str(mt.qc_platform))
@@ -362,9 +365,7 @@ def main(args):
     bucket_path = args.bucket_path
 
     logger.info("Importing callset as mt...")
-    mt = hl.read_matrix_table(
-        callset_path
-    ).repartition(1000)
+    mt = hl.read_matrix_table(callset_path).repartition(1000)
 
     mt = mt.annotate_entries(
         GT=hl.case()
@@ -389,7 +390,9 @@ def main(args):
         ).persist()
 
     logger.info("Annotating with sequencing metrics and filtered callrate...")
-    meta_ht = get_all_sample_metadata(mt, build, data_type, data_source, version,remap_path,sample_metadata_path)
+    meta_ht = get_all_sample_metadata(
+        mt, build, data_type, data_source, version, remap_path, sample_metadata_path
+    )
     meta_ht = meta_ht.checkpoint(new_temp_file("metadata_ht_imported", extension="ht"))
     mt = mt.annotate_cols(**meta_ht[mt.col_key], data_type=data_type)
 
@@ -405,9 +408,13 @@ def main(args):
         filter_flags=apply_filter_flags_expr(mt, data_type, metric_thresholds)
     )
 
-    mt = mt.checkpoint(new_temp_file("annotation_mt", extension="mt").replace('/tmp/','gs://seqr-scratch-temp/'))
+    mt = mt.checkpoint(
+        new_temp_file("annotation_mt", extension="mt").replace(
+            "/tmp/", "gs://seqr-scratch-temp/"
+        )
+    )
 
-    logger.info('We are silly and MANUALLY SKIPPING platform imputation...')
+    logger.info("We are silly and MANUALLY SKIPPING platform imputation...")
     logger.info("Assign platform or product")
     if data_type == "WES" and data_source == "External":
         logger.info("Running platform imputation...")
@@ -426,19 +433,22 @@ def main(args):
 
         missing_metrics = mt.filter_cols(hl.is_defined(mt.PRODUCT), keep=False)
         missing_metrics.cols().select().export(
-            'gs://seqr-scratch-temp/missing_metrics_new_new.tsv'
+            "gs://seqr-scratch-temp/missing_metrics_new_new.tsv"
         )  #  TODO Add logging step that prints unexpected missing samples
     else:
         mt = mt.annotate_cols(qc_platform="Unknown")
 
-    mt = mt.checkpoint(new_temp_file("sexcheck_mt", extension="mt").replace('/tmp/','gs://seqr-scratch-temp/'))
+    mt = mt.checkpoint(
+        new_temp_file("sexcheck_mt", extension="mt").replace(
+            "/tmp/", "gs://seqr-scratch-temp/"
+        )
+    )
 
-    # this has unacceptablly lousy behavior... what in the world ??
     logger.info("Projecting gnomAD population PCs...")
     pop_ht = run_population_pca(mt, build, num_pcs=20)
-    logger.info('Checkpointing pop_ht...')
-    pop_ht = pop_ht.checkpoint(new_temp_file('genetic_ancestry',extension="ht"))
-    logger.info('Annotating genetic ancestry inference information back on...')
+    logger.info("Checkpointing pop_ht...")
+    pop_ht = pop_ht.checkpoint(new_temp_file("genetic_ancestry", extension="ht"))
+    logger.info("Annotating genetic ancestry inference information back on...")
     mt = mt.annotate_cols(**pop_ht[mt.col_key])
 
     logger.info("Running Hail's sample qc...")
@@ -448,10 +458,11 @@ def main(args):
     logger.info("Exporting sample QC tables...")
     ht = mt.cols()
     ht = ht.checkpoint(
-        f"{bucket_path}/{data_type}_v{version}_{data_source}_gatk_sampleqc.ht",overwrite=True
+        f"{bucket_path}/{data_type}_v{version}_{data_source}_gatk_sampleqc.ht",
+        overwrite=True,
     )
     ht.flatten().export(
-       f"{bucket_path}/{data_type}_v{version}_{data_source}_gatk_sampleqc_flattened_tsv.tsv",
+        f"{bucket_path}/{data_type}_v{version}_{data_source}_gatk_sampleqc_flattened_tsv.tsv",
     )
 
 
@@ -567,7 +578,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--bucket-path",
         help="Path to bucket to output results to",
-        default = 'gs://seqr-loading-temp/v03/GRCh38/SNV_INDEL/sample_qc'
+        default="gs://seqr-loading-temp/v03/GRCh38/SNV_INDEL/sample_qc",
     )
 
     args = parser.parse_args()
