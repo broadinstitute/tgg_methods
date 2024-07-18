@@ -1,31 +1,33 @@
-import logging
 import argparse
+import logging
 import pickle
 
 import hail as hl
+from gnomad.sample_qc.ancestry import assign_population_pcs, pc_project
+from gnomad.sample_qc.filtering import compute_stratified_metrics_filter
+from gnomad.sample_qc.pipeline import filter_rows_for_qc
 from gnomad.sample_qc.platform import (
+    assign_platform_from_pcs,
     compute_callrate_mt,
     run_platform_pca,
-    assign_platform_from_pcs,
 )
-from gnomad.sample_qc.filtering import compute_stratified_metrics_filter
-from gnomad.utils.filtering import filter_to_autosomes
-from gnomad.sample_qc.pipeline import filter_rows_for_qc
-from gnomad.sample_qc.ancestry import pc_project, assign_population_pcs
 from gnomad.utils import slack
-
+from gnomad.utils.filtering import filter_to_autosomes
+from hail.utils.misc import new_temp_file
 from resources.resources_seqr_qc import (
-    mt_path,
-    missing_metrics_path,
-    rdg_gnomad_pop_pca_loadings_path,
-    rdg_gnomad_rf_model_path,
-    remap_path,
-    sample_qc_ht_path,
-    sample_qc_tsv_path,
-    seq_metrics_path,
-    val_coding_ht_path,
-    val_noncoding_ht_path,
-    VCFDataTypeError,
+    rdg_gnomad_v4_pop_pca_loadings_path,
+    rdg_gnomad_v4_rf_model_path,
+    # VCFDataTypeError,
+    # missing_metrics_path,
+    # mt_path,
+    # rdg_gnomad_pop_pca_loadings_path,
+    # rdg_gnomad_rf_model_path,
+    # remap_path,
+    # sample_qc_ht_path,
+    # sample_qc_tsv_path,
+    # seq_metrics_path,
+    # val_coding_ht_path,
+    # val_noncoding_ht_path,
 )
 
 logging.basicConfig(
@@ -151,7 +153,7 @@ def apply_filter_flags_expr(
 
 
 def get_all_sample_metadata(
-    mt: hl.MatrixTable, build: int, data_type: str, data_source: str, version: int
+    mt: hl.MatrixTable, build: int, data_type: str, data_source: str, version: int, remap_path: str, sample_metadata_path: str
 ) -> hl.Table:
     """
     Annotate MatrixTable with all current metadata: sample sequencing metrics, sample ID mapping,
@@ -165,13 +167,17 @@ def get_all_sample_metadata(
     :rtype: Table
     """
     logger.info("Importing and annotating with sequencing metrics...")
-    meta_ht = hl.import_table(
-        seq_metrics_path(build, data_type, data_source, version), impute=True
-    ).key_by("SAMPLE")
+    meta_ht = (
+        hl.import_table(
+            sample_metadata_path
+        )
+        .key_by("SAMPLE")
+        .repartition(1000)
+    )
 
     logger.info("Importing and annotating seqr ID names...")
     remap_ht = hl.import_table(
-        remap_path(build, data_type, data_source, version), impute=True
+        remap_path
     ).key_by("s")
     meta_ht = meta_ht.annotate(**remap_ht[meta_ht.key])
     meta_ht = meta_ht.annotate(
@@ -179,6 +185,18 @@ def get_all_sample_metadata(
             hl.is_missing(meta_ht.seqr_id), meta_ht.SAMPLE, meta_ht.seqr_id
         )
     )
+
+    float_metrics = [
+        "PCT_CONTAMINATION",
+        "AL_PCT_CHIMERAS",
+        "WGS_MEAN_COVERAGE",
+        "WGS_MEDIAN_COVERAGE",
+        "HS_MEAN_TARGET_COVERAGE",
+        "HS_PCT_TARGET_BASES_20X",
+    ]
+
+    hl_floats = {f_i: hl.float(meta_ht[f_i]) for f_i in float_metrics}
+    meta_ht = meta_ht.annotate(**hl_floats)
 
     logger.info(
         "Filtering to bi-allelic, high-callrate, common SNPs to calculate callrate..."
@@ -235,7 +253,7 @@ def run_platform_imputation(
     return plat_ht
 
 
-  def run_population_pca(mt: hl.MatrixTable, build: int, num_pcs=6) -> hl.Table:
+def run_population_pca(mt: hl.MatrixTable, build: int, num_pcs=20) -> hl.Table:
     """
     Projects samples onto pre-computed gnomAD and rare disease sample principal components using PCA loadings.  A
     random forest classifier assigns gnomAD and rare disease sample population labels
@@ -246,21 +264,24 @@ def run_platform_imputation(
     :return: Table annotated with assigned RDG and gnomAD population and PCs
     :rtype: Table
     """
-    loadings = hl.read_table(rdg_gnomad_pop_pca_loadings_path(build))
-    model_path = rdg_gnomad_rf_model_path()
+    logger.info("Reading in gnomAD v4 loadings and model...")
+    logger.info(f"With num_pcs: {num_pcs}")
+    loadings = rdg_gnomad_v4_pop_pca_loadings_path()
+    model_path = rdg_gnomad_v4_rf_model_path()
     mt = mt.select_entries("GT")
     scores = pc_project(mt, loadings)
     scores = scores.annotate(
         scores=scores.scores[:num_pcs], known_pop="Unknown"
-    ).key_by("s")
+    ).key_by("s").checkpoint(new_temp_file('scores_temp',extension="ht"))
 
     logger.info("Unpacking RF model")
     fit = None
     with hl.hadoop_open(model_path, "rb") as f:
         fit = pickle.load(f)
 
+    logger.info('Running assign_population_pcs...')
     pop_pca_ht, ignore = assign_population_pcs(
-        scores, pc_cols=scores.scores, output_col="qc_pop", fit=fit
+        scores, pc_cols=scores.scores, output_col="qc_pop", fit=fit,
     )
     pop_pca_ht = pop_pca_ht.key_by("s")
     pop_pcs = {f"pop_PC{i+1}": scores.scores[i] for i in range(num_pcs)}
@@ -269,7 +290,7 @@ def run_platform_imputation(
     return pop_pca_ht
 
 
-  def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
+def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
     """
     Runs Hail's built in sample qc function on the MatrixTable. Splits the MatrixTable in order to calculate inbreeding
     coefficient and annotates the result back onto original MatrixTable. Applies flags by population and platform groups.
@@ -284,7 +305,7 @@ def run_platform_imputation(
     mt = hl.sample_qc(mt)
     mt = mt.annotate_cols(
         sample_qc=mt.sample_qc.annotate(
-            f_inbreeding=hl.agg.inbreeding(mt.GT, mt.info.AF[0])
+            f_inbreeding=hl.agg.inbreeding(mt.GT, mt['info.AF'][0])
         )
     )
     mt = mt.annotate_cols(idx=mt.qc_pop + "_" + hl.str(mt.qc_platform))
@@ -324,7 +345,9 @@ def run_platform_imputation(
 def main(args):
 
     hl.init(log="/seqr_sample_qc.log")
-    hl._set_flags(no_whole_stage_codegen="1") #Flag needed for hail 0.2.93, may be able to remove in future release.
+    hl._set_flags(
+        no_whole_stage_codegen="1"
+    )  # Flag needed for hail 0.2.93, may be able to remove in future release.
     logger.info("Beginning seqr sample QC pipeline...")
 
     data_type = args.data_type
@@ -333,19 +356,16 @@ def main(args):
     version = args.callset_version
     is_test = args.is_test
     overwrite = args.overwrite
+    callset_path = args.callset_path
+    remap_path = args.remap_path
+    sample_metadata_path = args.sample_metadata_path
+    bucket_path = args.bucket_path
 
-    logger.info("Importing callset...")
-    if not args.skip_write_mt:
-        logger.info("Converting vcf to MatrixTable...")
-        mt = hl.import_vcf(
-            args.vcf_path,
-            force_bgz=True,
-            reference_genome=f"GRCh{build}",
-            min_partitions=4,
-        ).write(
-            mt_path(build, data_type, data_source, version, is_test), overwrite=True
-        )
-    mt = hl.read_matrix_table(mt_path(build, data_type, data_source, version, is_test))
+    logger.info("Importing callset as mt...")
+    mt = hl.read_matrix_table(
+        callset_path
+    ).repartition(1000)
+
     mt = mt.annotate_entries(
         GT=hl.case()
         .when(mt.GT.is_diploid(), hl.call(mt.GT[0], mt.GT[1], phased=False))
@@ -369,7 +389,8 @@ def main(args):
         ).persist()
 
     logger.info("Annotating with sequencing metrics and filtered callrate...")
-    meta_ht = get_all_sample_metadata(mt, build, data_type, data_source, version)
+    meta_ht = get_all_sample_metadata(mt, build, data_type, data_source, version,remap_path,sample_metadata_path)
+    meta_ht = meta_ht.checkpoint(new_temp_file("metadata_ht_imported", extension="ht"))
     mt = mt.annotate_cols(**meta_ht[mt.col_key], data_type=data_type)
 
     logger.info("Annotating with sample metric filter flags...")
@@ -384,6 +405,9 @@ def main(args):
         filter_flags=apply_filter_flags_expr(mt, data_type, metric_thresholds)
     )
 
+    mt = mt.checkpoint(new_temp_file("annotation_mt", extension="mt").replace('/tmp/','gs://seqr-scratch-temp/'))
+
+    logger.info('We are silly and MANUALLY SKIPPING platform imputation...')
     logger.info("Assign platform or product")
     if data_type == "WES" and data_source == "External":
         logger.info("Running platform imputation...")
@@ -402,13 +426,19 @@ def main(args):
 
         missing_metrics = mt.filter_cols(hl.is_defined(mt.PRODUCT), keep=False)
         missing_metrics.cols().select().export(
-            missing_metrics_path(build, data_type, data_source, version)
+            'gs://seqr-scratch-temp/missing_metrics_new_new.tsv'
         )  #  TODO Add logging step that prints unexpected missing samples
     else:
         mt = mt.annotate_cols(qc_platform="Unknown")
 
+    mt = mt.checkpoint(new_temp_file("sexcheck_mt", extension="mt").replace('/tmp/','gs://seqr-scratch-temp/'))
+
+    # this has unacceptablly lousy behavior... what in the world ??
     logger.info("Projecting gnomAD population PCs...")
-    pop_ht = run_population_pca(mt, build)
+    pop_ht = run_population_pca(mt, build, num_pcs=20)
+    logger.info('Checkpointing pop_ht...')
+    pop_ht = pop_ht.checkpoint(new_temp_file('genetic_ancestry',extension="ht"))
+    logger.info('Annotating genetic ancestry inference information back on...')
     mt = mt.annotate_cols(**pop_ht[mt.col_key])
 
     logger.info("Running Hail's sample qc...")
@@ -418,17 +448,30 @@ def main(args):
     logger.info("Exporting sample QC tables...")
     ht = mt.cols()
     ht = ht.checkpoint(
-        sample_qc_ht_path(build, data_type, data_source, version, is_test), overwrite
+        f"{bucket_path}/{data_type}_v{version}_{data_source}_gatk_sampleqc.ht",overwrite=True
     )
-    ht.flatten().export(sample_qc_tsv_path(build, data_type, data_source, version))
-
+    ht.flatten().export(
+       f"{bucket_path}/{data_type}_v{version}_{data_source}_gatk_sampleqc_flattened_tsv.tsv",
+    )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--vcf-path", help="Path to VCF", required=True,
+        "--callset-path",
+        help="Path to callset as mt",
+        required=True,
+    )
+    parser.add_argument(
+        "--remap-path",
+        help="Path to remapping tsv",
+        required=True,
+    )
+    parser.add_argument(
+        "--sample-metadata-path",
+        help="Path to sample metadata tsv",
+        required=True,
     )
     parser.add_argument(
         "--data-type",
@@ -521,11 +564,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--overwrite", help="Overwrite previous paths", action="store_true"
     )
+    parser.add_argument(
+        "--bucket-path",
+        help="Path to bucket to output results to",
+        default = 'gs://seqr-loading-temp/v03/GRCh38/SNV_INDEL/sample_qc'
+    )
 
     args = parser.parse_args()
 
     if args.slack_channel:
         from slack_creds import slack_token
+
         with slack.slack_notifications(slack_token, args.slack_channel):
 
             main(args)
