@@ -6,29 +6,15 @@ import hail as hl
 from gnomad.sample_qc.ancestry import assign_population_pcs, pc_project
 from gnomad.sample_qc.filtering import compute_stratified_metrics_filter
 from gnomad.sample_qc.pipeline import filter_rows_for_qc
-from gnomad.sample_qc.platform import (
-    assign_platform_from_pcs,
-    compute_callrate_mt,
-    run_platform_pca,
-)
+from gnomad.sample_qc.platform import (assign_platform_from_pcs,
+                                       compute_callrate_mt, run_platform_pca)
 from gnomad.utils import slack
 from gnomad.utils.filtering import filter_to_autosomes
 from hail.utils.misc import new_temp_file
-from resources.resources_seqr_qc import (
-    rdg_gnomad_v4_pop_pca_loadings_path,
-    rdg_gnomad_v4_rf_model_path,
-    # VCFDataTypeError,
-    # missing_metrics_path,
-    # mt_path,
-    # rdg_gnomad_pop_pca_loadings_path,
-    # rdg_gnomad_rf_model_path,
-    # remap_path,
-    # sample_qc_ht_path,
-    # sample_qc_tsv_path,
-    # seq_metrics_path,
-    # val_coding_ht_path,
-    # val_noncoding_ht_path,
-)
+from resources.resources_seqr_qc import (  # missing_metrics_path,; mt_path,; remap_path,; sample_qc_ht_path,; sample_qc_tsv_path,; seq_metrics_path,
+    VCFDataTypeError, rdg_gnomad_pop_pca_loadings_path,
+    rdg_gnomad_rf_model_path, rdg_gnomad_v4_pop_pca_loadings_path,
+    rdg_gnomad_v4_rf_model_path, val_coding_ht_path, val_noncoding_ht_path)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -251,7 +237,9 @@ def run_platform_imputation(
     return plat_ht
 
 
-def run_population_pca(mt: hl.MatrixTable, build: int, num_pcs=20) -> hl.Table:
+def run_population_pca(
+    mt: hl.MatrixTable, build: int, num_pcs=20, v2_cmg_model=False
+) -> hl.Table:
     """
     Projects samples onto pre-computed gnomAD and rare disease sample principal components using PCA loadings.  A
     random forest classifier assigns gnomAD and rare disease sample population labels
@@ -262,10 +250,16 @@ def run_population_pca(mt: hl.MatrixTable, build: int, num_pcs=20) -> hl.Table:
     :return: Table annotated with assigned RDG and gnomAD population and PCs
     :rtype: Table
     """
-    logger.info("Reading in gnomAD v4 loadings and model...")
+    if not v2_cmg_model:
+        logger.info("Reading in gnomAD v4 loadings and model...")
+        loadings = hl.read_table(rdg_gnomad_v4_pop_pca_loadings_path())
+        model_path = rdg_gnomad_v4_rf_model_path()
+    else:
+        logger.info("Reading in gnomAD v2 + CMG loadings and model...")
+        loadings = hl.read_table(rdg_gnomad_pop_pca_loadings_path(build=38))
+        model_path = rdg_gnomad_rf_model_path()
+
     logger.info(f"With num_pcs: {num_pcs}")
-    loadings = rdg_gnomad_v4_pop_pca_loadings_path()
-    model_path = rdg_gnomad_v4_rf_model_path()
     mt = mt.select_entries("GT")
     scores = pc_project(mt, loadings)
     scores = (
@@ -306,11 +300,18 @@ def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
     mt = filter_to_autosomes(mt)
     mt = hl.split_multi_hts(mt)
     mt = hl.sample_qc(mt)
-    mt = mt.annotate_cols(
-        sample_qc=mt.sample_qc.annotate(
-            f_inbreeding=hl.agg.inbreeding(mt.GT, mt["info.AF"][0])
+    if 'info' in mt.row:
+        mt = mt.annotate_cols(
+            sample_qc=mt.sample_qc.annotate(
+                f_inbreeding=hl.agg.inbreeding(mt.GT, mt.info.AF[0])
+            )
         )
-    )
+    else:
+        mt = mt.annotate_cols(
+            sample_qc=mt.sample_qc.annotate(
+                f_inbreeding=hl.agg.inbreeding(mt.GT, mt['info.AF'][0])
+            )
+        )
     mt = mt.annotate_cols(idx=mt.qc_pop + "_" + hl.str(mt.qc_platform))
 
     sample_qc = [
@@ -363,6 +364,7 @@ def main(args):
     remap_path = args.remap_path
     sample_metadata_path = args.sample_metadata_path
     bucket_path = args.bucket_path
+    v2_cmg_model = args.v2_cmg_model
 
     logger.info("Importing callset as mt...")
     mt = hl.read_matrix_table(callset_path).repartition(1000)
@@ -387,13 +389,23 @@ def main(args):
                     reference_genome=f"GRCh{build}",
                 )
             ],
-        ).persist()
+        ).sample_rows(0.1)  # .persist()
+        mt = mt.checkpoint(
+            new_temp_file("test_mt", extension="mt").replace(
+                "/tmp/", "gs://seqr-scratch-temp/"
+            )
+        )
 
     logger.info("Annotating with sequencing metrics and filtered callrate...")
     meta_ht = get_all_sample_metadata(
         mt, build, data_type, data_source, version, remap_path, sample_metadata_path
     )
-    meta_ht = meta_ht.checkpoint(new_temp_file("metadata_ht_imported", extension="ht"))
+    meta_ht = meta_ht.checkpoint(
+        new_temp_file(
+            "metadata_ht_imported",
+            extension="ht".replace("/tmp/", "gs://seqr-scratch-temp/"),
+        )
+    )
     mt = mt.annotate_cols(**meta_ht[mt.col_key], data_type=data_type)
 
     logger.info("Annotating with sample metric filter flags...")
@@ -414,7 +426,6 @@ def main(args):
         )
     )
 
-    logger.info("We are silly and MANUALLY SKIPPING platform imputation...")
     logger.info("Assign platform or product")
     if data_type == "WES" and data_source == "External":
         logger.info("Running platform imputation...")
@@ -433,7 +444,7 @@ def main(args):
 
         missing_metrics = mt.filter_cols(hl.is_defined(mt.PRODUCT), keep=False)
         missing_metrics.cols().select().export(
-            "gs://seqr-scratch-temp/missing_metrics_new_new.tsv"
+            "gs://seqr-scratch-temp/missing_metrics_new_new_v2cmg_test.tsv"
         )  #  TODO Add logging step that prints unexpected missing samples
     else:
         mt = mt.annotate_cols(qc_platform="Unknown")
@@ -444,10 +455,18 @@ def main(args):
         )
     )
 
+    num_pcs = 20
+    if v2_cmg_model:
+        num_pcs = 6
+
     logger.info("Projecting gnomAD population PCs...")
-    pop_ht = run_population_pca(mt, build, num_pcs=20)
+    pop_ht = run_population_pca(mt, build, num_pcs=num_pcs, v2_cmg_model=v2_cmg_model)
     logger.info("Checkpointing pop_ht...")
-    pop_ht = pop_ht.checkpoint(new_temp_file("genetic_ancestry", extension="ht"))
+    pop_ht = pop_ht.checkpoint(
+        new_temp_file("genetic_ancestry", extension="ht").replace(
+            "/tmp/", "gs://seqr-scratch-temp/"
+        )
+    )
     logger.info("Annotating genetic ancestry inference information back on...")
     mt = mt.annotate_cols(**pop_ht[mt.col_key])
 
@@ -579,6 +598,11 @@ if __name__ == "__main__":
         "--bucket-path",
         help="Path to bucket to output results to",
         default="gs://seqr-loading-temp/v03/GRCh38/SNV_INDEL/sample_qc",
+    )
+    parser.add_argument(
+        "--v2-cmg-model",
+        help="To run population PCA with gnomAD v2 + CMG Model & Loadings",
+        action="store_true",
     )
 
     args = parser.parse_args()

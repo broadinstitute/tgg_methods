@@ -39,8 +39,13 @@ def main(args):
     )
     mt = mt.annotate_rows(filters=filters_ht[mt.row_key].filters)
     logger.info(f"MT count: {mt.count()}")
-    hl.export_vcf(mt, args.vcf_out, parallel="header_per_shard")
-
+    # mt = mt.checkpoint('gs://seqr-scratch-temp/wes_gatk_callset_20240702.mt')
+    vcf_out_str = args.vcf_out 
+    if '.mt' in vcf_out_str:
+        mt = mt.checkpoint(vcf_out_str,overwrite=True)
+    elif '.vcf' in vcf_out_str:
+        hl.export_vcf(mt, args.vcf_out, parallel="header_per_shard")
+   
 
 if __name__ == "__main__":
 
