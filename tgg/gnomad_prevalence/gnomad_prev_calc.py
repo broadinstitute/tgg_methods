@@ -181,17 +181,17 @@ def make_ucsc_url(ht: hl.Table) -> hl.Table:
     return hl.format(
         "%s%s%s%s%s%s%s%s%s%s%s%s",
         ucsc_url,
-        ht.vep.seq_region_name,
+        ht.seq_region_name,
         "%3A",
-        hl.str(ht.vep.start - 1),
+        hl.str(ht.start - 1),
         "-",
-        hl.str(ht.vep.end - 1),
+        hl.str(ht.end - 1),
         "&position=",
-        ht.vep.seq_region_name,
+        ht.seq_region_name,
         "%3A",
-        hl.str(ht.vep.start - 25),
+        hl.str(ht.start - 25),
         "-",
-        hl.str(ht.vep.end + 25),
+        hl.str(ht.end + 25),
     )
 
 
@@ -214,73 +214,6 @@ def make_hgmd_url(ht: hl.Table) -> hl.Table:
         ),
         "NA",
     )
-
-
-def get_datatype_pop(ht, data_type, pop, data_type_pops, stat):
-    """"""
-    return (
-        ht[f"{data_type}_{gnomad_pop_expr(pop, stat)}_adj"]
-        if pop in data_type_pops
-        else 0
-    )
-
-
-def gnomad_pop_expr(pop, stat) -> hl.str:
-    if stat.upper() in {"AC", "AF", "AN"}:
-        return f"{stat}_{pop}" if pop != "" else f"{stat}"
-    else:
-        ValueError(
-            f"{stat} is not an accepted value. Please choose from 'AC', 'AN', or 'AF'"
-        )
-
-
-def gnomad_ac_dict(ht, all_pops=ALL_POPS) -> hl.dict:
-    logger.info("Building AC Dict")
-    return {
-        f'{gnomad_pop_expr(pop,"AC")}': (
-            hl.or_else(get_datatype_pop(ht, "exomes", pop, POPS["exomes"], "AC"), 0)
-            + hl.or_else(get_datatype_pop(ht, "genomes", pop, POPS["genomes"], "AC"), 0)
-        )
-        for pop in all_pops
-    }
-
-
-def gnomad_an_dict(ht, all_pops=ALL_POPS) -> hl.dict:
-    logger.info("Building AN dict")
-    return {
-        f'{gnomad_pop_expr(pop,"AN")}': (
-            hl.or_else(get_datatype_pop(ht, "exomes", pop, POPS["exomes"], "AN"), 0)
-            + hl.or_else(get_datatype_pop(ht, "genomes", pop, POPS["genomes"], "AN"), 0)
-        )
-        for pop in all_pops
-    }
-
-
-def gnomad_af_dict(ht, all_pops=ALL_POPS) -> hl.dict:
-    logger.info("Building AF dict")
-    return {
-        gnomad_pop_expr(pop, "AF"): hl.if_else(
-            ht[f'{gnomad_pop_expr(pop,"AN")}'] == 0,
-            0,
-            ht[f'{gnomad_pop_expr(pop,"AC")}'] / ht[f'{gnomad_pop_expr(pop,"AN")}'],
-        )
-        for pop in all_pops
-    }
-
-
-def calc_gnomad_allele_stats(ht: hl.Table, all_pops=ALL_POPS) -> hl.Table:
-    """
-    Calculate combined AC, AN, AF in gnomAD exomes and genomes
-    :param ht:
-    :param all_pops:
-    :return:
-    """
-    ht = ht.annotate(
-        **gnomad_ac_dict(ht, all_pops),
-        **gnomad_an_dict(ht, all_pops),
-    )
-    ht = ht.annotate(**gnomad_af_dict(ht, all_pops))
-    return ht
 
 
 def filter_to_gene_annotate_consq(
@@ -322,6 +255,25 @@ def filter_to_gene_annotate_consq(
     # Create HT with just missense consequences with high revel score within gene of interest
     missense_ht = create_missense_revel_ht(ht, missense_csq_terms, gene)
     ht = ht.annotate(**missense_ht[ht.key])
+
+    # Select only data needed downstream
+    ht = ht.select(
+        ht.filters,
+        ht.vep.seq_region_name,
+        ht.vep.start,
+        ht.vep.end,
+        ht.vep.allele_string,
+        ht.vep.transcript_consequences.gene_symbol,
+        ht.vep.transcript_consequences.canonical,
+        ht.vep.transcript_consequences.hgvsc,
+        ht.vep.transcript_consequences.hgvsp,
+        ht.vep.variant_class,
+        ht.csq_term,
+        ht.lof,
+        ht.missense_high_revel,
+        ht.vep.transcript_consequences.mane_select,
+        ht.in_silico_predictors.revel_max,
+    )
     return ht
 
 
@@ -397,34 +349,54 @@ def prep_hgmd_data(gene_interval, sig) -> hl.Table:
     return hgmd
 
 
-def annotate_ht_w_all_data(ht, clinvar_ht, hgmd_ht, data_type) -> hl.Table:
+def get_pop_freq(ht, pops) -> hl.Table:
+    """
+    Retreives AF,AC, and AN for populations within genes
+    :param ht: gnomAD HT
+    :param pops: populations in dataset
+    :return:
+    """
+    return {
+        f"{stat}_{pop}" if pop != "" else stat: ht.freq[
+            ht.freq_index_dict[f"{pop}_adj" if pop != "" else "adj"]
+        ][stat]
+        for stat in ["AF", "AC", "AN"]
+        for pop in pops
+    }
+
+
+def annotate_ht_w_all_data(ht, clinvar_ht, hgmd_ht) -> hl.Table:
     ht = ht.annotate(**clinvar_ht[ht.key])
     ht = ht.annotate(**hgmd_ht[ht.key])
+    joint_ht = release_sites("joint").ht()
 
-    ht = ht.checkpoint(
-        f"{TEMP_PATH}gnomad_{data_type}_w_clinvar_hgmd.ht", overwrite=True
+    ht = ht.annotate(
+        freq=joint_ht[ht.key].joint.freq,
+        exome_filters=joint_ht[ht.key].exomes.filters,
+        genome_filters=joint_ht[ht.key].genomes.filters,
     )
+    ht = ht.annotate_globals(
+        freq_index_dict=joint_ht.index_globals().joint_globals.freq_index_dict
+    )
+
     ht = ht.annotate(
         ucsc_url=make_ucsc_url(ht),
     )
     ht = ht.annotate(Reference_Allele=ht.alleles[0], Alternate_Allele=ht.alleles[1])
 
-    POPS[data_type].insert(0, "")
-    data_type_ac_ans = get_ac_an(ht, data_type, POPS[data_type])
-
-    ht_export = ht.select(
+    ht = ht.select(
         ht.filters,
-        ht.vep.seq_region_name,
-        ht.vep.start,
-        ht.vep.end,
+        ht.seq_region_name,
+        ht.start,
+        ht.end,
         ht.Reference_Allele,
         ht.Alternate_Allele,
-        ht.vep.allele_string,
-        ht.vep.transcript_consequences.gene_symbol,
-        ht.vep.transcript_consequences.canonical,
-        ht.vep.transcript_consequences.hgvsc,
-        ht.vep.transcript_consequences.hgvsp,
-        ht.vep.variant_class,
+        ht.allele_string,
+        ht.gene_symbol,
+        ht.canonical,
+        ht.hgvsc,
+        ht.hgvsp,
+        ht.variant_class,
         ht.VariationID,
         ht.NumberSubmitters,
         ht.ClinicalSignificance,
@@ -437,32 +409,14 @@ def annotate_ht_w_all_data(ht, clinvar_ht, hgmd_ht, data_type) -> hl.Table:
         ht.csq_term,
         ht.lof,
         ht.missense_high_revel,
-        mane_select=ht.vep.transcript_consequences.mane_select,
-        revel_max=ht.in_silico_predictors.revel_max,
-        **data_type_ac_ans[0],
-        **data_type_ac_ans[1],
+        ht.mane_select,
+        ht.revel_max,
+        ht.exome_filters,
+        ht.genome_filters,
+        **get_pop_freq(ht, ALL_POPS),
     )
-    return ht_export
-
-
-def get_ac_an(ht, data_type, pops) -> hl.Table:
-    """
-    Retreives AC and AN for given populations within genes
-    :param ht: gnomAD HT
-    :param data_type: exome or genome
-    :param pops: population in dataset
-    :return:
-    """
-    pop_indices = [f"{pop}_adj" if pop != "" else "adj" for pop in pops]
-    AC_callstat_dict = {
-        f"{data_type}_AC_{idx}": ht.freq[ht.freq_index_dict[idx]].AC
-        for idx in pop_indices
-    }
-    AN_callstat_dict = {
-        f"{data_type}_AN_{idx}": ht.freq[ht.freq_index_dict[idx]].AN
-        for idx in pop_indices
-    }
-    return (AC_callstat_dict, AN_callstat_dict)
+    ht = ht.checkpoint(f"{TEMP_PATH}gnomad_w_clinvar_hgmd_freq.ht", overwrite=True)
+    return ht
 
 
 def main(args):
@@ -492,8 +446,6 @@ def main(args):
                 lof_csq_terms=LOF_CONSEQUENCES,
                 missense_csq_terms=MISSENSE_CONSEQUENCES,
             )
-            e_ht = annotate_ht_w_all_data(e_ht, clinvar_ht, hgmd_ht, "exomes")
-
             g_ht = filter_to_gene_annotate_consq(
                 "genomes",
                 gene,
@@ -501,14 +453,14 @@ def main(args):
                 lof_csq_terms=LOF_CONSEQUENCES,
                 missense_csq_terms=MISSENSE_CONSEQUENCES,
             )
-            g_ht = annotate_ht_w_all_data(g_ht, clinvar_ht, hgmd_ht, "genomes")
             ht = e_ht.union(g_ht, unify=True)
+            ht = annotate_ht_w_all_data(ht, clinvar_ht, hgmd_ht)
+
             ht = ht.key_by(
                 "locus", "alleles", "hgvsc"
             ).distinct()  # TODO upstream combine any variants where multiple sigs
             ht = ht.key_by("locus", "alleles")
 
-            ht = calc_gnomad_allele_stats(ht)
             ht = ht.select_globals()
             ht = ht.annotate(
                 ENST_hgvsc=hl.if_else(
@@ -588,9 +540,6 @@ def main(args):
                 )  # TODO: Confirm this is wanted -- just added 12/4, was not there before v4 udpates
                 | hl.is_defined(ht.missense_high_revel)
             )
-            ht = ht.filter(
-                ht.filters.contains("AC0") | ht.filters.contains("RF"), keep=False
-            )
 
             logger.info("Selecting export fields")
             ht = ht.select(
@@ -664,6 +613,8 @@ def main(args):
                 ht.AF_sas,
                 ht.AC_sas,
                 ht.AN_sas,
+                ht.exome_filters,
+                ht.genome_filters,
             )
             if args.all_transcripts:
                 ht = ht.checkpoint(
