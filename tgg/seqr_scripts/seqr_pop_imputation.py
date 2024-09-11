@@ -1,3 +1,4 @@
+# Seqr Code for JUST Pop Imputation
 import argparse
 import json
 import logging
@@ -15,7 +16,12 @@ from gnomad.sample_qc.platform import (
 from gnomad.utils import slack
 from gnomad.utils.filtering import filter_to_autosomes
 from hail.utils.misc import new_temp_file
-from resources.resources_seqr_qc import (  # missing_metrics_path,; mt_path,; remap_path,; sample_qc_ht_path,; sample_qc_tsv_path,; seq_metrics_path,
+
+# import tgg.resources as tgg_path 
+
+# print(dir(tgg_path))
+
+from tgg.resources import (  # missing_metrics_path,; mt_path,; remap_path,; sample_qc_ht_path,; sample_qc_tsv_path,; seq_metrics_path,
     VCFDataTypeError,
     rdg_gnomad_pop_pca_loadings_path,
     rdg_gnomad_rf_model_path,
@@ -35,168 +41,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("seqr_sample_qc")
 logger.setLevel(logging.INFO)
-
-
-def validate_mt(mt: hl.MatrixTable, build: int, data_type: str, threshold=0.3):
-    """
-    Validate the mt by checking against a list of common coding and non-coding variants given its
-    genome version. This validates genome_version, variants, and the reported sample type.
-
-    :param mt: mt to validate
-    :param build: reference build
-    :param data_type: WGS or WES
-    :param threshold: Threshold percentage of variants matching validation tables
-    :return: True or Exception
-    """
-
-    def data_type_stats(mt, build, threshold):
-        """
-        Calculate stats for data type by checking against a list of common coding and non-coding variants.
-        If the match for each respective type is over the threshold, we return a match.
-
-        :param mt: Matrix Table to check
-        :param build: reference build
-        """
-        stats = {}
-        types_to_ht_path = {
-            "noncoding": val_noncoding_ht_path(build),
-            "coding": val_coding_ht_path(build),
-        }
-        for variant_type, ht_path in types_to_ht_path.items():
-            ht = hl.read_table(ht_path)
-            stats[variant_type] = ht_stats = {
-                "matched_count": mt.semi_join_rows(ht).count_rows(),
-                "total_count": ht.count(),
-            }
-
-            ht_stats["match"] = (
-                ht_stats["matched_count"] / ht_stats["total_count"]
-            ) >= threshold
-        return stats
-
-    data_type_stats = data_type_stats(mt, build, threshold)
-
-    for name, stat in data_type_stats.items():
-        logger.info(
-            "Table contains %i out of %i common %s variants.",
-            stat["matched_count"],
-            stat["total_count"],
-            name,
-        )
-
-    has_coding = data_type_stats["coding"]["match"]
-    has_noncoding = data_type_stats["noncoding"]["match"]
-
-    if not has_coding and not has_noncoding:
-        raise VCFDataTypeError(
-            f"Genome version validation error: dataset specified as GRCh{build} but doesn't contain "
-            f"the expected number of common GRCh{build} variants"
-        )
-    elif has_noncoding and not has_coding:
-        raise VCFDataTypeError(
-            "Sample type validation error: Dataset contains noncoding variants but is missing common coding "
-            f"variants for GRCh{build}. Please verify that the dataset contains coding variants."
-        )
-    elif has_coding and not has_noncoding:
-        if data_type != "WES":
-            raise VCFDataTypeError(
-                f"Sample type validation error: dataset sample-type is specified as {data_type} but appears to be "
-                "WES because it contains many common coding variants and lacks many non-coding variants"
-            )
-    elif has_noncoding and has_coding:
-        if data_type != "WGS":
-            raise VCFDataTypeError(
-                f"Sample type validation error: dataset sample-type is specified as {data_type} but appears to be "
-                "WGS because it contains many common non-coding variants"
-            )
-
-
-def apply_filter_flags_expr(
-    mt: hl.MatrixTable,
-    data_type: str,
-    metric_thresholds: dict,
-    dragen: bool,
-) -> hl.expr.SetExpression:
-    """
-    Annotates table with flags for elevated contamination and chimera as well as low coverage and call rate
-    :param Table mt: input MatrixTable
-    :param str data_type: 'WES' or 'WGS' for selecting coverage threshold
-    :param dict metric_thresholds: dictionary where key is metric and value is threshold value
-    :return: Set of sequencing metric flags
-    :rtype: SetExpression
-    """
-    if not dragen:
-        logger.info("GATK/WARP Metrics")
-        flags = {
-            "callrate": mt.filtered_callrate < metric_thresholds["callrate_thres"],
-            "contamination": mt.PCT_CONTAMINATION  # this changes for DRAGEN -> 'contamination_rate'
-            > metric_thresholds[
-                "contam_thres"
-            ],  # TODO revisit current thresholds and rename once have to kristen's script output
-            "chimera": mt.AL_PCT_CHIMERAS
-            > metric_thresholds[
-                "chimera_thres"
-            ],  # this changes for DRAGEN or needs to be calculated
-            # -> 'custom_chimer_pct' for now...
-            # in a notebook, looks fine!
-            # but what's to be done about it ?
-        }
-
-        if data_type == "WES":
-            flags.update(
-                {
-                    "coverage": mt.HS_PCT_TARGET_BASES_20X  # this may be a different name -> 'percent_bases_at_20x'
-                    < metric_thresholds["wes_cov_thres"]
-                }
-            )
-        else:
-            flags.update(
-                {
-                    "coverage": mt.WGS_MEAN_COVERAGE
-                    < metric_thresholds["wgs_cov_thres"]
-                }  # I think this is also a different name
-                # -> 'mean_coverage'
-            )
-
-    else:
-        logger.info("DRAGEN/GVS metrics")
-        flags = {
-            "callrate": mt.filtered_callrate < metric_thresholds["callrate_thres"],
-            "contamination": mt.contamination_rate  # this changes for DRAGEN -> 'contamination_rate'
-            > metric_thresholds["contam_thres"]
-            * 0.01,  # TODO revisit current thresholds and rename once have to kristen's script output
-            # this is a PERCENT
-            "chimera": mt.custom_chimer_pct
-            > metric_thresholds[
-                "chimera_thres"
-            ],  # this changes for DRAGEN or needs to be calculated
-            # -> 'custom_chimer_pct' for now...
-            # in a notebook, looks fine!
-            # but what's to be done about it ?
-        }
-
-        if data_type == "WES":
-            flags.update(
-                {
-                    "coverage": mt.percent_bases_at_20x  # this may be a different name -> 'percent_bases_at_20x'
-                    < metric_thresholds["wes_cov_thres"]
-                }
-            )
-        else:
-            flags.update(
-                {
-                    "coverage": mt.mean_coverage < metric_thresholds["wgs_cov_thres"]
-                }  # I think this is also a different name
-                # -> 'mean_coverage'
-            )
-
-    return hl.set(
-        hl.filter(
-            lambda x: hl.is_defined(x),
-            [hl.or_missing(filter_expr, name) for name, filter_expr in flags.items()],
-        )
-    )
-
 
 def get_all_sample_metadata(
     mt: hl.MatrixTable,
@@ -271,42 +115,6 @@ def get_all_sample_metadata(
     meta_ht = meta_ht.annotate(**callrate_ht[meta_ht.key])
     return meta_ht
 
-
-def run_platform_imputation(
-    mt: hl.MatrixTable,
-    plat_min_cluster_size: int,
-    plat_min_sample_size: int,
-    plat_assignment_pcs: int,
-) -> hl.Table:
-    """
-    Run PCA using sample callrate across Broad's evaluation intervals and create Hail Table
-    with platform PCs and assigned platform.
-    :param MatrixTable mt: QC MatrixTable
-    :param plat_min_cluster_size: min cluster size for HBDscan clustering
-    :param plat_min_sample_size: min sample size for HBDscan clustering
-    :param plat_assignment_pcs: Number PCs used for HBDscan clustering
-    :return: Table with platform PCs and assigned platform
-    :rtype: Table
-    """
-    intervals = hl.import_locus_intervals(
-        "gs://gcp-public-data--broad-references/hg38/v0/exome_evaluation_regions.v1.interval_list"
-    )
-    callrate_mt = compute_callrate_mt(mt, intervals)
-    eigenvalues, scores_ht, ignore = run_platform_pca(callrate_mt)
-    plat_ht = assign_platform_from_pcs(
-        scores_ht,
-        hdbscan_min_cluster_size=plat_min_cluster_size,
-        hdbscan_min_samples=plat_min_sample_size,
-    )
-    plat_pcs = {
-        f"plat_PC{i+1}": scores_ht.scores[i]
-        for i in list(range(0, plat_assignment_pcs))
-    }
-    scores_ht = scores_ht.annotate(**plat_pcs).drop("scores")
-    plat_ht = plat_ht.annotate(**scores_ht[plat_ht.key])
-    return plat_ht
-
-
 def run_population_pca(
     mt: hl.MatrixTable,
     build: int,
@@ -335,16 +143,18 @@ def run_population_pca(
         logger.info(
             "Reading in custom gnomAD v4 RF model with 151 spiked in v2 MID training samples..."
         )
-        loadings = hl.read_table(rdg_gnomad_v4_pop_pca_loadings_path())
-        model_path = "gs://marten-seqr-sandbox-storage/ancestry/gnomad.joint.v4.0.pop.RF_fit.pickle"
-        # rdg_gnomad_v4_rf_model_path()
+        logger.info("Not doing this now")
+        # loadings = hl.read_table(rdg_gnomad_v4_pop_pca_loadings_path())
+        # model_path = "gs://marten-seqr-sandbox-storage/ancestry/gnomad.joint.v4.0.pop.RF_fit.pickle"
+        # # rdg_gnomad_v4_rf_model_path()
     elif v4_custom_mid_model_179:
         logger.info(
             "Reading in custom gnomAD v4 RF model with 179 spiked in v2 MID training samples..."
         )
-        loadings = hl.read_table(rdg_gnomad_v4_pop_pca_loadings_path())
-        model_path = "gs://marten-seqr-sandbox-storage/ancestry/gnomad.joint.v4.0_v2_179samples.pop.RF_fit.pickle"
-        # rdg_gnomad_v4_rf_model_path()
+        logger.info("Not doing this now...")
+        # loadings = hl.read_table(rdg_gnomad_v4_pop_pca_loadings_path())
+        # model_path = "gs://marten-seqr-sandbox-storage/ancestry/gnomad.joint.v4.0_v2_179samples.pop.RF_fit.pickle"
+        # # rdg_gnomad_v4_rf_model_path()
     elif v4_custom_mid_model_cmgmid:
         loadings = hl.read_table(rdg_gnomad_v4_pop_pca_loadings_path())
         model_path = 'gs://marten-seqr-sandbox-storage/ancestry/pop_ht_custom_probs_cmgmidsamples_rfmodel_20240909.pickle'
@@ -384,90 +194,12 @@ def run_population_pca(
     pop_pca_ht = pop_pca_ht.annotate(**scores[pop_pca_ht.key])
     return pop_pca_ht
 
-
-def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
-    """
-    Runs Hail's built in sample qc function on the MatrixTable. Splits the MatrixTable in order to calculate inbreeding
-    coefficient and annotates the result back onto original MatrixTable. Applies flags by population and platform groups.
-    :param MatrixTable mt: QC MatrixTable
-    :param str data_type: WGS or WES for write path
-    :return: MatrixTable annotated with hails sample qc metrics as well as pop and platform outliers
-    :rtype: MatrixTable
-    """
-    mt = mt.select_entries(mt.GT)
-    mt = filter_to_autosomes(mt)
-    mt = hl.split_multi_hts(mt)
-    mt = hl.sample_qc(mt)
-    if "info" in mt.row:
-        mt = mt.annotate_cols(
-            sample_qc=mt.sample_qc.annotate(
-                f_inbreeding=hl.agg.inbreeding(mt.GT, mt.info.AF[0])
-            )
-        )
-    elif "info.AF" in mt.row:
-        mt = mt.annotate_cols(
-            sample_qc=mt.sample_qc.annotate(
-                f_inbreeding=hl.agg.inbreeding(mt.GT, mt["info.AF"][0])
-            )
-        )
-    else:
-        logger.info("recomputing callstats...")
-        call_stats = hl.agg.call_stats(mt.GT, mt.alleles)
-        call_stats_bind = hl.bind(
-            lambda cs: cs.annotate(
-                AC=cs.AC[1], AF=cs.AF[1], homozygote_count=cs.homozygote_count[1]
-            ),
-            call_stats,
-        )
-        pop_freq = call_stats_bind
-        mt = mt.annotate_rows(info_callset=pop_freq)
-        mt = mt.annotate_cols(
-            sample_qc=mt.sample_qc.annotate(
-                f_inbreeding=hl.agg.inbreeding(
-                    mt.GT, mt.info_callset.AF
-                )  # this is a FLOAT64 already
-            )
-        )
-
-    mt = mt.annotate_cols(idx=mt.qc_pop + "_" + hl.str(mt.qc_platform))
-
-    sample_qc = [
-        "n_snp",
-        "r_ti_tv",
-        "r_insertion_deletion",
-        "n_insertion",
-        "n_deletion",
-        "r_het_hom_var",
-    ]
-    if data_type == "WGS":
-        sample_qc = sample_qc + ["call_rate"]
-
-    strat_ht = mt.cols()
-    qc_metrics = {metric: strat_ht.sample_qc[metric] for metric in sample_qc}
-    strata = {"qc_pop": strat_ht.qc_pop, "qc_platform": strat_ht.qc_platform}
-
-    metric_ht = compute_stratified_metrics_filter(strat_ht, qc_metrics, strata)
-    checkpoint_pass = metric_ht.aggregate(
-        hl.agg.count_where(hl.len(metric_ht.qc_metrics_filters) == 0)
-    )
-    logger.info(
-        "%i samples found passing pop/platform-specific filtering", checkpoint_pass
-    )
-    checkpoint_fail = metric_ht.aggregate(
-        hl.agg.count_where(hl.len(metric_ht.qc_metrics_filters) != 0)
-    )
-    logger.info(
-        "%i samples found failing pop/platform-specific filtering", checkpoint_fail
-    )
-    metric_ht = metric_ht.annotate(sample_qc=mt.cols()[metric_ht.key].sample_qc)
-    return metric_ht
-
-
 def main(args):
 
     hl.init(log="/seqr_sample_qc.log")
     hl._set_flags(
-        no_whole_stage_codegen="1"
+        no_whole_stage_codegen="1",
+        
     )  # Flag needed for hail 0.2.93, may be able to remove in future release.
     logger.info("Beginning seqr sample QC pipeline...")
 
@@ -498,11 +230,12 @@ def main(args):
         .when(mt.GT.is_haploid(), hl.call(mt.GT[0], phased=False))
         .default(hl.missing(hl.tcall))
     )
-    if not args.skip_validate_mt:
-        logger.info("Validating data type...")
-        validate_mt(mt, build, data_type)
-    else:
-        logger.info("Skipping validation...")
+    # if not args.skip_validate_mt:
+    #     logger.info("Validating data type...")
+    #     validate_mt(mt, build, data_type)
+    # else:
+    #     
+    logger.info("Skipping validation...")
 
     if is_test:
         logger.info("Creating test mt...")
@@ -524,22 +257,23 @@ def main(args):
         )
 
     logger.info("Annotating with sequencing metrics and filtered callrate...")
-    meta_ht = get_all_sample_metadata(
-        mt,
-        build,
-        data_type,
-        data_source,
-        version,
-        remap_path,
-        sample_metadata_path,
-        dragen,
-    )
-    meta_ht = meta_ht.checkpoint(
-        new_temp_file(
-            "metadata_ht_imported",
-            extension="ht".replace("/tmp/", "gs://seqr-scratch-temp/"),
-        )
-    )
+    logger.info("Skipping Metadata information...")
+    # meta_ht = get_all_sample_metadata(
+    #     mt,
+    #     build,
+    #     data_type,
+    #     data_source,
+    #     version,
+    #     remap_path,
+    #     sample_metadata_path,
+    #     dragen,
+    # )
+    # meta_ht = meta_ht.checkpoint(
+    #     new_temp_file(
+    #         "metadata_ht_imported",
+    #         extension="ht".replace("/tmp/", "gs://seqr-scratch-temp/"),
+    #     )
+    # )
 
     def _get_root_sqc_output(
         bucket_path,
@@ -564,58 +298,60 @@ def main(args):
 
         return f'{bucket_path}/{data_type}_v{version}_{data_source}_{model_text}{output_suffix if output_suffix else ""}'
 
-    mt = mt.annotate_cols(**meta_ht[mt.col_key], data_type=data_type)
+    # mt = mt.annotate_cols(**meta_ht[mt.col_key], data_type=data_type)
 
-    logger.info("Annotating with sample metric filter flags...")
-    metric_thresholds = {
-        "callrate_thres": args.callrate_low_threshold,
-        "contam_thres": args.contam_up_threshold,
-        "chimera_thres": args.chimera_up_threshold,
-        "wes_cov_thres": args.wes_coverage_low_threshold,
-        "wgs_cov_thres": args.wgs_coverage_low_threshold,
-    }
-    mt = mt.annotate_cols(
-        filter_flags=apply_filter_flags_expr(mt, data_type, metric_thresholds, dragen)
-    )
+    logger.info('Skipping annotating with sample metric filter flags...')
+    # logger.info("Annotating with sample metric filter flags...")
+    # metric_thresholds = {
+    #     "callrate_thres": args.callrate_low_threshold,
+    #     "contam_thres": args.contam_up_threshold,
+    #     "chimera_thres": args.chimera_up_threshold,
+    #     "wes_cov_thres": args.wes_coverage_low_threshold,
+    #     "wgs_cov_thres": args.wgs_coverage_low_threshold,
+    # }
+    # mt = mt.annotate_cols(
+    #     filter_flags=apply_filter_flags_expr(mt, data_type, metric_thresholds, dragen)
+    # )
 
-    mt = mt.checkpoint(
-        new_temp_file("annotation_mt", extension="mt").replace(
-            "/tmp/", "gs://seqr-scratch-temp/"
-        )
-    )
+    # mt = mt.checkpoint(
+    #     new_temp_file("annotation_mt", extension="mt").replace(
+    #         "/tmp/", "gs://seqr-scratch-temp/"
+    #     )
+    # )
 
     logger.info("Assign platform or product...")
-    if skip_platform_imputation:
-        logger.info("Skipping platform impuation...")
-        mt = mt.annotate_cols(qc_platform="Skipped")
-    elif data_type == "WES" and data_source == "External":
-        logger.info("Running platform imputation...")
-        plat_ht = run_platform_imputation(
-            mt,
-            args.plat_min_cluster_size,
-            args.plat_min_sample_size,
-            args.plat_assignment_pcs,
-        )
-        mt = mt.annotate_cols(**plat_ht[mt.col_key])
-    elif data_source == "Internal":
-        logger.info("Assigning platform from product in metadata...")
-        mt = mt.annotate_cols(
-            qc_platform=hl.if_else(hl.is_defined(mt.PRODUCT), mt.PRODUCT, "Unknown")
-        )
+    logger.info("Skipping platform imputation...")
+    # if skip_platform_imputation:
+    #     logger.info("Skipping platform impuation...")
+    #     mt = mt.annotate_cols(qc_platform="Skipped")
+    # elif data_type == "WES" and data_source == "External":
+    #     logger.info("Running platform imputation...")
+    #     plat_ht = run_platform_imputation(
+    #         mt,
+    #         args.plat_min_cluster_size,
+    #         args.plat_min_sample_size,
+    #         args.plat_assignment_pcs,
+    #     )
+    #     mt = mt.annotate_cols(**plat_ht[mt.col_key])
+    # elif data_source == "Internal":
+    #     logger.info("Assigning platform from product in metadata...")
+    #     mt = mt.annotate_cols(
+    #         qc_platform=hl.if_else(hl.is_defined(mt.PRODUCT), mt.PRODUCT, "Unknown")
+    #     )
 
-        missing_metrics = mt.filter_cols(hl.is_defined(mt.PRODUCT), keep=False)
-        missing_metrics.cols().select().export(
-            "gs://seqr-scratch-temp/missing_metrics_new_new_v2cmg_test.tsv"
-        )  #  TODO Add logging step that prints unexpected missing samples
-    else:
-        mt = mt.annotate_cols(qc_platform="Unknown")
+    #     missing_metrics = mt.filter_cols(hl.is_defined(mt.PRODUCT), keep=False)
+    #     missing_metrics.cols().select().export(
+    #         "gs://seqr-scratch-temp/missing_metrics_new_new_v2cmg_test.tsv"
+    #     )  #  TODO Add logging step that prints unexpected missing samples
+    # else:
+    #     mt = mt.annotate_cols(qc_platform="Unknown")
     logger.info("Assigning platform or product finished...")
 
-    mt = mt.checkpoint(
-        new_temp_file("sexcheck_mt", extension="mt").replace(
-            "/tmp/", "gs://seqr-scratch-temp/"
-        )
-    )
+    # mt = mt.checkpoint(
+    #     new_temp_file("sexcheck_mt", extension="mt").replace(
+    #         "/tmp/", "gs://seqr-scratch-temp/"
+    #     )
+    # )
 
     # mt = hl.read_matrix_table('gs://seqr-scratch-temp/sexcheck_mt-rSSTqdZRVtMTqC9lzKc7am.mt')
 
@@ -663,18 +399,24 @@ def main(args):
             logger.info(
                 "From v4 custom model with all 700+ cmg mid samples spiked in..."
             )
-            custom_probs = "gs://marten-seqr-sandbox-storage/ancestry/per_pop_min_probs_179samples.json"
+            custom_probs = "gs://marten-seqr-sandbox-storage/ancestry/per_pop_min_probs_cmgmid_20240909.json"
 
         with hl.hadoop_open(custom_probs, "r") as d:
             min_probs = json.load(d)
         pop_ht = assign_pop_with_per_pop_probs(pop_ht, min_probs, missing_label="oth")
+        pop_ht = pop_ht.checkpoint(
+            new_temp_file("genetic_ancestry_per_pop_probs", extension="ht").replace(
+                "/tmp/", "gs://seqr-scratch-temp/"
+            )
+        )
 
     logger.info("Annotating genetic ancestry inference information back on...")
     mt = mt.annotate_cols(**pop_ht[mt.col_key])
 
-    logger.info("Running Hail's sample qc...")
-    hail_metric_ht = run_hail_sample_qc(mt, data_type)
-    mt = mt.annotate_cols(**hail_metric_ht[mt.col_key])
+    logger.info('Skipping Hails sample qc...')
+    # logger.info("Running Hail's sample qc...")
+    # hail_metric_ht = run_hail_sample_qc(mt, data_type)
+    # mt = mt.annotate_cols(**hail_metric_ht[mt.col_key])
 
     logger.info("Exporting sample QC tables...")
     ht = mt.cols()

@@ -7,26 +7,19 @@ import hail as hl
 from gnomad.sample_qc.ancestry import assign_population_pcs, pc_project
 from gnomad.sample_qc.filtering import compute_stratified_metrics_filter
 from gnomad.sample_qc.pipeline import filter_rows_for_qc
-from gnomad.sample_qc.platform import (
-    assign_platform_from_pcs,
-    compute_callrate_mt,
-    run_platform_pca,
-)
+from gnomad.sample_qc.platform import (assign_platform_from_pcs,
+                                       compute_callrate_mt, run_platform_pca)
 from gnomad.utils import slack
 from gnomad.utils.filtering import filter_to_autosomes
 from hail.utils.misc import new_temp_file
 from resources.resources_seqr_qc import (  # missing_metrics_path,; mt_path,; remap_path,; sample_qc_ht_path,; sample_qc_tsv_path,; seq_metrics_path,
-    VCFDataTypeError,
-    rdg_gnomad_pop_pca_loadings_path,
-    rdg_gnomad_rf_model_path,
-    rdg_gnomad_v4_pop_pca_loadings_path,
-    rdg_gnomad_v4_rf_model_path,
-    val_coding_ht_path,
-    val_noncoding_ht_path,
-)
+    VCFDataTypeError, rdg_gnomad_pop_pca_loadings_path,
+    rdg_gnomad_rf_model_path, rdg_gnomad_v4_pop_pca_loadings_path,
+    rdg_gnomad_v4_rf_model_path, val_coding_ht_path, val_noncoding_ht_path)
 
-# from gnomad_qc.v4.resources.sample_qc import per_pop_min_rf_probs_json_path
-from gnomad_qc.v4.sample_qc.assign_ancestry import assign_pop_with_per_pop_probs
+from gnomad_qc.v4.resources.sample_qc import per_pop_min_rf_probs_json_path
+from gnomad_qc.v4.sample_qc.assign_ancestry import \
+    assign_pop_with_per_pop_probs
 
 logging.basicConfig(
     level=logging.INFO,
@@ -37,85 +30,82 @@ logger = logging.getLogger("seqr_sample_qc")
 logger.setLevel(logging.INFO)
 
 
-def validate_mt(mt: hl.MatrixTable, build: int, data_type: str, threshold=0.3):
-    """
-    Validate the mt by checking against a list of common coding and non-coding variants given its
-    genome version. This validates genome_version, variants, and the reported sample type.
+# def validate_mt(mt: hl.MatrixTable, build: int, data_type: str, threshold=0.3):
+#     """
+#     Validate the mt by checking against a list of common coding and non-coding variants given its
+#     genome version. This validates genome_version, variants, and the reported sample type.
 
-    :param mt: mt to validate
-    :param build: reference build
-    :param data_type: WGS or WES
-    :param threshold: Threshold percentage of variants matching validation tables
-    :return: True or Exception
-    """
+#     :param mt: mt to validate
+#     :param build: reference build
+#     :param data_type: WGS or WES
+#     :param threshold: Threshold percentage of variants matching validation tables
+#     :return: True or Exception
+#     """
 
-    def data_type_stats(mt, build, threshold):
-        """
-        Calculate stats for data type by checking against a list of common coding and non-coding variants.
-        If the match for each respective type is over the threshold, we return a match.
+#     def data_type_stats(mt, build, threshold):
+#         """
+#         Calculate stats for data type by checking against a list of common coding and non-coding variants.
+#         If the match for each respective type is over the threshold, we return a match.
 
-        :param mt: Matrix Table to check
-        :param build: reference build
-        """
-        stats = {}
-        types_to_ht_path = {
-            "noncoding": val_noncoding_ht_path(build),
-            "coding": val_coding_ht_path(build),
-        }
-        for variant_type, ht_path in types_to_ht_path.items():
-            ht = hl.read_table(ht_path)
-            stats[variant_type] = ht_stats = {
-                "matched_count": mt.semi_join_rows(ht).count_rows(),
-                "total_count": ht.count(),
-            }
+#         :param mt: Matrix Table to check
+#         :param build: reference build
+#         """
+#         stats = {}
+#         types_to_ht_path = {
+#             "noncoding": val_noncoding_ht_path(build),
+#             "coding": val_coding_ht_path(build),
+#         }
+#         for variant_type, ht_path in types_to_ht_path.items():
+#             ht = hl.read_table(ht_path)
+#             stats[variant_type] = ht_stats = {
+#                 "matched_count": mt.semi_join_rows(ht).count_rows(),
+#                 "total_count": ht.count(),
+#             }
 
-            ht_stats["match"] = (
-                ht_stats["matched_count"] / ht_stats["total_count"]
-            ) >= threshold
-        return stats
+#             ht_stats["match"] = (
+#                 ht_stats["matched_count"] / ht_stats["total_count"]
+#             ) >= threshold
+#         return stats
 
-    data_type_stats = data_type_stats(mt, build, threshold)
+#     data_type_stats = data_type_stats(mt, build, threshold)
 
-    for name, stat in data_type_stats.items():
-        logger.info(
-            "Table contains %i out of %i common %s variants.",
-            stat["matched_count"],
-            stat["total_count"],
-            name,
-        )
+#     for name, stat in data_type_stats.items():
+#         logger.info(
+#             "Table contains %i out of %i common %s variants.",
+#             stat["matched_count"],
+#             stat["total_count"],
+#             name,
+#         )
 
-    has_coding = data_type_stats["coding"]["match"]
-    has_noncoding = data_type_stats["noncoding"]["match"]
+#     has_coding = data_type_stats["coding"]["match"]
+#     has_noncoding = data_type_stats["noncoding"]["match"]
 
-    if not has_coding and not has_noncoding:
-        raise VCFDataTypeError(
-            f"Genome version validation error: dataset specified as GRCh{build} but doesn't contain "
-            f"the expected number of common GRCh{build} variants"
-        )
-    elif has_noncoding and not has_coding:
-        raise VCFDataTypeError(
-            "Sample type validation error: Dataset contains noncoding variants but is missing common coding "
-            f"variants for GRCh{build}. Please verify that the dataset contains coding variants."
-        )
-    elif has_coding and not has_noncoding:
-        if data_type != "WES":
-            raise VCFDataTypeError(
-                f"Sample type validation error: dataset sample-type is specified as {data_type} but appears to be "
-                "WES because it contains many common coding variants and lacks many non-coding variants"
-            )
-    elif has_noncoding and has_coding:
-        if data_type != "WGS":
-            raise VCFDataTypeError(
-                f"Sample type validation error: dataset sample-type is specified as {data_type} but appears to be "
-                "WGS because it contains many common non-coding variants"
-            )
+#     if not has_coding and not has_noncoding:
+#         raise VCFDataTypeError(
+#             f"Genome version validation error: dataset specified as GRCh{build} but doesn't contain "
+#             f"the expected number of common GRCh{build} variants"
+#         )
+#     elif has_noncoding and not has_coding:
+#         raise VCFDataTypeError(
+#             "Sample type validation error: Dataset contains noncoding variants but is missing common coding "
+#             f"variants for GRCh{build}. Please verify that the dataset contains coding variants."
+#         )
+#     elif has_coding and not has_noncoding:
+#         if data_type != "WES":
+#             raise VCFDataTypeError(
+#                 f"Sample type validation error: dataset sample-type is specified as {data_type} but appears to be "
+#                 "WES because it contains many common coding variants and lacks many non-coding variants"
+#             )
+#     elif has_noncoding and has_coding:
+#         if data_type != "WGS":
+#             raise VCFDataTypeError(
+#                 f"Sample type validation error: dataset sample-type is specified as {data_type} but appears to be "
+#                 "WGS because it contains many common non-coding variants"
+#             )
 
 
 def apply_filter_flags_expr(
-    mt: hl.MatrixTable,
-    data_type: str,
-    metric_thresholds: dict,
-    dragen: bool,
+    mt: hl.MatrixTable, data_type: str, metric_thresholds: dict
 ) -> hl.expr.SetExpression:
     """
     Annotates table with flags for elevated contamination and chimera as well as low coverage and call rate
@@ -125,70 +115,27 @@ def apply_filter_flags_expr(
     :return: Set of sequencing metric flags
     :rtype: SetExpression
     """
-    if not dragen:
-        logger.info("GATK/WARP Metrics")
-        flags = {
-            "callrate": mt.filtered_callrate < metric_thresholds["callrate_thres"],
-            "contamination": mt.PCT_CONTAMINATION  # this changes for DRAGEN -> 'contamination_rate'
-            > metric_thresholds[
-                "contam_thres"
-            ],  # TODO revisit current thresholds and rename once have to kristen's script output
-            "chimera": mt.AL_PCT_CHIMERAS
-            > metric_thresholds[
-                "chimera_thres"
-            ],  # this changes for DRAGEN or needs to be calculated
-            # -> 'custom_chimer_pct' for now...
-            # in a notebook, looks fine!
-            # but what's to be done about it ?
-        }
-
-        if data_type == "WES":
-            flags.update(
-                {
-                    "coverage": mt.HS_PCT_TARGET_BASES_20X  # this may be a different name -> 'percent_bases_at_20x'
-                    < metric_thresholds["wes_cov_thres"]
-                }
-            )
-        else:
-            flags.update(
-                {
-                    "coverage": mt.WGS_MEAN_COVERAGE
-                    < metric_thresholds["wgs_cov_thres"]
-                }  # I think this is also a different name
-                # -> 'mean_coverage'
-            )
-
+    flags = {
+        "callrate": mt.filtered_callrate < metric_thresholds["callrate_thres"], # filtered by our upstream friends:) 
+        "contamination": mt.contamination_rate
+        > metric_thresholds[
+            "contam_thres"
+        ],  # TODO revisit current thresholds and rename once have to kristen's script output
+        # or not 
+        # 
+        "chimera": mt.AL_PCT_CHIMERAS > metric_thresholds["chimera_thres"],
+    }
+    if data_type == "WES":
+        flags.update(
+            {
+                "coverage": mt.HS_PCT_TARGET_BASES_20X
+                < metric_thresholds["wes_cov_thres"]
+            }
+        )
     else:
-        logger.info("DRAGEN/GVS metrics")
-        flags = {
-            "callrate": mt.filtered_callrate < metric_thresholds["callrate_thres"],
-            "contamination": mt.contamination_rate  # this changes for DRAGEN -> 'contamination_rate'
-            > metric_thresholds["contam_thres"]
-            * 0.01,  # TODO revisit current thresholds and rename once have to kristen's script output
-            # this is a PERCENT
-            "chimera": mt.custom_chimer_pct
-            > metric_thresholds[
-                "chimera_thres"
-            ],  # this changes for DRAGEN or needs to be calculated
-            # -> 'custom_chimer_pct' for now...
-            # in a notebook, looks fine!
-            # but what's to be done about it ?
-        }
-
-        if data_type == "WES":
-            flags.update(
-                {
-                    "coverage": mt.percent_bases_at_20x  # this may be a different name -> 'percent_bases_at_20x'
-                    < metric_thresholds["wes_cov_thres"]
-                }
-            )
-        else:
-            flags.update(
-                {
-                    "coverage": mt.mean_coverage < metric_thresholds["wgs_cov_thres"]
-                }  # I think this is also a different name
-                # -> 'mean_coverage'
-            )
+        flags.update(
+            {"coverage": mt.WGS_MEAN_COVERAGE < metric_thresholds["wgs_cov_thres"]}
+        )
 
     return hl.set(
         hl.filter(
@@ -206,7 +153,6 @@ def get_all_sample_metadata(
     version: int,
     remap_path: str,
     sample_metadata_path: str,
-    dragen: bool,
 ) -> hl.Table:
     """
     Annotate MatrixTable with all current metadata: sample sequencing metrics, sample ID mapping,
@@ -239,15 +185,6 @@ def get_all_sample_metadata(
         "HS_MEAN_TARGET_COVERAGE",
         "HS_PCT_TARGET_BASES_20X",
     ]
-
-    if dragen:
-        logger.info("DRAGEN float metrics:")  # do this with other float metrics
-        float_metrics = [
-            "contamination_rate",
-            "custom_chimer_pct",
-            "mean_coverage",
-            "percent_bases_at_20x",
-        ]
 
     hl_floats = {f_i: hl.float(meta_ht[f_i]) for f_i in float_metrics}
     meta_ht = meta_ht.annotate(**hl_floats)
@@ -308,13 +245,7 @@ def run_platform_imputation(
 
 
 def run_population_pca(
-    mt: hl.MatrixTable,
-    build: int,
-    num_pcs: int = 20,
-    v2_cmg_model: bool = False,
-    v4_custom_mid_model_151: bool = False,
-    v4_custom_mid_model_179: bool = False,
-    v4_custom_mid_model_cmgmid: bool = False,
+    mt: hl.MatrixTable, build: int, num_pcs=20, v2_cmg_model=False
 ) -> hl.Table:
     """
     Projects samples onto pre-computed gnomAD and rare disease sample principal components using PCA loadings.  A
@@ -326,30 +257,8 @@ def run_population_pca(
     :return: Table annotated with assigned RDG and gnomAD population and PCs
     :rtype: Table
     """
-    if v2_cmg_model and any([v4_custom_mid_model_151, v4_custom_mid_model_179]):
-        raise ValueError("Cannot request two models, u dolt>:(")
-    if all([v4_custom_mid_model_151, v4_custom_mid_model_179, v4_custom_mid_model_cmgmid]):
-        raise ValueError("Cannot request two models, u dolt>:(")
-
-    if v4_custom_mid_model_151:
-        logger.info(
-            "Reading in custom gnomAD v4 RF model with 151 spiked in v2 MID training samples..."
-        )
-        loadings = hl.read_table(rdg_gnomad_v4_pop_pca_loadings_path())
-        model_path = "gs://marten-seqr-sandbox-storage/ancestry/gnomad.joint.v4.0.pop.RF_fit.pickle"
-        # rdg_gnomad_v4_rf_model_path()
-    elif v4_custom_mid_model_179:
-        logger.info(
-            "Reading in custom gnomAD v4 RF model with 179 spiked in v2 MID training samples..."
-        )
-        loadings = hl.read_table(rdg_gnomad_v4_pop_pca_loadings_path())
-        model_path = "gs://marten-seqr-sandbox-storage/ancestry/gnomad.joint.v4.0_v2_179samples.pop.RF_fit.pickle"
-        # rdg_gnomad_v4_rf_model_path()
-    elif v4_custom_mid_model_cmgmid:
-        loadings = hl.read_table(rdg_gnomad_v4_pop_pca_loadings_path())
-        model_path = 'gs://marten-seqr-sandbox-storage/ancestry/pop_ht_custom_probs_cmgmidsamples_rfmodel_20240909.pickle'
-    elif not v2_cmg_model:
-        logger.info("Reading in standard gnomAD v4 loadings and model...")
+    if not v2_cmg_model:
+        logger.info("Reading in gnomAD v4 loadings and model...")
         loadings = hl.read_table(rdg_gnomad_v4_pop_pca_loadings_path())
         model_path = rdg_gnomad_v4_rf_model_path()
     else:
@@ -404,31 +313,12 @@ def run_hail_sample_qc(mt: hl.MatrixTable, data_type: str) -> hl.MatrixTable:
                 f_inbreeding=hl.agg.inbreeding(mt.GT, mt.info.AF[0])
             )
         )
-    elif "info.AF" in mt.row:
+    else:
         mt = mt.annotate_cols(
             sample_qc=mt.sample_qc.annotate(
                 f_inbreeding=hl.agg.inbreeding(mt.GT, mt["info.AF"][0])
             )
         )
-    else:
-        logger.info("recomputing callstats...")
-        call_stats = hl.agg.call_stats(mt.GT, mt.alleles)
-        call_stats_bind = hl.bind(
-            lambda cs: cs.annotate(
-                AC=cs.AC[1], AF=cs.AF[1], homozygote_count=cs.homozygote_count[1]
-            ),
-            call_stats,
-        )
-        pop_freq = call_stats_bind
-        mt = mt.annotate_rows(info_callset=pop_freq)
-        mt = mt.annotate_cols(
-            sample_qc=mt.sample_qc.annotate(
-                f_inbreeding=hl.agg.inbreeding(
-                    mt.GT, mt.info_callset.AF
-                )  # this is a FLOAT64 already
-            )
-        )
-
     mt = mt.annotate_cols(idx=mt.qc_pop + "_" + hl.str(mt.qc_platform))
 
     sample_qc = [
@@ -482,12 +372,6 @@ def main(args):
     sample_metadata_path = args.sample_metadata_path
     bucket_path = args.bucket_path
     v2_cmg_model = args.v2_cmg_model
-    dragen = args.is_dragen
-    v4_custom_mid_model_151 = args.v4_custom_mid_model_151
-    v4_custom_mid_model_179 = args.v4_custom_mid_model_179
-    v4_custom_mid_model_cmgmid = args.v4_custom_mid_model_cmgmid
-    skip_platform_imputation = args.skip_platform_imputation
-    output_suffix = args.output_suffix
 
     logger.info("Importing callset as mt...")
     mt = hl.read_matrix_table(callset_path).repartition(1000)
@@ -501,8 +385,6 @@ def main(args):
     if not args.skip_validate_mt:
         logger.info("Validating data type...")
         validate_mt(mt, build, data_type)
-    else:
-        logger.info("Skipping validation...")
 
     if is_test:
         logger.info("Creating test mt...")
@@ -510,7 +392,7 @@ def main(args):
             mt,
             [
                 hl.parse_locus_interval(
-                    hl.if_else(build == "37", "22", "chr22"),
+                    hl.if_else(build == "37", "20", "chr20"),
                     reference_genome=f"GRCh{build}",
                 )
             ],
@@ -525,14 +407,7 @@ def main(args):
 
     logger.info("Annotating with sequencing metrics and filtered callrate...")
     meta_ht = get_all_sample_metadata(
-        mt,
-        build,
-        data_type,
-        data_source,
-        version,
-        remap_path,
-        sample_metadata_path,
-        dragen,
+        mt, build, data_type, data_source, version, remap_path, sample_metadata_path
     )
     meta_ht = meta_ht.checkpoint(
         new_temp_file(
@@ -540,30 +415,6 @@ def main(args):
             extension="ht".replace("/tmp/", "gs://seqr-scratch-temp/"),
         )
     )
-
-    def _get_root_sqc_output(
-        bucket_path,
-        data_type,
-        version,
-        data_source,
-        v4_custom_mid_model_151,
-        v4_custom_mid_model_179,
-        v2_cmg_model,
-        output_suffix=None,
-    ) -> None:
-        model_text = "gnomAD_v4"
-        if v4_custom_mid_model_151:
-            model_text = "v4_custom_mid_model_151"
-        if v4_custom_mid_model_179:
-            model_text = "v4_custom_mid_model_179"
-        if v4_custom_mid_model_cmgmid:
-            model_text = "v4_custom_mid_model_cmgmid"
-
-        elif v2_cmg_model:
-            model_text = "v2_cmg_model"
-
-        return f'{bucket_path}/{data_type}_v{version}_{data_source}_{model_text}{output_suffix if output_suffix else ""}'
-
     mt = mt.annotate_cols(**meta_ht[mt.col_key], data_type=data_type)
 
     logger.info("Annotating with sample metric filter flags...")
@@ -575,7 +426,7 @@ def main(args):
         "wgs_cov_thres": args.wgs_coverage_low_threshold,
     }
     mt = mt.annotate_cols(
-        filter_flags=apply_filter_flags_expr(mt, data_type, metric_thresholds, dragen)
+        filter_flags=apply_filter_flags_expr(mt, data_type, metric_thresholds)
     )
 
     mt = mt.checkpoint(
@@ -584,11 +435,8 @@ def main(args):
         )
     )
 
-    logger.info("Assign platform or product...")
-    if skip_platform_imputation:
-        logger.info("Skipping platform impuation...")
-        mt = mt.annotate_cols(qc_platform="Skipped")
-    elif data_type == "WES" and data_source == "External":
+    logger.info("Assign platform or product")
+    if data_type == "WES" and data_source == "External":
         logger.info("Running platform imputation...")
         plat_ht = run_platform_imputation(
             mt,
@@ -609,7 +457,6 @@ def main(args):
         )  #  TODO Add logging step that prints unexpected missing samples
     else:
         mt = mt.annotate_cols(qc_platform="Unknown")
-    logger.info("Assigning platform or product finished...")
 
     mt = mt.checkpoint(
         new_temp_file("sexcheck_mt", extension="mt").replace(
@@ -617,22 +464,14 @@ def main(args):
         )
     )
 
-    # mt = hl.read_matrix_table('gs://seqr-scratch-temp/sexcheck_mt-rSSTqdZRVtMTqC9lzKc7am.mt')
+    mt = hl.read_matrix_table('gs://seqr-scratch-temp/sexcheck_mt-rSSTqdZRVtMTqC9lzKc7am.mt')
 
     num_pcs = 20
     if v2_cmg_model:
         num_pcs = 6
 
     logger.info("Projecting gnomAD population PCs...")
-    pop_ht = run_population_pca(
-        mt,
-        build,
-        num_pcs=num_pcs,
-        v2_cmg_model=v2_cmg_model,
-        v4_custom_mid_model_151=v4_custom_mid_model_151,
-        v4_custom_mid_model_179=v4_custom_mid_model_179,
-        v4_custom_mid_model_cmgmid = v4_custom_mid_model_cmgmid,
-    )
+    pop_ht = run_population_pca(mt, build, num_pcs=num_pcs, v2_cmg_model=v2_cmg_model)
 
     logger.info("Checkpointing pop_ht...")
     pop_ht = pop_ht.checkpoint(
@@ -643,29 +482,7 @@ def main(args):
 
     if args.v4_custom_per_pop_probs:
         logger.info("Assigning pops with per-pop probabilities...")
-        custom_probs = (
-            "gs://marten-seqr-sandbox-storage/gnomad.joint.v4.0.pop_min_probs.json"  # this has been overwritten oops !!!
-            # not a today problem
-        )
-        if v4_custom_mid_model_151:
-            logger.info(
-                "From v4 custom model with 151 mid training samples spiked in..."
-            )
-            custom_probs = (
-                "gs://marten-seqr-sandbox-storage/ancestry/per_pop_min_probs.json"
-            )
-        elif v4_custom_mid_model_179:
-            logger.info(
-                "From v4 custom model with 179 mid training samples spiked in..."
-            )
-            custom_probs = "gs://marten-seqr-sandbox-storage/ancestry/per_pop_min_probs_179samples.json"
-        elif v4_custom_mid_model_cmgmid:
-            logger.info(
-                "From v4 custom model with all 700+ cmg mid samples spiked in..."
-            )
-            custom_probs = "gs://marten-seqr-sandbox-storage/ancestry/per_pop_min_probs_179samples.json"
-
-        with hl.hadoop_open(custom_probs, "r") as d:
+        with hl.hadoop_open('gs://marten-seqr-sandbox-storage/gnomad.joint.v4.0.pop_min_probs.json', "r") as d:
             min_probs = json.load(d)
         pop_ht = assign_pop_with_per_pop_probs(pop_ht, min_probs, missing_label="oth")
 
@@ -673,28 +490,18 @@ def main(args):
     mt = mt.annotate_cols(**pop_ht[mt.col_key])
 
     logger.info("Running Hail's sample qc...")
-    hail_metric_ht = run_hail_sample_qc(mt, data_type)
-    mt = mt.annotate_cols(**hail_metric_ht[mt.col_key])
+    # hail_metric_ht = run_hail_sample_qc(mt, data_type)
+    # mt = mt.annotate_cols(**hail_metric_ht[mt.col_key])
 
     logger.info("Exporting sample QC tables...")
     ht = mt.cols()
-
-    output_root = _get_root_sqc_output(
-        bucket_path=bucket_path,
-        data_type=data_type,
-        version=version,
-        data_source=data_source,
-        v2_cmg_model=v2_cmg_model,
-        v4_custom_mid_model_151=v4_custom_mid_model_151,
-        v4_custom_mid_model_179=v4_custom_mid_model_179,
-        output_suffix=output_suffix,
-    )
-
     ht = ht.checkpoint(
-        f"{output_root}.ht",
+        f"{bucket_path}/{data_type}_v{version}_{data_source}_gatk_sampleqc_customprobs.ht",
         overwrite=True,
     )
-    ht.flatten().export(f"{output_root}_flattened_tsv.tsv")
+    ht.flatten().export(
+        f"{bucket_path}/{data_type}_v{version}_{data_source}_gatk_sampleqc_flattened_tsv_customprobs.tsv",
+    )
 
 
 if __name__ == "__main__":
@@ -727,6 +534,7 @@ if __name__ == "__main__":
         help="Reference build, 37 or 38",
         type=int,
         choices=[37, 38],
+        required=True,
         default=38,
     )
     parser.add_argument(
@@ -740,6 +548,7 @@ if __name__ == "__main__":
         "--data-source",
         help="Data source (Internal or External)",
         choices=["Internal", "External"],
+        required=True,
         default="Internal",
     )
     parser.add_argument(
@@ -754,8 +563,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--contam-up-threshold",
-        help="Upper threshold at which to flag samples for elevated contamination",
-        default=5,
+        help="Upper threshold at which to flag samples for elevated contamination rate",
+        default=0.05,
     )
     parser.add_argument(
         "--chimera-up-threshold",
@@ -818,37 +627,6 @@ if __name__ == "__main__":
         "--v4-custom-per-pop-probs",
         help="Assign imputed genetic ancestry using gnomAD v4.0 custom per pop probabilities",
         action="store_true",
-    )
-    parser.add_argument(
-        "--is-dragen",
-        help="Run with a number of different flags, to fit DRAGEN/GSV returns",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--v4-custom-mid-model-151",
-        help="Use gnomAD v4 RF model with 151 spiked in v2 MID training samples...",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--v4-custom-mid-model-179",
-        help="Use gnomAD v4 RF model with 179 spiked in v2 MID training samples...",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--v4-custom-mid-model-cmgmid",
-        help="Use gnomAD v4 RF model with 700+ CMG MID training samples...",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--skip-platform-imputation",
-        help="Pass to skip platform imputation, label as skip",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--output-suffix",
-        help="Optional suffix to add to file names for outputs",
-        type=str,
-        default=None,
     )
 
     args = parser.parse_args()

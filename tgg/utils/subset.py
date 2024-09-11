@@ -2,6 +2,7 @@ import argparse
 import logging
 
 import hail as hl
+from hail.utils.misc import new_temp_file
 
 from gnomad.utils.filtering import subset_samples_and_variants
 
@@ -52,9 +53,14 @@ def main(args):
 
     Used when CMG/MGRC collaborators request VCFs of their data.
     """
+    logger.info('About to initialize Hail...')
     hl.init(
         log="/subset.log", tmp_dir="gs://seqr-scratch-temp", default_reference="GRCh38"
     )
+    logger.info('Hail has been initialized!')
+
+    if args.mt_write and args.mt_path:
+        raise ValueError('Cannot read AND write MT!')
 
     if args.vcf_path:
         logger.info("Importing VCF...")
@@ -69,6 +75,12 @@ def main(args):
 
     logger.info(f"Input MT counts: {mt.count()}")
     mt.describe()
+
+    hail_temp = new_temp_file().split('/')[-1]
+
+    if args.mt_write:
+        logger.info("Checkpointing for subset request work...")
+        mt = mt.checkpoint(f'gs://seqr-loading-temp/v3.1/GRCh38/SNV_INDEL/subset_request/joint_callset_{hail_temp}.mt')
 
     if args.mapping:
         logger.info("Mapping VCF IDs to seqr IDs...")
@@ -109,6 +121,11 @@ if __name__ == "__main__":
         "--no-header",
         help="Whether sample list file is missing a header. Specify only if False",
         action="store_false",
+    )
+    parser.add_argument(
+        "--mt-write",
+        help="Whether to write out MT. Not compatible with mt-path",
+        action="store_true",
     )
     parser.add_argument(
         "--table-key", help="Field used to key sample Table", default="s"
