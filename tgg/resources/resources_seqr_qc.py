@@ -110,6 +110,15 @@ def rdg_gnomad_pop_pca_loadings_path(build: int) -> str:
     """Return the precomputed PCA loadings from joint RDG and gnomAD PCA"""
     return f"gs://seqr-datasets/sample_qc_resources/population_assignment/{build}_ancestry_pca_loadings.ht"
 
+def rdg_gnomad_v4_rf_model_path() -> str:
+    """Return the precomputed RF Model from gnomAD v4"""
+    return "gs://gcp-public-data--gnomad/release/4.0/pca/gnomad.v4.0.RF_fit.pkl"
+
+
+def rdg_gnomad_v4_pop_pca_loadings_path() -> str:
+    """Return the precomputed PCA loadings from gnomAD PCA"""
+    return  "gs://gcp-public-data--gnomad/release/4.0/pca/gnomad.v4.0.pca_loadings.ht"
+
 
 def val_noncoding_ht_path(build):
     """

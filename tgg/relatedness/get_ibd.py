@@ -140,7 +140,8 @@ def ld_prune(input_mt: hl.MatrixTable, build: str, gnomad_ld: bool) -> hl.Matrix
             pruned_mt = hl.read_matrix_table(qc_mt_path("joint", ld_pruned=True))
 
         elif build == "GRCh38":
-            pruned_mt = hl.read_matrix_table(qc.path)
+            logger.info('COPIED CUSTOM QC PATH: ')
+            pruned_mt = hl.read_matrix_table('gs://seqr-scratch-temp/v3_1_sites_qc.mt')
 
         input_mt = input_mt.filter_rows(
             hl.is_defined(pruned_mt.index_rows(input_mt.row_key))
@@ -411,17 +412,17 @@ def main(args):
     # Compare inferred and given sex
     check_sex(sex_ht, output_dir, output_name)
 
-    kin_ht = add_project_and_family_annotations(kin_ht, seqr_projects, family_ids)
+    #kin_ht = add_project_and_family_annotations(kin_ht, seqr_projects, family_ids)
 
     logger.info("Writing kinship ht per project...")
     # Output original ht per project
-    for project in set(seqr_projects.values()):
-        full_ht = kin_ht.filter(
-            (kin_ht.seqr_proj_i == project) | (kin_ht.seqr_proj_j == project)
-        )
-        full_ht.drop("seqr_proj_i", "seqr_proj_j").export(
-            f"{output_dir}/{project}/{output_name}_{project}_annotated_kin.txt"
-        )
+    # for project in set(seqr_projects.values()):
+    #     full_ht = kin_ht.filter(
+    #         (kin_ht.seqr_proj_i == project) | (kin_ht.seqr_proj_j == project)
+    #     )
+    #     full_ht.drop("seqr_proj_i", "seqr_proj_j").export(
+    #         f"{output_dir}/{project}/{output_name}_{project}_annotated_kin.txt"
+    #     )
 
 
 if __name__ == "__main__":
