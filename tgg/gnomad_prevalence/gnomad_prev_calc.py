@@ -5,8 +5,8 @@ import logging
 
 import hail as hl
 
-from gnomad.resources.grch38.gnomad import POPS
-from gnomad_qc.v4.resources.release import release_sites
+from gnomad.resources.grch38.gnomad import GEN_ANC_GROUPS, public_release
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -41,13 +41,13 @@ SIG = {
     "DM",
 }
 
-POPS = {
-    "exomes": deepcopy(POPS["v4"]["exomes"]),
-    "genomes": deepcopy(POPS["v4"]["genomes"]),
+GEN_ANC_GROUPS = {
+    "exomes": deepcopy(GEN_ANC_GROUPS["v4"]["exomes"]),
+    "genomes": deepcopy(GEN_ANC_GROUPS["v4"]["genomes"]),
 }
-ALL_POPS = set().union(*POPS.values())
+ALL_GEN_ANC_GROUPS = set().union(*GEN_ANC_GROUPS.values())
 # Insert "" to account for total dataset
-ALL_POPS.add("")
+ALL_GEN_ANC_GROUPS.add("")
 
 TEMP_PATH = "gs://gnomad-tmp-4day/mwilson/prevalence/"
 RESULT_PATH = "gs://gnomad-mwilson/prevalence/results/"
@@ -232,7 +232,7 @@ def filter_to_gene_annotate_consq(
     :param consequences: List of consequence terms to filter to
     :return: Filtered Table
     """
-    ht = release_sites(data_type).ht()
+    ht = public_release(data_type).ht()
     ht = hl.filter_intervals(ht, gene_interval)
     gene = hl.literal(gene)
     ht = ht.explode(ht.vep.transcript_consequences)
@@ -368,7 +368,7 @@ def get_pop_freq(ht, pops) -> hl.Table:
 def annotate_ht_w_all_data(ht, clinvar_ht, hgmd_ht) -> hl.Table:
     ht = ht.annotate(**clinvar_ht[ht.key])
     ht = ht.annotate(**hgmd_ht[ht.key])
-    joint_ht = release_sites("joint").ht()
+    joint_ht = public_release("joint").ht()
 
     ht = ht.annotate(
         freq=joint_ht[ht.key].joint.freq,
@@ -383,6 +383,7 @@ def annotate_ht_w_all_data(ht, clinvar_ht, hgmd_ht) -> hl.Table:
         ucsc_url=make_ucsc_url(ht),
     )
     ht = ht.annotate(Reference_Allele=ht.alleles[0], Alternate_Allele=ht.alleles[1])
+    ht.describe()
 
     ht = ht.select(
         ht.filters,
@@ -413,7 +414,7 @@ def annotate_ht_w_all_data(ht, clinvar_ht, hgmd_ht) -> hl.Table:
         ht.revel_max,
         ht.exome_filters,
         ht.genome_filters,
-        **get_pop_freq(ht, ALL_POPS),
+        **get_pop_freq(ht, ALL_GEN_ANC_GROUPS),
     )
     ht = ht.checkpoint(f"{TEMP_PATH}gnomad_w_clinvar_hgmd_freq.ht", overwrite=True)
     return ht
@@ -425,6 +426,7 @@ def main(args):
         log="gnomad_prevalence.log",
         tmp_dir="gs://gnomad-tmp-4day/mwilson/prevalence/tmp",
     )
+    print(ALL_GEN_ANC_GROUPS)
     # Open genes file and iterate through each gene printing itå
     with hl.hadoop_open(args.genes_file, "r") as f:
         for gene in f:
